@@ -150,7 +150,10 @@ class AnswerRelevancy(BaseMetric):
             / norm
         )
 
-        # Score is average cosine similarity, reduced to 0 if response is noncommittal
+        # Score is average cosine similarity, reduced to 0 if response is noncommittal.
+        # Cosine similarity can be slightly negative for unrelated embeddings;
+        # the metric is documented as 0-1, so clip (#56).
         score = cosine_sim.mean() * int(not all_noncommittal)
+        score = float(np.clip(score, 0.0, 1.0))
 
         return MetricResult(value=float(score))

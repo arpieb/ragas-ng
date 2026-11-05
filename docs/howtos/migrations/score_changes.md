@@ -41,3 +41,45 @@ Response and reference were split on `". "` and passed to `sacrebleu.corpus_bleu
 | segments scored | first response sentence, against any one reference sentence | the whole response against the whole reference |
 
 **Who sees a difference:** any multi-sentence response. A response whose first sentence matches the reference and whose remaining sentences are wrong used to score `1.0`. It now scores about `0.33`.
+
+## Context precision: perfect ranking is exactly 1.0 ([#57](https://github.com/arpieb/ragas-ng/issues/57))
+
+`ContextPrecision`, `ContextUtilization`, `ContextPrecisionWithReference`, `ContextPrecisionWithoutReference`, `NonLLMContextPrecisionWithReference` (collections)
+
+Average precision divided by `relevant_count + 1e-10` unconditionally, so a perfect ranking scored `0.9999999999` and never `1.0`. The epsilon now applies only where it was needed: no relevant contexts gives `0.0`.
+
+**Who sees a difference:** every non-zero score rises by a relative ~1e-10. It's invisible at normal precision but breaks `score == 1.0` checks and CI thresholds set at 1.0.
+
+## SummaryScore: no crash, and a questions-based denominator ([#60](https://github.com/arpieb/ragas-ng/issues/60))
+
+`ragas.metrics.collections.SummaryScore`
+
+The QA component divided the number of `"1"` answers by the number of answers the judge *returned*:
+
+| | Before | Now |
+|---|---|---|
+| no questions generated | `ZeroDivisionError` (after an extra LLM call) | `NaN`, answer call skipped |
+| judge returns a different number of answers than questions | ratio over whatever came back | `NaN`, with a warning |
+| `" 1 "` (whitespace) | counted as unanswered | counted as answered |
+
+**Who sees a difference:** samples whose answer count didn't match the question count now score NaN instead of an over- or under-stated ratio. Samples that used to crash now return NaN.
+
+## CHRFScore: missing reference is NaN, not 0.0 ([#61](https://github.com/arpieb/ragas-ng/issues/61))
+
+`ragas.metrics.collections.CHRFScore`
+
+| Input | Before | Now |
+|---|---|---|
+| reference empty, whitespace, `None` or not a string | `0.0` | `NaN` |
+| response not a string | `0.0` | `NaN` |
+| response empty, valid reference | `0.0` | `0.0` (unchanged) |
+
+A missing reference is a gap in the dataset, not a model failure. Scoring it `0.0` pulled the mean down for something the model didn't do. As with other undefined scores, NaN rows are left out of the mean.
+
+## AnswerRelevancy: clipped to 0–1 ([#56](https://github.com/arpieb/ragas-ng/issues/56))
+
+`ragas.metrics.collections.AnswerRelevancy`
+
+The score is the mean cosine similarity between the user's question and questions generated from the response. Cosine similarity can be slightly negative for unrelated embeddings, so the metric could return values like `-0.02` despite being documented as 0–1. Scores are now clipped to `[0, 1]`.
+
+**Who sees a difference:** only samples that scored below 0. They now score `0.0`.
