@@ -246,19 +246,19 @@ class TestEquivalenceWithLegacy:
             )
 
     @pytest.mark.asyncio
-    async def test_threshold_asymmetry_is_preserved(self):
-        """precision uses `>=`, recall uses `>`. Inherited, deliberately kept."""
+    async def test_threshold_is_inclusive_for_both(self):
+        """Both use `>=` (#64); legacy recall used `>`, so an exact match at
+        threshold=1.0 counted for precision but scored 0 for recall."""
         exact = ["Paris is the capital of France."]
         precision = NonLLMContextPrecisionWithReference(threshold=1.0)
         recall = NonLLMContextRecall(threshold=1.0)
 
-        # similarity == 1.0 exactly: >= admits it, > does not
         assert (
             await precision.ascore(retrieved_contexts=exact, reference_contexts=exact)
         ).value == pytest.approx(1.0)
         assert (
             await recall.ascore(retrieved_contexts=exact, reference_contexts=exact)
-        ).value == pytest.approx(0.0)
+        ).value == pytest.approx(1.0)
 
 
 class TestRunsThroughEvaluate:
