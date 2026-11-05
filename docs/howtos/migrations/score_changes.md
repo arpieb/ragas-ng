@@ -133,3 +133,18 @@ Now each submitted item needs exactly one verdict:
 **Who sees a difference:** only samples where the judge returned the wrong number of verdicts. Others are unchanged.
 
 ContextRecall and AnswerCorrectness are not covered. Their judge splits the reference into statements itself, so there is no submitted list to check against.
+
+## strictness actually samples ([#55](https://github.com/arpieb/ragas-ng/issues/55))
+
+`AnswerRelevancy`, `AspectCritic`, `SimpleCriteriaScore` (collections)
+
+`strictness=N` is documented as N independent judgements: AnswerRelevancy averages over N generated questions, and the criteria metrics take a majority vote. The N calls were identical, at the deterministic defaults (temperature `0.01`, top_p `0.1`), so the samples barely differed. **With a cache enabled, all N calls returned the same cached response,** so one judgement was counted N times.
+
+| `strictness` | Before | Now |
+|---|---|---|
+| 1 (default) | one call with the configured settings | unchanged |
+| N > 1 | N identical calls, run one after another; one call with a cache | N calls run concurrently at temperature `0.3` (the legacy sampling value), `top_p` dropped, each cached separately |
+
+**Who sees a difference:** anyone using `strictness > 1`. AnswerRelevancy averages over genuinely different questions, and criteria verdicts are real majority votes. Scores can move in either direction. Reasoning models (o-series, gpt-5+) still use the only temperature they accept, 1.0.
+
+`agenerate()` / `generate()` on `InstructorLLM` and `LiteLLMStructuredLLM` gain optional `temperature` and `sample_index` arguments. `sample_index` only distinguishes cache entries and is never sent to the provider.

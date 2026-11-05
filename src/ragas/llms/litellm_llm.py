@@ -176,7 +176,11 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
                 asyncio.set_event_loop(None)
 
     def generate(
-        self, prompt: str, response_model: t.Type[InstructorTypeVar]
+        self,
+        prompt: str,
+        response_model: t.Type[InstructorTypeVar],
+        temperature: t.Optional[float] = None,
+        sample_index: t.Optional[int] = None,
     ) -> InstructorTypeVar:
         """Generate a response using the configured LLM.
 
@@ -185,6 +189,8 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
         Args:
             prompt: Input prompt
             response_model: Pydantic model for structured output
+            temperature: Per-call temperature override (drops top_p)
+            sample_index: Cache-key only; distinguishes repeated samples
 
         Returns:
             Instance of response_model with generated data
@@ -197,7 +203,7 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
         # If client is async, use the appropriate method to run it
         if self.is_async:
             result = self._run_async_in_current_loop(
-                self.agenerate(prompt, response_model)
+                self.agenerate(prompt, response_model, temperature, sample_index)
             )
         else:
             # Call LiteLLM with structured output
@@ -205,7 +211,7 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
                 model=self.model,
                 messages=messages,
                 response_model=response_model,
-                **self.model_args,
+                **self._with_sampling(self.model_args, temperature),
             )
 
         return result
@@ -214,12 +220,16 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
         self,
         prompt: str,
         response_model: t.Type[InstructorTypeVar],
+        temperature: t.Optional[float] = None,
+        sample_index: t.Optional[int] = None,
     ) -> InstructorTypeVar:
         """Asynchronously generate a response using the configured LLM.
 
         Args:
             prompt: Input prompt
             response_model: Pydantic model for structured output
+            temperature: Per-call temperature override (drops top_p)
+            sample_index: Cache-key only; distinguishes repeated samples
 
         Returns:
             Instance of response_model with generated data
@@ -240,7 +250,7 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
             model=self.model,
             messages=messages,
             response_model=response_model,
-            **self.model_args,
+            **self._with_sampling(self.model_args, temperature),
         )
 
         return result

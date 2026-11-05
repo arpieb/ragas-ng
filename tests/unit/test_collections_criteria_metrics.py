@@ -34,7 +34,7 @@ def scripted_llm(outputs: t.Sequence[t.Any]):
     llm = MagicMock(spec=InstructorLLM)
     calls = {"n": 0}
 
-    async def agenerate(prompt, model):
+    async def agenerate(prompt, model, **kwargs):
         i = min(calls["n"], len(outputs) - 1)
         calls["n"] += 1
         return outputs[i]
@@ -188,7 +188,7 @@ class TestRunsThroughEvaluate:
         seen = {}
         llm = MagicMock(spec=InstructorLLM)
 
-        async def agenerate(prompt, model):
+        async def agenerate(prompt, model, **kwargs):
             seen["prompt"] = prompt
             return critic(1)
 
