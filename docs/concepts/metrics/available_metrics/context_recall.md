@@ -2,12 +2,12 @@
 
 Context Recall measures how many of the relevant documents (or pieces of information) were successfully retrieved. It focuses on not missing important results. Higher recall means fewer relevant documents were left out. In short, recall is about not missing anything important. 
 
-Since it is about not missing anything, calculating context recall always requires a reference to compare against. The LLM-based Context Recall metric uses `reference` as a proxy to `reference_contexts`, which makes it easier to use as annotating reference contexts can be very time-consuming. To estimate context recall from the `reference`, the reference is broken down into claims, and each claim is analyzed to determine whether it can be attributed to the retrieved context or not. In an ideal scenario, all claims in the reference answer should be attributable to the retrieved context.
+Since it is about not missing anything, calculating context recall always requires a reference to compare against. The LLM-based Context Recall metric uses `reference` as a proxy to `reference_contexts`, which makes it easier to use as annotating reference contexts can be very time-consuming. To estimate context recall from the `reference`, the judge LLM breaks the reference into statements (roughly one per sentence) and classifies each one as attributable to the retrieved context or not. In an ideal scenario, every statement in the reference is attributable to the retrieved context.
 
 The formula for calculating context recall is as follows:
 
 $$
-\text{Context Recall} = \frac{\text{Number of claims in the reference supported by the retrieved context}}{\text{Total number of claims in the reference}}
+\text{Context Recall} = \frac{\text{Number of reference statements attributable to the retrieved context}}{\text{Total number of statements in the reference}}
 $$
 
 ## Example
@@ -27,8 +27,10 @@ scorer = ContextRecall(llm=llm)
 # Evaluate
 result = await scorer.ascore(
     user_input="Where is the Eiffel Tower located?",
-    retrieved_contexts=["Paris is the capital of France."],
-    reference="The Eiffel Tower is located in Paris.",
+    retrieved_contexts=[
+        "The Eiffel Tower is a wrought-iron lattice tower on the Champ de Mars in Paris, France."
+    ],
+    reference="The Eiffel Tower is located in Paris. It was completed in 1889.",
 )
 print(f"Context Recall Score: {result.value}")
 ```
@@ -36,8 +38,10 @@ print(f"Context Recall Score: {result.value}")
 Output:
 
 ```
-Context Recall Score: 1.0
+Context Recall Score: 0.5
 ```
+
+The reference makes two statements. The retrieved context supports the first, that the tower is in Paris, but says nothing about 1889, so one of two statements is recalled. A context like `"Paris is the capital of France."` supports neither statement and scores `0.0`: being about Paris is not enough.
 
 !!! note "Synchronous Usage"
     If you prefer synchronous code, you can use the `.score()` method instead of `.ascore()`:
@@ -45,8 +49,10 @@ Context Recall Score: 1.0
     ```python
     result = scorer.score(
         user_input="Where is the Eiffel Tower located?",
-        retrieved_contexts=["Paris is the capital of France."],
-        reference="The Eiffel Tower is located in Paris.",
+        retrieved_contexts=[
+            "The Eiffel Tower is a wrought-iron lattice tower on the Champ de Mars in Paris, France."
+        ],
+        reference="The Eiffel Tower is located in Paris. It was completed in 1889.",
     )
     ```
 
@@ -63,7 +69,9 @@ sample = SingleTurnSample(
     user_input="Where is the Eiffel Tower located?",
     response="The Eiffel Tower is located in Paris.",
     reference="The Eiffel Tower is located in Paris.",
-    retrieved_contexts=["Paris is the capital of France."],
+    retrieved_contexts=[
+        "The Eiffel Tower is a wrought-iron lattice tower on the Champ de Mars in Paris, France."
+    ],
 )
 
 context_recall = LLMContextRecall(llm=evaluator_llm)
