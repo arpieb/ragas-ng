@@ -82,15 +82,19 @@ class SemanticSimilarity(BaseMetric):
         reference = reference or " "
         response = response or " "
 
-        embedding_1 = np.array(self.embeddings.embed_text(reference))
-        embedding_2 = np.array(self.embeddings.embed_text(response))
+        # Async API: the sync embed_text blocked the event loop inside ascore.
+        embedding_1 = np.array(await self.embeddings.aembed_text(reference))
+        embedding_2 = np.array(await self.embeddings.aembed_text(response))
 
         norms_1 = np.linalg.norm(embedding_1)
         norms_2 = np.linalg.norm(embedding_2)
         embedding_1_normalized = embedding_1 / norms_1
         embedding_2_normalized = embedding_2 / norms_2
         similarity = embedding_1_normalized @ embedding_2_normalized.T
-        score = similarity.flatten()
+        # Cosine similarity spans [-1, 1]; the metric is defined on [0, 1], and
+        # unrelated texts can come out slightly negative with some embedding
+        # models (#107). Same treatment as AnswerRelevancy (#56).
+        score = np.clip(similarity.flatten(), 0.0, 1.0)
 
         assert isinstance(score, np.ndarray), "Expects ndarray"
         if self.threshold:

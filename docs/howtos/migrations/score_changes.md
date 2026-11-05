@@ -184,3 +184,9 @@ These assumed space-separated Latin text:
 | **QuotedSpansAlignment** | only `"…"`, `'…'`, `“…”`, `‘…’`; quoted CJK sentences counted as one word, so they fell below `min_span_words` | also `«…»`, `‹…›`, `„…“`, `「…」`, `『…』`; CJK characters count individually |
 
 **Who sees a difference:** anyone scoring text that isn't plain ASCII. For English, ROUGE and BLEU scores are unchanged. The legacy `ragas.metrics.quoted_spans` module had lost its curly-quote characters and matched straight quotes only; it now uses the same pattern.
+
+## SemanticSimilarity: clipped to 0–1 ([#107](https://github.com/arpieb/ragas-ng/issues/107))
+
+`ragas.metrics.collections.SemanticSimilarity`
+
+The score is the cosine similarity of the two embeddings, which can be slightly negative for unrelated texts, despite the metric being documented as 0–1. It is now clipped to `[0, 1]`, the same as AnswerRelevancy. **Who sees a difference:** only samples that scored below 0; they now score `0.0`. With `threshold` set, the score is binary as before.

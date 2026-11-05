@@ -59,7 +59,7 @@ Let's examine how semantic similarity was calculated for the high similarity res
 - **Step 1:** Vectorize the reference answer using the specified embedding model.
 - **Step 2:** Vectorize the generated response using the same embedding model.
 - **Step 3:** Compute the cosine similarity between the two vectors.
-- **Step 4:** The cosine similarity value (0-1) is the final score.
+- **Step 4:** The cosine similarity is the final score. Cosine similarity can range from -1 to 1, and unrelated texts occasionally score slightly below 0 with some embedding models, so the score is clipped to 0-1. With `threshold` set, the score is instead `1` if the similarity is at or above the threshold and `0` otherwise.
 
 
 ## Legacy Metrics API
