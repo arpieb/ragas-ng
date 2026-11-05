@@ -47,47 +47,32 @@ class TestBleuE2EMigration:
         ]
 
     @pytest.mark.asyncio
-    async def test_legacy_vs_v2_class_e2e_compatibility(self, sample_data):
-        """E2E test that legacy and v2 class implementations produce identical scores."""
+    async def test_v2_scores_whole_text_as_one_segment(self, sample_data):
+        """V2 equals sacrebleu on one (response, reference) segment.
+
+        This no longer compares against legacy: legacy split on ". " and
+        effectively scored only the first response sentence (#50), so the two
+        intentionally diverge on multi-sentence text.
+        """
+        from sacrebleu import corpus_bleu
 
         for i, data in enumerate(sample_data):
-            print(f"\n🧪 Testing BLEU - Case {i + 1}: {data['description']}")
-            print(f"   Reference: {data['reference'][:50]}...")
-            print(f"   Response:  {data['response'][:50]}...")
-
-            legacy_bleu = LegacyBleuScore()
-            legacy_sample = SingleTurnSample(
-                user_input="dummy",
-                response=data["response"],
-                reference=data["reference"],
-            )
-            legacy_score = await legacy_bleu._single_turn_ascore(legacy_sample, None)
-
-            v2_class_metric = BleuScore()
-            v2_class_result = await v2_class_metric.ascore(
+            v2_result = await BleuScore().ascore(
                 reference=data["reference"],
                 response=data["response"],
             )
-
-            class_diff = abs(legacy_score - v2_class_result.value)
-
-            print(f"   Legacy:      {legacy_score:.6f}")
-            print(f"   V2 Class:    {v2_class_result.value:.6f}")
-            print(f"   Diff:        {class_diff:.10f}")
-
-            assert class_diff < 1e-10, (
-                f"Case {i + 1} ({data['description']}): BLEU mismatch: "
-                f"{legacy_score} != {v2_class_result.value}"
+            expected = (
+                corpus_bleu([data["response"]], [[data["reference"]]]).score / 100
             )
-
-            assert isinstance(legacy_score, float)
-            assert isinstance(v2_class_result, MetricResult)
-
-            print("   ✅ Legacy and V2 class produce identical scores!")
+            assert abs(v2_result.value - expected) < 1e-10, (
+                f"Case {i + 1} ({data['description']}): {v2_result.value} != {expected}"
+            )
+            assert isinstance(v2_result, MetricResult)
 
     @pytest.mark.asyncio
     async def test_bleu_score_performance_comparison(self, sample_data):
-        """Compare performance characteristics between legacy and v2 class."""
+        """Compare performance between legacy and v2 on an exact match,
+        where both score 1.0."""
         import time
 
         test_case = sample_data[0]

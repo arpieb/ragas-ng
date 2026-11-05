@@ -131,6 +131,8 @@ You can pass additional arguments to the underlying `sacrebleu.corpus_bleu` func
 scorer = BleuScore(kwargs={"smooth_method": "exp"})
 ```
 
+Each sample is scored as one segment, the whole `response` against the whole `reference`. Unsmoothed BLEU is often `0` for short texts that share no 4-gram, so `smooth_method="exp"` is a good choice for short answers. For languages written without spaces, pick a matching tokenizer, for example `kwargs={"tokenize": "zh"}` (Chinese) or `kwargs={"tokenize": "char"}`.
+
 ### Legacy Metrics API
 
 The following examples use the legacy metrics API pattern. For new projects, we recommend using the collections-based API shown above.

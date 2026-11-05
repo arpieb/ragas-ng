@@ -29,3 +29,15 @@ Recall used the *precision-direction* supported count over the precision-directi
 **Example:** the response makes 4 claims, all supported. The reference makes 4 claims, of which the response covers 1. Recall was `4/7 = 0.57` and is now `1/4 = 0.25`. F1 was `0.73` and is now `0.40`.
 
 **Also:** `mode="recall"` no longer makes the precision-direction LLM calls it didn't need, so it's two calls instead of four.
+
+## BleuScore: whole text, not first sentence ([#50](https://github.com/arpieb/ragas-ng/issues/50))
+
+`ragas.metrics.collections.BleuScore`
+
+Response and reference were split on `". "` and passed to `sacrebleu.corpus_bleu` so that each reference sentence became its own reference *stream* for only the first response sentence. **Everything after the response's first sentence was ignored.**
+
+| | Before | Now |
+|---|---|---|
+| segments scored | first response sentence, against any one reference sentence | the whole response against the whole reference |
+
+**Who sees a difference:** any multi-sentence response. A response whose first sentence matches the reference and whose remaining sentences are wrong used to score `1.0`. It now scores about `0.33`.
