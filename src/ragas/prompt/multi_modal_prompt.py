@@ -9,12 +9,13 @@ import re
 import socket
 import typing as t
 from io import BytesIO
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import requests
 from PIL import Image
 from pydantic import BaseModel
 from typing_extensions import TypedDict
+from urllib3.util import parse_url as urllib3_parse_url
 
 from ragas.callbacks import ChainType, new_group
 from ragas.exceptions import RagasOutputParserException
@@ -67,7 +68,17 @@ ALLOW_LOCAL_FILE_ACCESS = False  # <<< SECURITY: Default to False
 
 ALLOW_INTERNAL_TARGETS = False  # <<< SECURITY: Default to False
 
-DISALLOWED_IP_CHECKS = {"is_loopback", "is_private", "is_link_local", "is_reserved"}
+DISALLOWED_IP_CHECKS = {
+    "is_loopback",
+    "is_private",
+    "is_link_local",
+    "is_reserved",
+    "is_multicast",
+    "is_unspecified",
+}
+# Redirects are followed manually so every hop is re-validated against the
+# SSRF policy; this caps how many hops are followed.
+MAX_REDIRECTS = 5
 
 
 # Define the *absolute* path to the ONLY directory from which local images can be loaded.
@@ -345,31 +356,9 @@ class ImageTextPromptValue(PromptValue):
         Uses 'requests' library for better control.
         """
         try:
-            # <<< SSRF CHECK START >>>
-            parsed_url = urlparse(url)
-            if not parsed_url.hostname:
-                logger.error(
-                    f"Could not extract hostname from URL '{url}' for SSRF check."
-                )
+            response = self._fetch_with_validated_redirects(url)
+            if response is None:
                 return None
-
-            if not self._is_safe_url_target(parsed_url.hostname):
-                # Logging is handled within _is_safe_url_target
-                return None
-            # <<< SSRF CHECK END >>>
-
-            # Proceed with the request only if the target IP check passed
-            response = requests.get(
-                url,
-                timeout=REQUESTS_TIMEOUT_SECONDS,
-                stream=True,
-                # IMPORTANT CAVEAT: Redirects can bypass this initial check.
-                # An initial safe URL could redirect to an internal one.
-                # Setting allow_redirects=False is safer but may break legitimate uses.
-                # Handling redirects manually with re-checks is complex.
-                # Consider the risk profile. Defaulting to allow_redirects=True for now.
-                allow_redirects=True,
-            )
             response.raise_for_status()  # Check for HTTP errors (4xx, 5xx)
 
             # 1. Check Content-Type header (as a hint, not definitive)
@@ -436,6 +425,84 @@ class ImageTextPromptValue(PromptValue):
             logger.error(f"An unexpected error occurred processing URL {url}: {e}")
             return None
 
+    def _validated_request_host(self, url: str) -> t.Optional[str]:
+        """
+        Return the host ``requests`` will actually connect to for ``url``, or
+        None if the URL must not be fetched.
+
+        The SSRF check has to look at the same host the HTTP client uses.
+        ``urllib.parse`` and ``requests``/``urllib3`` disagree on malformed
+        authorities - e.g. ``http://127.0.0.1:6666\\@1.1.1.1`` is ``1.1.1.1``
+        to ``urlparse`` but ``127.0.0.1`` to ``requests``. So the host is taken
+        from the prepared request, and any URL the two parsers disagree on, or
+        that carries credentials, is rejected outright.
+        """
+        try:
+            parsed = urlparse(url)
+            if parsed.scheme not in ALLOWED_URL_SCHEMES:
+                logger.error(f"SSRF check: scheme of URL '{url}' is not allowed.")
+                return None
+            if "\\" in parsed.netloc or "@" in parsed.netloc:
+                logger.error(
+                    f"SSRF check: URL '{url}' has credentials or a backslash in its authority."
+                )
+                return None
+            prepared_url = requests.Request("GET", url).prepare().url or ""
+            request_host = urllib3_parse_url(prepared_url).host
+        except Exception as e:
+            logger.error(f"SSRF check: could not parse URL '{url}': {e}")
+            return None
+
+        if not request_host or not parsed.hostname:
+            logger.error(f"SSRF check: could not extract hostname from URL '{url}'.")
+            return None
+        # urllib3 keeps IPv6 brackets; urlparse strips them. Compare normalised.
+        if request_host.strip("[]").lower() != parsed.hostname.lower():
+            logger.error(
+                f"SSRF check: URL parsers disagree on host for '{url}' "
+                f"('{parsed.hostname}' vs '{request_host}'). Blocking request."
+            )
+            return None
+        return parsed.hostname
+
+    def _fetch_with_validated_redirects(
+        self, url: str
+    ) -> t.Optional[requests.Response]:
+        """
+        GET ``url`` with redirects followed manually, so every hop is checked
+        against the SSRF policy rather than only the first one.
+
+        Note: resolution in the check and in the connection are separate
+        lookups, so a DNS-rebinding attacker controlling a public hostname can
+        still race them. Set ``ALLOW_INTERNAL_TARGETS``/network egress policy
+        accordingly for untrusted input.
+        """
+        current_url = url
+        for _ in range(MAX_REDIRECTS + 1):
+            host = self._validated_request_host(current_url)
+            if host is None or not self._is_safe_url_target(host):
+                # Logging is handled within the checks
+                return None
+
+            response = requests.get(
+                current_url,
+                timeout=REQUESTS_TIMEOUT_SECONDS,
+                stream=True,
+                allow_redirects=False,
+            )
+            if not response.is_redirect:
+                return response
+
+            location = response.headers.get("Location")
+            response.close()
+            if not location:
+                logger.error(f"Redirect from {current_url} has no Location header.")
+                return None
+            current_url = urljoin(current_url, location)
+
+        logger.error(f"URL {url} exceeded {MAX_REDIRECTS} redirects.")
+        return None
+
     def _is_safe_url_target(self, url_hostname: str) -> bool:
         """
         Resolves the URL hostname to IP addresses and checks if any fall into
@@ -476,7 +543,20 @@ class ImageTextPromptValue(PromptValue):
                     0
                 ]  # IP address is the first element of the sockaddr tuple
                 try:
-                    ip = ipaddress.ip_address(ip_address_str)
+                    # Strip an IPv6 zone id ("fe80::1%eth0") before parsing
+                    ip = ipaddress.ip_address(str(ip_address_str).split("%")[0])
+                    # Judge IPv4-mapped IPv6 (::ffff:a.b.c.d) by its IPv4 address
+                    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+                        ip = ip.ipv4_mapped
+
+                    # Anything not globally routable (incl. shared CGNAT space
+                    # 100.64.0.0/10, which is neither private nor reserved) is
+                    # blocked, on top of the explicit policy checks below.
+                    if not ip.is_global:
+                        logger.error(
+                            f"SSRF check: Hostname '{url_hostname}' resolved to non-global IP '{ip_address_str}'. Blocking request."
+                        )
+                        return False
 
                     # Check against disallowed types using the policy
                     for check_name in DISALLOWED_IP_CHECKS:
