@@ -155,6 +155,7 @@ nav:
           - From v0.1 to v0.2: howtos/migrations/migrate_from_v01_to_v02.md
           - From v0.3 to v0.4: howtos/migrations/migrate_from_v03_to_v04.md
           - Off LangChain: howtos/migrations/migrate_off_langchain.md
+          - Metric score changes: howtos/migrations/score_changes.md
   - 📖 References:
     - references/index.md
     - Core:
