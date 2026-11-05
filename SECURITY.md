@@ -1,66 +1,46 @@
 # Security Policy
 
-## Reporting Security Issues
+## Reporting a Vulnerability
 
-We take the security of RAGAS seriously. If you discover a security vulnerability in this project, please report it to us privately. **Do not report security vulnerabilities through public GitHub issues, discussions, or pull requests.**
+Please report security vulnerabilities **privately**. Do not open public GitHub issues, discussions, or pull requests for them.
 
-To report a vulnerability, please email us at founders@vibrantlabs.com. While not all details are mandatory, providing as much information as possible will assist us in effectively triaging and addressing the issue. Please include:
+Use GitHub's private vulnerability reporting:
 
-- **Type of Issue**: (e.g., buffer overflow, SQL injection, cross-site scripting)
-- **Affected Versions**: List the versions of RAGAS impacted by this vulnerability.
-- **Affected Files**: Full paths of source files related to the issue.
-- **Location in Code**: The location of the affected source code (tag/branch/commit or direct URL).
-- **Configuration Details**: Any special configuration required to reproduce the issue.
-- **Environment**: (e.g., Linux / Windows / macOS)
-- **Reproduction Steps**: Step-by-step instructions to reproduce the issue.
-- **Proof-of-Concept or Exploit Code**: (if possible)
-- **Impact Assessment**: Description of the issue's impact and how an attacker might exploit it.
-- **Mitigation Suggestions**: If possible, offer suggestions or patches to mitigate the issue.
+**[Report a vulnerability](https://github.com/arpieb/ragas-ng/security/advisories/new)** (repository → *Security* tab → *Report a vulnerability*)
 
-This information will help us triage and address your report more quickly.
+This opens a private advisory visible only to you and the maintainers, where we can discuss, fix, and coordinate disclosure.
+
+Not every detail is required, but these help us triage quickly:
+
+- **Type of issue** (e.g. SSRF, path traversal, code execution, credential leak)
+- **Affected version / commit**
+- **Affected files and location in code**
+- **Configuration** needed to reproduce
+- **Reproduction steps** and, if possible, a proof of concept
+- **Impact**: what an attacker could achieve
+- **Suggested fix**, if you have one
 
 ## Supported Versions
 
-The following versions of RAGAS are currently being supported with security updates.
+ragas-ng has not cut a release yet. Security fixes land on the `main` branch.
 
 | Version | Supported |
 | --- | --- |
-| 0.3.x   | :white_check_mark: |
-| 0.2.x   | :x: |
-| 0.1.x   | :x: |
-| < 0.1.x | :x: |
+| `main` | :white_check_mark: |
+| upstream `ragas` releases (vibrantlabsai/ragas) | :x: — report those upstream |
 
-## Security Update Policy
+## What to Expect
 
-Upon receiving a security report, we will:
+This is a community-maintained fork, so timelines are best effort:
 
-1. Acknowledge receipt within 48 hours.
-2. Investigate and verify the issue.
-3. Develop a fix and prepare a release.
-4. Coordinate with the reporter to validate the fix.
-5. Release the fix and update all affected parties.
+1. We aim to acknowledge reports within a few days.
+2. We investigate and confirm the issue.
+3. We develop a fix, ideally validated with the reporter.
+4. We publish the fix and a GitHub security advisory crediting the reporter (unless you prefer otherwise).
 
-We aim to address critical issues within 7 days of disclosure.
-
-## Preferred Languages
-
-We prefer all communications to be in English.
-
-## Policy
-
-We follow the principle of [Coordinated Vulnerability Disclosure.](https://en.wikipedia.org/wiki/Coordinated_vulnerability_disclosure)
-
-## Acknowledgments
-
-We appreciate the efforts of security researchers and users who report vulnerabilities to us. Your contributions help improve the security of RAGAS.
+We follow [Coordinated Vulnerability Disclosure](https://en.wikipedia.org/wiki/Coordinated_vulnerability_disclosure).
 
 ## References
 
-For more information on security reporting and policies, you may refer to:
-
-- [GitHub's Guide to Reporting Security Vulnerabilities](https://docs.github.com/en/code-security/security-advisories/guidelines-for-reporting-and-writing-about-security-vulnerabilities)
-- [Open Source Security Foundation (OpenSSF) Best Practices](https://bestpractices.coreinfrastructure.org/)
-
----
-
-*This policy is subject to change without notice. Please refer to the latest version in our repository.*
+- [GitHub: Privately reporting a security vulnerability](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability)
+- [OpenSSF Best Practices](https://www.bestpractices.dev/)
