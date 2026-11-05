@@ -6,6 +6,7 @@ from typing import List, Literal, Union
 import numpy as np
 
 from ragas.messages import AIMessage, HumanMessage, ToolMessage
+from ragas.metrics.collections._verdicts import judge_each
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
 
@@ -120,6 +121,8 @@ class TopicAdherence(BaseMetric):
 
         # Step 3: Classify topics against reference topics
         topic_classifications = await self._classify_topics(reference_topics, topics)
+        if topic_classifications is None:
+            return MetricResult(value=float("nan"))
 
         # Step 4: Compute score based on mode
         score = self._compute_score(topic_answered, topic_classifications)
@@ -157,25 +160,25 @@ class TopicAdherence(BaseMetric):
 
     async def _classify_topics(
         self, reference_topics: List[str], topics: List[str]
-    ) -> np.ndarray:
+    ) -> t.Optional[np.ndarray]:
         """Classify if each topic falls within reference topics."""
         input_data = TopicClassificationInput(
             reference_topics=reference_topics, topics=topics
         )
         prompt_str = self.topic_classification_prompt.to_string(input_data)
-        result = await self.llm.agenerate(prompt_str, TopicClassificationOutput)
-        classifications = self._safe_bool_conversion(result.classifications)
 
-        expected_len = len(topics)
-        actual_len = len(classifications)
-        if actual_len != expected_len:
-            if actual_len < expected_len:
-                padding = np.zeros(expected_len - actual_len, dtype=bool)
-                classifications = np.concatenate([classifications, padding])
-            else:
-                classifications = classifications[:expected_len]
+        async def ask() -> List[t.Any]:
+            result = await self.llm.agenerate(prompt_str, TopicClassificationOutput)
+            return list(result.classifications)
 
-        return classifications
+        # One classification per topic or no score. Padding missing ones with
+        # False (or truncating extras) silently mislabelled topics (#52).
+        aligned = await judge_each(
+            topics, ask, what="classifications", metric=self.name
+        )
+        if aligned is None:
+            return None
+        return self._safe_bool_conversion(aligned)
 
     def _safe_bool_conversion(self, classifications: List) -> np.ndarray:
         """Safely convert classifications to boolean array."""

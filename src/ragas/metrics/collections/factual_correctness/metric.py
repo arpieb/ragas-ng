@@ -5,6 +5,7 @@ from typing import List
 
 import numpy as np
 
+from ragas.metrics.collections._verdicts import judge_each
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
 from ragas.metrics.utils import fbeta_from_precision_recall
@@ -16,6 +17,7 @@ from .util import (
     NLIStatementInput,
     NLIStatementOutput,
     NLIStatementPrompt,
+    StatementFaithfulnessAnswer,
 )
 
 if t.TYPE_CHECKING:
@@ -187,11 +189,17 @@ class FactualCorrectness(BaseMetric):
         if not claims:
             return np.array([], dtype=bool)
 
-        verdicts = await self._verify_claims(claims, reference_text)
-        if not verdicts.statements:
-            return np.array([], dtype=bool)
+        async def ask() -> List[StatementFaithfulnessAnswer]:
+            return (await self._verify_claims(claims, reference_text)).statements
 
-        return np.array([bool(stmt.verdict) for stmt in verdicts.statements])
+        # One verdict per claim or no score (#52); NaN propagates to the result.
+        aligned = await judge_each(
+            claims, ask, text_of=lambda v: v.statement, metric=self.name
+        )
+        if aligned is None:
+            return np.array([np.nan])
+
+        return np.array([bool(stmt.verdict) for stmt in aligned])
 
 
 def _supported_fraction(verdicts: np.ndarray) -> float:

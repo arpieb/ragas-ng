@@ -110,3 +110,26 @@ A Python `str` is iterable, so passing `retrieved_contexts="some text"` instead 
 Every list-typed `ascore()` input now raises `ListInputError` (a subclass of both `TypeError` and `ValueError`) for a bare string, before any LLM call. That covers `retrieved_contexts`, `reference_contexts`, the context-ID lists, `reference_topics`, and multi-turn `user_input` / `reference_tool_calls`.
 
 `evaluate()` users aren't affected: `SingleTurnSample` already rejects a string there.
+
+## One verdict per statement, or no score ([#52](https://github.com/arpieb/ragas-ng/issues/52))
+
+`Faithfulness`, `FactualCorrectness`, `NoiseSensitivity`, `TopicAdherence` (collections)
+
+These metrics send the judge a list (statements, claims, topics) and score the fraction it marks supported. They divided by however many verdicts *came back*. If the judge dropped an unsupported statement, faithfulness went **up**.
+
+Now each submitted item needs exactly one verdict:
+
+1. If the counts match, the verdicts are taken in order.
+2. If the counts differ, verdicts are matched to items by the statement text the judge echoes back. Extra verdicts are ignored.
+3. If that fails, the judge is asked once more.
+4. If it still fails, the sample scores `NaN` with a warning. The NaN shows up as a missing row in `EvaluationResult.summary()` and the repr.
+
+| Metric | Before | Now |
+|---|---|---|
+| Faithfulness, FactualCorrectness | ratio over the returned verdicts | ratio over submitted statements, or NaN |
+| NoiseSensitivity | ragged verdict matrix (crash or nonsense) | NaN |
+| TopicAdherence | missing classifications padded with "not a reference topic", extras truncated | NaN |
+
+**Who sees a difference:** only samples where the judge returned the wrong number of verdicts. Others are unchanged.
+
+ContextRecall and AnswerCorrectness are not covered. Their judge splits the reference into statements itself, so there is no submitted list to check against.

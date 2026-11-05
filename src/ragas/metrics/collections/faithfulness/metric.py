@@ -3,6 +3,7 @@
 import typing as t
 from typing import List
 
+from ragas.metrics.collections._verdicts import judge_each
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
 
@@ -10,6 +11,7 @@ from .util import (
     NLIStatementInput,
     NLIStatementOutput,
     NLIStatementPrompt,
+    StatementFaithfulnessAnswer,
     StatementGeneratorInput,
     StatementGeneratorOutput,
     StatementGeneratorPrompt,
@@ -120,12 +122,26 @@ class Faithfulness(BaseMetric):
             # No statements generated - return NaN like legacy
             return MetricResult(value=float("nan"))
 
-        # Step 2: Join all contexts and evaluate statements against them
+        # Step 2: Join all contexts and evaluate statements against them.
+        # One verdict per statement or no score: scoring over whatever subset
+        # the judge returned shifts the denominator (#52).
         context_str = "\n".join(retrieved_contexts)
-        verdicts = await self._create_verdicts(statements, context_str)
+
+        async def ask() -> List[StatementFaithfulnessAnswer]:
+            return (await self._create_verdicts(statements, context_str)).statements
+
+        aligned = await judge_each(
+            statements,
+            ask,
+            text_of=lambda v: v.statement,
+            what="verdicts",
+            metric=self.name,
+        )
+        if aligned is None:
+            return MetricResult(value=float("nan"))
 
         # Step 3: Compute faithfulness score
-        score = self._compute_score(verdicts)
+        score = self._compute_score(NLIStatementOutput(statements=aligned))
 
         return MetricResult(value=float(score))
 

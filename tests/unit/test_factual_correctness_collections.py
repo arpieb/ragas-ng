@@ -161,3 +161,22 @@ def test_fbeta_from_precision_recall(p, r, beta, expected):
 def test_fbeta_from_precision_recall_propagates_nan():
     assert math.isnan(fbeta_from_precision_recall(float("nan"), 1.0))
     assert math.isnan(fbeta_from_precision_recall(1.0, float("nan")))
+
+
+@pytest.mark.asyncio
+async def test_verdicts_that_cannot_be_matched_to_claims_are_nan():
+    # 3 response claims, the judge keeps returning 2 verdicts (#52).
+    llm = claims_llm([1, 1, 0], [1])
+    metric = FactualCorrectness(llm=llm, mode="precision")
+
+    async def short_verify(claims, reference):
+        return NLIStatementOutput(
+            statements=[
+                StatementFaithfulnessAnswer(statement=c, reason="r", verdict=1)
+                for c in claims[:2]
+            ]
+        )
+
+    metric._verify_claims = short_verify  # type: ignore[method-assign]
+    result = await metric.ascore(response=RESPONSE, reference=REFERENCE)
+    assert math.isnan(result.value)  # pre-fix: 2/2 = 1.0
