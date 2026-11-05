@@ -4,7 +4,20 @@ ragas-ng fixes scoring bugs in the `ragas.metrics.collections` metrics, even whe
 
 If you compare runs across versions, check this page first. Each entry lists the metric, what changed, and which inputs score differently.
 
-Legacy metrics (`ragas.metrics._*`, deprecated) are generally left as they were unless stated otherwise.
+## The short imports score through collections
+
+`from ragas.metrics import BleuScore` (and every other deprecated metric name and pre-built instance such as `faithfulness`) returns the legacy class, but **its score comes from the matching `ragas.metrics.collections` metric**. So every fix on this page applies whichever import you use. The legacy interface is unchanged: the constructor arguments, `evaluate()` injecting `llm` and `embeddings`, `single_turn_ascore`, `get_prompts`, `adapt_prompts` and `train`.
+
+It falls back to the legacy implementation, and logs a warning saying so, when the collections metric can't honour the configuration:
+
+| Situation | Example |
+|---|---|
+| The LLM isn't an `InstructorBaseRagasLLM` from `llm_factory()` | OCI GenAI, Haystack or LlamaIndex wrappers |
+| The embeddings aren't a modern `BaseRagasEmbedding` | a custom legacy embeddings class |
+| A prompt was customised | `set_prompts(...)`, `adapt_prompts(...)`, `train(...)` |
+| A legacy-only option was changed | `FactualCorrectness(language=...)`, `AnswerSimilarity(is_cross_encoder=True)`, a `distance_measure` that isn't a `NonLLMStringSimilarity` |
+
+Only the private modules (`from ragas.metrics._bleu_score import BleuScore`) still give the unmodified legacy class.
 
 ## FactualCorrectness: recall and f1 ([#48](https://github.com/arpieb/ragas-ng/issues/48), [#49](https://github.com/arpieb/ragas-ng/issues/49))
 
