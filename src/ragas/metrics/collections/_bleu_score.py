@@ -31,7 +31,9 @@ class BleuScore(BaseMetric):
 
     Attributes:
         name: The metric name
-        kwargs: Additional arguments to pass to sacrebleu.corpus_bleu
+        kwargs: Additional arguments to pass to sacrebleu.corpus_bleu, e.g.
+            ``{"tokenize": "zh"}`` for Chinese or ``{"smooth_method": "exp"}``
+            for sentence-level smoothing of short texts
         allowed_values: Score range (0.0 to 1.0)
     """
 
@@ -71,16 +73,13 @@ class BleuScore(BaseMetric):
         assert isinstance(reference, str), "BleuScore expects a valid reference string"
         assert isinstance(response, str), "BleuScore expects a valid response string"
 
-        reference_sentences = reference.split(". ")
-        response_sentences = response.split(". ")
-
-        reference_formatted = [[ref] for ref in reference_sentences]
-        response_formatted = response_sentences
-
-        score = (
-            corpus_bleu(response_formatted, reference_formatted, **self.kwargs).score
-            / 100
-        )
+        # One sample is one segment: the whole response against the whole
+        # reference. corpus_bleu takes a list of hypotheses and a list of
+        # reference *streams*, each stream holding one reference per hypothesis.
+        # Splitting into sentences here made every reference sentence its own
+        # stream for only the first response sentence, so the rest of the
+        # response was never scored (#50).
+        score = corpus_bleu([response], [[reference]], **self.kwargs).score / 100
 
         assert isinstance(score, float), "Expecting a float"
         return MetricResult(value=float(score))
