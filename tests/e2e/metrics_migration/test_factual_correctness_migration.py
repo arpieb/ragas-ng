@@ -82,11 +82,14 @@ class TestFactualCorrectnessE2EMigration:
         if test_llm is None or test_modern_llm is None:
             pytest.skip("LLM required for E2E testing")
 
-        # Test different modes and configurations
+        # Only precision is compared. Legacy recall (and therefore f1) used the
+        # precision-direction true positives as its numerator; collections
+        # computes recall over the reference's claims instead (#48), so those
+        # modes intentionally no longer match legacy. Unit tests in
+        # tests/unit/test_factual_correctness_collections.py pin the arithmetic.
         test_configs = [
-            {"mode": "f1", "atomicity": "low", "coverage": "low"},
+            {"mode": "precision", "atomicity": "low", "coverage": "low"},
             {"mode": "precision", "atomicity": "high", "coverage": "high"},
-            {"mode": "recall", "atomicity": "low", "coverage": "high"},
         ]
 
         for config in test_configs:
@@ -124,6 +127,10 @@ class TestFactualCorrectnessE2EMigration:
                     reference=data["reference"],
                 )
 
+                if np.isnan(v2_result.value):
+                    # collections returns NaN when there are no claims (#49);
+                    # legacy returned 0.0
+                    continue
                 score_diff = abs(legacy_score - v2_result.value)
                 print(f"   Legacy: {legacy_score:.6f}")
                 print(f"   V2:     {v2_result.value:.6f}")

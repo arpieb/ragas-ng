@@ -72,33 +72,29 @@ scorer = FactualCorrectness(
 
 ### How It's Calculated
 
-The formula for calculating True Positive (TP), False Positive (FP), and False Negative (FN) is as follows:
+Both texts are broken into claims, and each set of claims is checked against the *other* text:
+
+- **Response claims**, checked against the reference: how much of what the response says is supported.
+- **Reference claims**, checked against the response: how much of the reference the response covers.
 
 $$
-\text{True Positive (TP)} = \text{Number of claims in response that are present in reference}
-$$
-
-$$
-\text{False Positive (FP)} = \text{Number of claims in response that are not present in reference}
-$$
-
-$$
-\text{False Negative (FN)} = \text{Number of claims in reference that are not present in response}
-$$
-
-The formula for calculating precision, recall, and F1 score is as follows:
-
-$$
-\text{Precision} = {TP \over (TP + FP)}
+\text{Precision} = {\text{response claims supported by the reference} \over \text{response claims}}
 $$
 
 $$
-\text{Recall} = {TP \over (TP + FN)}
+\text{Recall} = {\text{reference claims supported by the response} \over \text{reference claims}}
 $$
 
 $$
-\text{F1 Score} = {2 \times \text{Precision} \times \text{Recall} \over (\text{Precision} + \text{Recall})}
+F_\beta = {(1 + \beta^2) \times \text{Precision} \times \text{Recall} \over \beta^2 \times \text{Precision} + \text{Recall}}
 $$
+
+With the default `beta=1.0` this is the F1 score. `beta > 1` weights recall more and `beta < 1` weights precision more.
+
+`mode="precision"` and `mode="recall"` only make the LLM calls for their own direction. If the text a mode depends on yields no claims, the score is `NaN` (undefined) rather than `0`.
+
+!!! note "Changed in ragas-ng"
+    Earlier versions used the precision-direction supported count as the recall numerator, so recall and F1 did not mean what this section describes. See [Metric score changes](../../../howtos/migrations/score_changes.md).
 
 ### Controlling the Number of Claims
 

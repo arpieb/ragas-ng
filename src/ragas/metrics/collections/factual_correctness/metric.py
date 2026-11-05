@@ -7,7 +7,7 @@ import numpy as np
 
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
-from ragas.metrics.utils import fbeta_score
+from ragas.metrics.utils import fbeta_from_precision_recall
 
 from .util import (
     ClaimDecompositionInput,
@@ -132,36 +132,33 @@ class FactualCorrectness(BaseMetric):
                 "reference is missing. Please add reference to the test sample."
             )
 
-        # Step 1: Get claim verifications to match legacy behavior exactly
-        # Legacy always does: decompose response → verify against reference
-        reference_response = await self._decompose_and_verify_claims(
-            response, reference
-        )
-
+        # Precision: what fraction of the RESPONSE's claims the reference
+        # supports. Recall: what fraction of the REFERENCE's claims the response
+        # supports. Each direction is decomposed and verified independently, and
+        # only the directions the mode needs are computed.
+        precision = recall = float("nan")
+        if self.mode != "recall":
+            response_claims_supported = await self._decompose_and_verify_claims(
+                response, reference
+            )
+            precision = _supported_fraction(response_claims_supported)
         if self.mode != "precision":
-            # For recall and f1, also do: decompose reference → verify against response
-            response_reference = await self._decompose_and_verify_claims(
+            reference_claims_supported = await self._decompose_and_verify_claims(
                 reference, response
             )
-        else:
-            response_reference = np.array([], dtype=bool)
+            recall = _supported_fraction(reference_claims_supported)
 
-        # Step 2: Compute TP, FP, FN exactly like legacy
-        tp = int(np.sum(reference_response))
-        fp = int(np.sum(~reference_response))
-        if self.mode != "precision":
-            fn = int(np.sum(~response_reference))
-        else:
-            fn = 0
-
-        # Step 3: Compute final score based on mode
         if self.mode == "precision":
-            score = tp / (tp + fp + 1e-8)
+            score = precision
         elif self.mode == "recall":
-            score = tp / (tp + fn + 1e-8)
-        else:  # f1
-            score = fbeta_score(tp, fp, fn, self.beta)
+            score = recall
+        else:  # f-beta
+            score = fbeta_from_precision_recall(precision, recall, self.beta)
 
+        # NaN means "no claims to judge" (e.g. a one-word answer or an
+        # abstention), which is undefined, not a failure.
+        if np.isnan(score):
+            return MetricResult(value=float("nan"))
         return MetricResult(value=float(np.round(score, 2)))
 
     async def _decompose_claims(self, text: str) -> List[str]:
@@ -195,3 +192,10 @@ class FactualCorrectness(BaseMetric):
             return np.array([], dtype=bool)
 
         return np.array([bool(stmt.verdict) for stmt in verdicts.statements])
+
+
+def _supported_fraction(verdicts: np.ndarray) -> float:
+    """Fraction of claims judged supported; NaN when there were no claims."""
+    if verdicts.size == 0:
+        return float("nan")
+    return float(np.mean(verdicts))
