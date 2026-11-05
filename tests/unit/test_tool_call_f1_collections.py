@@ -273,13 +273,13 @@ class TestToolCallF1Collections:
     @pytest.mark.asyncio
     async def test_input_validation(self, tool_call_f1):
         """Test input validation."""
-        with pytest.raises(ValueError, match="user_input must be a list"):
+        with pytest.raises(ValueError, match="'user_input' must be a list"):
             await tool_call_f1.ascore(
                 user_input="not a list",
                 reference_tool_calls=[],
             )
 
-        with pytest.raises(ValueError, match="reference_tool_calls must be a list"):
+        with pytest.raises(ValueError, match="'reference_tool_calls' must be a list"):
             await tool_call_f1.ascore(
                 user_input=[],
                 reference_tool_calls="not a list",
