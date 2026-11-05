@@ -284,3 +284,29 @@ class TestComplexDataHandling:
         except Exception as e:
             # If validation fails due to CSV serialization, that's a separate issue
             pytest.skip(f"Validation failed due to serialization: {e}")
+
+
+@pytest.mark.parametrize("table_class", [Dataset, Experiment])
+@pytest.mark.parametrize("data_model", [None, SimpleTestModel])
+def test_train_test_split_reloads_saved_rows(
+    mock_backend, simple_test_data, table_class, data_model
+):
+    saved = table_class("saved_rows", mock_backend, data=simple_test_data)
+    saved.save()
+    table = table_class("saved_rows", mock_backend, data_model=data_model)
+
+    train, test = table.train_test_split(test_size=1 / 3)
+
+    expected = (
+        [data_model(**row) for row in simple_test_data]
+        if data_model
+        else [
+            {key: str(value) for key, value in row.items()} for row in simple_test_data
+        ]
+    )
+    assert list(train) == expected[:2]
+    assert list(test) == expected[2:]
+    assert type(train) is table_class
+    assert type(test) is table_class
+    assert train.data_model is data_model
+    assert test.data_model is data_model
