@@ -171,15 +171,17 @@ class AnswerCorrectness(BaseMetric):
         response_statements = await self._generate_statements(user_input, response)
         reference_statements = await self._generate_statements(user_input, reference)
 
-        # Step 2: Calculate factuality score via TP/FP/FN classification
-        if response_statements and reference_statements:
-            classification = await self._classify_statements(
-                user_input, response_statements, reference_statements
-            )
-            factuality_score = self._compute_f1_score(classification)
-        else:
-            # If no statements generated, assume perfect match
-            factuality_score = 1.0
+        # Step 2: Calculate factuality score via TP/FP/FN classification.
+        # With no statements on either side there is nothing to classify: the
+        # factuality, and so the sample's score, is undefined (NaN), matching
+        # FactualCorrectness (#49). It used to "assume perfect match" (1.0),
+        # giving evasive answers full factuality credit (#136).
+        if not (response_statements and reference_statements):
+            return MetricResult(value=float("nan"))
+        classification = await self._classify_statements(
+            user_input, response_statements, reference_statements
+        )
+        factuality_score = self._compute_f1_score(classification)
 
         # Step 3: Calculate semantic similarity score
         if self.weights[1] == 0:

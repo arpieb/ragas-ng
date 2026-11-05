@@ -190,3 +190,9 @@ These assumed space-separated Latin text:
 `ragas.metrics.collections.SemanticSimilarity`
 
 The score is the cosine similarity of the two embeddings, which can be slightly negative for unrelated texts, despite the metric being documented as 0–1. It is now clipped to `[0, 1]`, the same as AnswerRelevancy. **Who sees a difference:** only samples that scored below 0; they now score `0.0`. With `threshold` set, the score is binary as before.
+
+## AnswerCorrectness: no statements is undefined, not a perfect match ([#136](https://github.com/arpieb/ragas-ng/issues/136))
+
+`ragas.metrics.collections.AnswerCorrectness`
+
+When the response or the reference yielded no statements, the factuality part was set to `1.0` ("assume perfect match"). An evasive or one-word answer then got full factuality credit and scored about `0.75` or higher with the default weights. The sample now scores `NaN`, the same as FactualCorrectness ([#49](https://github.com/arpieb/ragas-ng/issues/49)), and shows as a missing row in `EvaluationResult.summary()`. **Who sees a difference:** only samples where statement extraction came back empty.
