@@ -154,6 +154,9 @@ class AgentGoalAccuracyWithoutReference(MetricWithLLM, MultiTurnMetric):
             }
         }
     )
+    # Binary (goal achieved or not), like the WithReference variant. Unset, it
+    # made metric.train() abort with "output_type ... must be set" (#66).
+    output_type: t.Optional[MetricOutputType] = MetricOutputType.BINARY
     workflow_prompt: PydanticPrompt = field(
         default_factory=lambda: InferGoalOutcomePrompt()
     )

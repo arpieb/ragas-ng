@@ -130,11 +130,17 @@ class AnswerAccuracy(MetricWithLLM, SingleTurnMetric):
                     logger.warning(f"Retry: {retry}")
 
             for retry in range(self.retry):
+                # Judge 2 swaps the *roles*: the reference is rated as the
+                # "User Answer" against the response as "Reference Answer", so
+                # the two judges check agreement in both directions. This used
+                # to swap only the order, keeping each label on its original
+                # text, i.e. judge 1's question again (#63). Matches the docs
+                # and ragas.metrics.collections.AnswerAccuracy.
                 formatted_prompt = StringPromptValue(
                     text=self.template_accuracy2.format(
                         query=sample.user_input,
-                        answer0="Reference Answer",
-                        answer1="User Answer",
+                        answer0="User Answer",
+                        answer1="Reference Answer",
                         sentence_inference=sample.reference,
                         sentence_true=sample.response,
                     )

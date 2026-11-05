@@ -96,7 +96,13 @@ class InstanceRubrics(MetricWithLLM, SingleTurnMetric, MultiTurnMetric):
         )
         if contexts is not None:
             contexts = "\n".join(contexts)
-            user_input = f"{user_input} answer using context: {contexts}"
+            # user_input is optional: without it, don't put the literal string
+            # "None" into the judge prompt (#65).
+            user_input = (
+                f"{user_input} answer using context: {contexts}"
+                if user_input is not None
+                else f"Answer using context: {contexts}"
+            )
 
         if rubrics is None:
             raise ValueError(f"Rubrics are not set for the sample: {row}")
