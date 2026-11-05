@@ -248,6 +248,40 @@ def _deprecation_message(name: str) -> str:
     )
 
 
+_HANDOFF_CACHE: dict = {}
+
+
+def _with_collections_scoring(name: str):
+    """The deprecated export for ``name``, scoring through collections.
+
+    Legacy classes and pre-built instances are swapped for subclasses that keep
+    the legacy interface but take the score from the ``ragas.metrics.collections``
+    port, which carries the scoring fixes. See ``_legacy_handoff``.
+    """
+    if name in _HANDOFF_CACHE:
+        return _HANDOFF_CACHE[name]
+
+    import ragas.metrics.collections as _collections
+    from ragas.metrics._legacy_handoff import handoff_class, handoff_instance
+
+    obj = _DEPRECATED_METRICS[name]
+    if isinstance(obj, type):
+        target_name = _COLLECTIONS_RENAMES.get(name, name)
+    else:
+        target_name = _COLLECTIONS_CLASS_FOR_INSTANCE.get(name, "")
+    target = getattr(_collections, target_name, None)
+
+    if not (isinstance(target, type) and isinstance(obj, (type, Metric))):
+        # Not a metric (e.g. the DistanceMeasure enum) or no port: unchanged.
+        result = obj
+    elif isinstance(obj, type):
+        result = handoff_class(obj, target) if issubclass(obj, Metric) else obj
+    else:
+        result = handoff_instance(obj, target)
+    _HANDOFF_CACHE[name] = result
+    return result
+
+
 def __getattr__(name: str):
     if name in _DEPRECATED_METRICS:
         warnings.warn(
@@ -255,5 +289,5 @@ def __getattr__(name: str):
             DeprecationWarning,
             stacklevel=2,
         )
-        return _DEPRECATED_METRICS[name]
+        return _with_collections_scoring(name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

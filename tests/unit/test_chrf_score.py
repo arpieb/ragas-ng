@@ -1,3 +1,4 @@
+import math
 from unittest.mock import patch
 
 import pytest
@@ -58,15 +59,15 @@ async def test_chrf_score_single_turn_ascore_none_values(mock_sacrebleu):
     """Test single turn async score with None values."""
     metric = ChrfScore()
 
-    # Test with None reference
+    # `from ragas.metrics import ChrfScore` scores through collections CHRFScore,
+    # where missing input is undefined (NaN), not a 0.0 failure (#61).
     sample = SingleTurnSample(reference=None, response="Hello there")
     score = await metric._single_turn_ascore(sample, None)
-    assert score == 0.0
+    assert math.isnan(score)
 
-    # Test with None response
     sample = SingleTurnSample(reference="Hello world", response=None)
     score = await metric._single_turn_ascore(sample, None)
-    assert score == 0.0
+    assert math.isnan(score)
 
 
 @pytest.mark.asyncio
