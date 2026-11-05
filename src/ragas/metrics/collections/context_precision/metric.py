@@ -6,6 +6,7 @@ from typing import List
 import numpy as np
 
 from ragas.metrics.collections._average_precision import average_precision
+from ragas.metrics.collections._concurrency import gather_bounded
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
 
@@ -102,15 +103,19 @@ class ContextPrecisionWithReference(BaseMetric):
             raise ValueError("retrieved_contexts cannot be empty")
 
         # Evaluate each retrieved context
-        verdicts = []
-        for context in retrieved_contexts:
-            # Create input data and generate prompt
-            input_data = ContextPrecisionInput(
-                question=user_input, context=context, answer=reference
+        # One independent judgement per context, run concurrently (#58).
+        results = await gather_bounded(
+            self.llm.agenerate(
+                self.prompt.to_string(
+                    ContextPrecisionInput(
+                        question=user_input, context=context, answer=reference
+                    )
+                ),
+                ContextPrecisionOutput,
             )
-            prompt_string = self.prompt.to_string(input_data)
-            result = await self.llm.agenerate(prompt_string, ContextPrecisionOutput)
-            verdicts.append(result.verdict)
+            for context in retrieved_contexts
+        )
+        verdicts = [result.verdict for result in results]
 
         # Calculate average precision
         score = self._calculate_average_precision(verdicts)
@@ -214,15 +219,19 @@ class ContextPrecisionWithoutReference(BaseMetric):
             raise ValueError("retrieved_contexts cannot be empty")
 
         # Evaluate each retrieved context
-        verdicts = []
-        for context in retrieved_contexts:
-            # Create input data and generate prompt
-            input_data = ContextPrecisionInput(
-                question=user_input, context=context, answer=response
+        # One independent judgement per context, run concurrently (#58).
+        results = await gather_bounded(
+            self.llm.agenerate(
+                self.prompt.to_string(
+                    ContextPrecisionInput(
+                        question=user_input, context=context, answer=response
+                    )
+                ),
+                ContextPrecisionOutput,
             )
-            prompt_string = self.prompt.to_string(input_data)
-            result = await self.llm.agenerate(prompt_string, ContextPrecisionOutput)
-            verdicts.append(result.verdict)
+            for context in retrieved_contexts
+        )
+        verdicts = [result.verdict for result in results]
 
         # Calculate average precision
         score = self._calculate_average_precision(verdicts)
