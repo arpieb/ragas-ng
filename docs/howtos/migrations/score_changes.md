@@ -75,3 +75,11 @@ The QA component divided the number of `"1"` answers by the number of answers th
 | response empty, valid reference | `0.0` | `0.0` (unchanged) |
 
 A missing reference is a gap in the dataset, not a model failure. Scoring it `0.0` pulled the mean down for something the model didn't do. As with other undefined scores, NaN rows are left out of the mean.
+
+## AnswerRelevancy: clipped to 0–1 ([#56](https://github.com/arpieb/ragas-ng/issues/56))
+
+`ragas.metrics.collections.AnswerRelevancy`
+
+The score is the mean cosine similarity between the user's question and questions generated from the response. Cosine similarity can be slightly negative for unrelated embeddings, so the metric could return values like `-0.02` despite being documented as 0–1. Scores are now clipped to `[0, 1]`.
+
+**Who sees a difference:** only samples that scored below 0. They now score `0.0`.
