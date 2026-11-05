@@ -170,3 +170,17 @@ Rule: the shorter list must be contained in the longer one, as an in-order subse
 `ragas.metrics.collections.NonLLMContextRecall`
 
 Recall counted a reference context as recalled when similarity was `> threshold`; precision used `>=`. Both now use `>=`. **Who sees a difference:** only contexts whose similarity equals the threshold exactly. In practice that means `threshold=1.0`, where an exact match counted for precision but scored `0` for recall.
+
+## ROUGE, BLEU and quoted spans on non-English text ([#51](https://github.com/arpieb/ragas-ng/issues/51))
+
+`RougeScore`, `BleuScore`, `QuotedSpansAlignment` (collections)
+
+These assumed space-separated Latin text:
+
+| | Before | Now |
+|---|---|---|
+| **RougeScore**, non-ASCII text | `rouge_score`'s tokenizer drops everything outside `a-z0-9`: identical Russian, Greek, Arabic or Chinese text scored `0.0`, and `très` became `tr s` | Unicode-aware tokenizer; each CJK character is a token. **ASCII-only text is tokenized exactly as before.** |
+| **BleuScore**, Chinese / Japanese | the space-based `13a` tokenizer saw one "word" per sentence, so a one-character difference scored `0.0` | `tokenize="zh"` for Chinese, `"char"` for Japanese, unless you pass `tokenize` |
+| **QuotedSpansAlignment** | only `"…"`, `'…'`, `“…”`, `‘…’`; quoted CJK sentences counted as one word, so they fell below `min_span_words` | also `«…»`, `‹…›`, `„…“`, `「…」`, `『…』`; CJK characters count individually |
+
+**Who sees a difference:** anyone scoring text that isn't plain ASCII. For English, ROUGE and BLEU scores are unchanged. The legacy `ragas.metrics.quoted_spans` module had lost its curly-quote characters and matched straight quotes only; it now uses the same pattern.
