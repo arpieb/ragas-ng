@@ -71,3 +71,14 @@ async def test_instance_rubrics_without_user_input_has_no_literal_none():
     )
     assert "None" not in captured["input"].user_input
     assert captured["input"].user_input == "Answer using context: ctx one\nctx two"
+
+
+@pytest.mark.parametrize(
+    "cls_name", ["AgentGoalAccuracyWithReference", "AgentGoalAccuracyWithoutReference"]
+)
+def test_agent_goal_accuracy_output_type_is_binary(cls_name):
+    # train() refuses to run without an output_type (#66)
+    import ragas.metrics._goal_accuracy as ga
+    from ragas.metrics.base import MetricOutputType
+
+    assert getattr(ga, cls_name)().output_type == MetricOutputType.BINARY
