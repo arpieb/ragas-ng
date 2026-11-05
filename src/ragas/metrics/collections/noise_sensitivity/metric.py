@@ -194,7 +194,7 @@ class NoiseSensitivity(BaseMetric):
         self, text: str, question: str
     ) -> List[str]:
         """Decompose answer text into atomic statements."""
-        input_data = StatementGeneratorInput(question=question, text=text)
+        input_data = StatementGeneratorInput(question=question, answer=text)
         prompt_str = self.statement_prompt.to_string(input_data)
         result = await self.llm.agenerate(prompt_str, StatementGeneratorOutput)
         return result.statements
