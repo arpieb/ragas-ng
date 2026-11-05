@@ -7,6 +7,7 @@ from typing import Dict, List, Literal
 import numpy as np
 
 from ragas.metrics.collections._concurrency import gather_bounded
+from ragas.metrics.collections._reasons import count_phrase, itemized
 from ragas.metrics.collections._verdicts import judge_each
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
@@ -186,9 +187,18 @@ class NoiseSensitivity(BaseMetric):
         answers = {k: v.astype(bool) for k, v in answers.items()}
 
         # Step 4: Compute noise sensitivity score
-        score = self._compute_score(answers)
-
-        return MetricResult(value=float(score))
+        noisy = self._noisy_statements(answers)
+        score = float(np.mean(noisy))
+        reason = itemized(
+            f"{count_phrase(int(noisy.sum()), len(noisy), 'response statement')} "
+            f"are incorrect (not supported by the reference) yet supported by "
+            f"{'a relevant' if self.mode == 'relevant' else 'an irrelevant'} "
+            f"retrieved context; lower is better.",
+            ((stmt, not bool(flag), None) for stmt, flag in zip(ans_statements, noisy)),
+            yes="ok",
+            no="noise-induced error",
+        )
+        return MetricResult(value=score, reason=reason)
 
     async def _decompose_answer_into_statements(
         self, text: str, question: str
@@ -223,6 +233,11 @@ class NoiseSensitivity(BaseMetric):
 
     def _compute_score(self, answers: Dict) -> float:
         """Compute noise sensitivity score from faithfulness matrices."""
+        return float(np.mean(self._noisy_statements(answers)))
+
+    def _noisy_statements(self, answers: Dict) -> np.ndarray:
+        """Per response statement: incorrect (not supported by the reference)
+        yet supported by a relevant / irrelevant retrieved context (by mode)."""
         incorrect = ~answers["ground_truth2answer"]
 
         # Compute relevant retrievals (needed for both modes)
@@ -243,7 +258,7 @@ class NoiseSensitivity(BaseMetric):
             # Keep them exclusive (irrelevant should not include relevant)
             irrelevant_faithful &= ~relevant_faithful
 
-            return float(np.mean(irrelevant_faithful & incorrect))
+            return (irrelevant_faithful & incorrect).reshape(-1)
 
-        else:  # mode == "relevant"
-            return float(np.mean(relevant_faithful & incorrect))
+        # mode == "relevant"
+        return (relevant_faithful & incorrect).reshape(-1)

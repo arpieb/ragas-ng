@@ -124,7 +124,11 @@ class AnswerRelevancy(BaseMetric):
                 noncommittal_flags.append(result.noncommittal)
 
         if not generated_questions:
-            return MetricResult(value=0.0)
+            return MetricResult(
+                value=0.0,
+                reason="No question could be generated from the response (it is "
+                "likely evasive or empty), so it is scored as not relevant.",
+            )
 
         # Check if all responses are noncommittal
         all_noncommittal = np.all(noncommittal_flags)
@@ -156,4 +160,24 @@ class AnswerRelevancy(BaseMetric):
         score = cosine_sim.mean() * int(not all_noncommittal)
         score = float(np.clip(score, 0.0, 1.0))
 
-        return MetricResult(value=float(score))
+        if all_noncommittal:
+            summary = (
+                "The response was judged noncommittal (evasive or vague), so the "
+                "score is 0. Questions generated from it:"
+            )
+        else:
+            summary = (
+                f"Mean similarity {float(cosine_sim.mean()):.2f} between the user "
+                f"input and questions generated from the response:"
+            )
+        reason = "\n".join(
+            [summary]
+            + [
+                f"- {q!r} (similarity {float(sim):.2f}"
+                + (", noncommittal)" if flag else ")")
+                for q, sim, flag in zip(
+                    generated_questions, cosine_sim, noncommittal_flags
+                )
+            ]
+        )
+        return MetricResult(value=float(score), reason=reason)

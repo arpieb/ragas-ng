@@ -5,6 +5,11 @@ from typing import List
 
 import numpy as np
 
+from ragas.metrics.collections._reasons import (
+    UNMATCHED_VERDICTS,
+    count_phrase,
+    itemized,
+)
 from ragas.metrics.collections._verdicts import judge_each
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
@@ -139,16 +144,19 @@ class FactualCorrectness(BaseMetric):
         # supports. Each direction is decomposed and verified independently, and
         # only the directions the mode needs are computed.
         precision = recall = float("nan")
+        sections: List[str] = []
         if self.mode != "recall":
-            response_claims_supported = await self._decompose_and_verify_claims(
-                response, reference
+            verdicts = await self._judge_direction(response, reference)
+            precision = _supported_fraction(verdicts)
+            sections.append(
+                _direction_reason("response", "reference", "Precision", verdicts)
             )
-            precision = _supported_fraction(response_claims_supported)
         if self.mode != "precision":
-            reference_claims_supported = await self._decompose_and_verify_claims(
-                reference, response
+            verdicts = await self._judge_direction(reference, response)
+            recall = _supported_fraction(verdicts)
+            sections.append(
+                _direction_reason("reference", "response", "Recall", verdicts)
             )
-            recall = _supported_fraction(reference_claims_supported)
 
         if self.mode == "precision":
             score = precision
@@ -157,11 +165,12 @@ class FactualCorrectness(BaseMetric):
         else:  # f-beta
             score = fbeta_from_precision_recall(precision, recall, self.beta)
 
+        reason = "\n\n".join(sections)
         # NaN means "no claims to judge" (e.g. a one-word answer or an
         # abstention), which is undefined, not a failure.
         if np.isnan(score):
-            return MetricResult(value=float("nan"))
-        return MetricResult(value=float(np.round(score, 2)))
+            return MetricResult(value=float("nan"), reason=reason)
+        return MetricResult(value=float(np.round(score, 2)), reason=reason)
 
     async def _decompose_claims(self, text: str) -> List[str]:
         """Break text into claims using configurable decomposition."""
@@ -181,29 +190,56 @@ class FactualCorrectness(BaseMetric):
         result = await self.llm.agenerate(prompt_str, NLIStatementOutput)
         return result
 
-    async def _decompose_and_verify_claims(
+    async def _judge_direction(
         self, text_to_decompose: str, reference_text: str
-    ) -> np.ndarray:
-        """Decompose text into claims and verify against reference."""
+    ) -> t.Optional[List[StatementFaithfulnessAnswer]]:
+        """Claims of one text, each with a verdict against the other text.
+
+        ``[]`` if no claims were extracted; ``None`` if the judge's verdicts
+        couldn't be matched to the claims (#52).
+        """
         claims = await self._decompose_claims(text_to_decompose)
         if not claims:
-            return np.array([], dtype=bool)
+            return []
 
         async def ask() -> List[StatementFaithfulnessAnswer]:
             return (await self._verify_claims(claims, reference_text)).statements
 
-        # One verdict per claim or no score (#52); NaN propagates to the result.
         aligned = await judge_each(
             claims, ask, text_of=lambda v: v.statement, metric=self.name
         )
         if aligned is None:
-            return np.array([np.nan])
+            return None
+        # Report the claim as decomposed, whatever the judge echoed back.
+        return [v.model_copy(update={"statement": c}) for c, v in zip(claims, aligned)]
 
-        return np.array([bool(stmt.verdict) for stmt in aligned])
 
-
-def _supported_fraction(verdicts: np.ndarray) -> float:
-    """Fraction of claims judged supported; NaN when there were no claims."""
-    if verdicts.size == 0:
+def _supported_fraction(
+    verdicts: t.Optional[List[StatementFaithfulnessAnswer]],
+) -> float:
+    """Fraction of claims judged supported; NaN for no claims or unmatched."""
+    if not verdicts:
         return float("nan")
-    return float(np.mean(verdicts))
+    return sum(1 for v in verdicts if v.verdict) / len(verdicts)
+
+
+def _direction_reason(
+    source: str,
+    against: str,
+    label: str,
+    verdicts: t.Optional[List[StatementFaithfulnessAnswer]],
+) -> str:
+    """Explanation for one direction (response vs reference or the reverse)."""
+    if verdicts is None:
+        return f"{label}: " + UNMATCHED_VERDICTS.format(what=f"{source} claims")
+    if not verdicts:
+        return (
+            f"{label}: no claims could be extracted from the {source}, so it is "
+            f"undefined."
+        )
+    supported = sum(1 for v in verdicts if v.verdict)
+    return itemized(
+        f"{label}: {count_phrase(supported, len(verdicts), 'claim')} in the "
+        f"{source} are supported by the {against}.",
+        ((v.statement, bool(v.verdict), v.reason) for v in verdicts),
+    )

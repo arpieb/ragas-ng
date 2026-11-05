@@ -3,6 +3,11 @@
 import typing as t
 from typing import List
 
+from ragas.metrics.collections._reasons import (
+    UNMATCHED_VERDICTS,
+    count_phrase,
+    itemized,
+)
 from ragas.metrics.collections._verdicts import judge_each
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
@@ -120,7 +125,11 @@ class Faithfulness(BaseMetric):
 
         if not statements:
             # No statements generated - return NaN like legacy
-            return MetricResult(value=float("nan"))
+            return MetricResult(
+                value=float("nan"),
+                reason="No statements could be extracted from the response, so "
+                "faithfulness is undefined.",
+            )
 
         # Step 2: Join all contexts and evaluate statements against them.
         # One verdict per statement or no score: scoring over whatever subset
@@ -138,12 +147,20 @@ class Faithfulness(BaseMetric):
             metric=self.name,
         )
         if aligned is None:
-            return MetricResult(value=float("nan"))
+            return MetricResult(
+                value=float("nan"),
+                reason=UNMATCHED_VERDICTS.format(what="statements"),
+            )
 
         # Step 3: Compute faithfulness score
         score = self._compute_score(NLIStatementOutput(statements=aligned))
-
-        return MetricResult(value=float(score))
+        supported = sum(1 for v in aligned if v.verdict)
+        reason = itemized(
+            f"{count_phrase(supported, len(aligned), 'statement')} in the response "
+            f"are supported by the retrieved context.",
+            ((s, bool(v.verdict), v.reason) for s, v in zip(statements, aligned)),
+        )
+        return MetricResult(value=float(score), reason=reason)
 
     async def _create_statements(self, question: str, response: str) -> List[str]:
         """Break response into atomic statements using statement generator."""

@@ -148,6 +148,33 @@ my_metric.score(
 )  # Returns a ranked list of indices
 ```
 
+## Why a Metric Gave Its Score
+
+LLM-judged metrics in `ragas.metrics.collections` explain their score in `MetricResult.reason`: which statements, claims, contexts or entities the judge counted for or against, with the judge's reasoning where it gives one.
+
+```python
+result = await Faithfulness(llm=llm).ascore(
+    user_input="Where is the Eiffel Tower?",
+    response="The Eiffel Tower is in Paris. It is 500 m tall.",
+    retrieved_contexts=["The Eiffel Tower is a 330 m tower in Paris."],
+)
+print(result.value)  # 0.5
+print(result.reason)
+# 1 of 2 statements in the response are supported by the retrieved context.
+# - [supported] The Eiffel Tower is in Paris.: the context places it in Paris
+# - [not supported] The Eiffel Tower is 500 m tall.: the context says 330 m
+```
+
+With `evaluate()`, the explanations are kept per row:
+
+```python
+results = evaluate(dataset, metrics=[Faithfulness(llm=llm)])
+results.reasons["faithfulness"][0]  # one explanation per row
+results.to_pandas(include_reasons=True)  # adds a faithfulness_reason column
+```
+
+When a score is undefined (`NaN`), for example because no statements could be extracted, the reason says why. Non-LLM metrics such as BLEU or exact match have nothing to explain and don't set a reason.
+
 ## Metric Design Principles
 
 Designing effective metrics for AI applications requires following to a set of core principles to ensure their reliability, interpretability, and relevance. Here are five key principles we follow in ragas when designing metrics:
