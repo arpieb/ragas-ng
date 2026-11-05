@@ -11,7 +11,7 @@ import numpy as np
 from pydantic.dataclasses import dataclass
 from pydantic_core import CoreSchema, core_schema
 
-from ragas.cache import CacheInterface, cacher
+from ragas.cache import CacheInterface, cache_identity, cacher
 from ragas.embeddings.utils import run_async_in_current_loop, validate_texts
 from ragas.run_config import RunConfig, add_async_retry, add_retry
 
@@ -41,8 +41,12 @@ class BaseRagasEmbedding(ABC):
         self.cache = cache
 
         if self.cache is not None:
-            self.embed_text = cacher(cache_backend=self.cache)(self.embed_text)
-            self.aembed_text = cacher(cache_backend=self.cache)(self.aembed_text)
+            self.embed_text = cacher(
+                cache_backend=self.cache, identity=lambda: cache_identity(self)
+            )(self.embed_text)
+            self.aembed_text = cacher(
+                cache_backend=self.cache, identity=lambda: cache_identity(self)
+            )(self.aembed_text)
 
     @abstractmethod
     def embed_text(self, text: str, **kwargs: t.Any) -> t.List[float]:
@@ -231,14 +235,18 @@ class BaseRagasEmbeddings(ABC):
         super().__init__()
         self.cache = cache
         if self.cache is not None:
-            self.embed_query = cacher(cache_backend=self.cache)(self.embed_query)
-            self.embed_documents = cacher(cache_backend=self.cache)(
-                self.embed_documents
-            )
-            self.aembed_query = cacher(cache_backend=self.cache)(self.aembed_query)
-            self.aembed_documents = cacher(cache_backend=self.cache)(
-                self.aembed_documents
-            )
+            self.embed_query = cacher(
+                cache_backend=self.cache, identity=lambda: cache_identity(self)
+            )(self.embed_query)
+            self.embed_documents = cacher(
+                cache_backend=self.cache, identity=lambda: cache_identity(self)
+            )(self.embed_documents)
+            self.aembed_query = cacher(
+                cache_backend=self.cache, identity=lambda: cache_identity(self)
+            )(self.aembed_query)
+            self.aembed_documents = cacher(
+                cache_backend=self.cache, identity=lambda: cache_identity(self)
+            )(self.aembed_documents)
 
     async def embed_text(self, text: str, is_async=True) -> t.List[float]:
         """
@@ -391,7 +399,9 @@ class HuggingfaceEmbeddings(BaseRagasEmbeddings):
             self.encode_kwargs["convert_to_tensor"] = True
 
         if self.cache is not None:
-            self.predict = cacher(cache_backend=self.cache)(self.predict)
+            self.predict = cacher(
+                cache_backend=self.cache, identity=lambda: cache_identity(self)
+            )(self.predict)
 
     def embed_query(self, text: str) -> t.List[float]:
         """

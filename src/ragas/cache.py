@@ -5,7 +5,7 @@ import json
 import logging
 import sys
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import Any, Callable, Dict, Optional
 
 from pydantic import BaseModel, GetCoreSchemaHandler
 from pydantic_core import CoreSchema, core_schema
@@ -181,7 +181,57 @@ def _make_pydantic_picklable(obj: Any) -> Any:
     return obj
 
 
-def _generate_cache_key(func, args, kwargs):
+# Attributes that make one LLM/embedding wrapper answer differently from
+# another for the same input. Only plain values are used (a loaded model object
+# in `model` is skipped; its `model_name` identifies it).
+_IDENTITY_ATTRS = (
+    "provider",
+    "model",
+    "model_name",
+    "model_args",
+    "system_prompt",
+    "dimensions",
+    "model_kwargs",
+    "encode_kwargs",
+    "is_cross_encoder",
+)
+_PLAIN = (str, int, float, bool, type(None), dict, list, tuple)
+
+
+def _client_base_url(obj: Any) -> Optional[str]:
+    """Endpoint of the wrapped client, so two OpenAI-compatible servers serving
+    a model under the same name don't share entries."""
+    client = getattr(obj, "client", None)
+    for candidate in (client, getattr(client, "client", None)):
+        url = getattr(candidate, "base_url", None)
+        # str, or httpx.URL as used by the openai/anthropic SDKs. Anything else
+        # (e.g. a test double) has no stable textual form.
+        if isinstance(url, str) or type(url).__name__ == "URL":
+            return str(url)
+    return None
+
+
+def cache_identity(obj: Any) -> Dict[str, Any]:
+    """What distinguishes ``obj``'s outputs from another instance's (#72).
+
+    Cached methods are wrapped as *bound* methods, so ``self`` never reaches
+    the key. Without this, two wrappers for different models sharing one cache
+    backend returned each other's responses (or embeddings).
+    """
+    identity: Dict[str, Any] = {
+        "class": f"{type(obj).__module__}.{type(obj).__qualname__}"
+    }
+    for attr in _IDENTITY_ATTRS:
+        value = getattr(obj, attr, None)
+        if value is not None and isinstance(value, _PLAIN):
+            identity[attr] = value
+    base_url = _client_base_url(obj)
+    if base_url is not None:
+        identity["base_url"] = base_url
+    return identity
+
+
+def _generate_cache_key(func, args, kwargs, identity: Any = None):
     filtered_kwargs = {k: v for k, v in kwargs.items() if k not in EXCLUDE_KEYS}
 
     key_data = {
@@ -189,13 +239,18 @@ def _generate_cache_key(func, args, kwargs):
         "args": _make_hashable(args),
         "kwargs": _make_hashable(filtered_kwargs),
     }
+    if identity is not None:
+        key_data["identity"] = _make_hashable(identity)
 
     key_string = json.dumps(key_data, sort_keys=True, default=str)
     cache_key = hashlib.sha256(key_string.encode("utf-8")).hexdigest()
     return cache_key
 
 
-def cacher(cache_backend: Optional[CacheInterface] = None):
+def cacher(
+    cache_backend: Optional[CacheInterface] = None,
+    identity: Optional[Callable[[], Any]] = None,
+):
     """Decorator that adds caching functionality to a function.
 
     This decorator can be applied to both synchronous and asynchronous functions to cache their results.
@@ -204,6 +259,10 @@ def cacher(cache_backend: Optional[CacheInterface] = None):
     Args:
         cache_backend (Optional[CacheInterface]): The cache backend to use for storing results.
             If None, caching is disabled.
+        identity (Optional[Callable[[], Any]]): Called on every lookup; its result
+            is part of the key. Pass ``lambda: cache_identity(self)`` when wrapping
+            a bound method so instances configured differently (model, provider,
+            endpoint, sampling args) never share entries.
 
     Returns:
         Callable: A decorated function that implements caching behavior.
@@ -220,7 +279,9 @@ def cacher(cache_backend: Optional[CacheInterface] = None):
 
         @functools.wraps(func)
         async def async_wrapper(*args, **kwargs):
-            cache_key = _generate_cache_key(func, args, kwargs)
+            cache_key = _generate_cache_key(
+                func, args, kwargs, identity() if identity else None
+            )
 
             if backend.has_key(cache_key):
                 logger.debug(f"Cache hit for {cache_key}")
@@ -233,7 +294,9 @@ def cacher(cache_backend: Optional[CacheInterface] = None):
 
         @functools.wraps(func)
         def sync_wrapper(*args, **kwargs):
-            cache_key = _generate_cache_key(func, args, kwargs)
+            cache_key = _generate_cache_key(
+                func, args, kwargs, identity() if identity else None
+            )
 
             if backend.has_key(cache_key):
                 logger.debug(f"Cache hit for {cache_key}")

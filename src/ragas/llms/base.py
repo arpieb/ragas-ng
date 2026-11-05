@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 import instructor
 from pydantic import BaseModel
 
-from ragas.cache import CacheInterface, cacher
+from ragas.cache import CacheInterface, cache_identity, cacher
 from ragas.exceptions import LLMDidNotFinishException
 from ragas.llms.output import Generation, LLMResult
 from ragas.run_config import RunConfig, add_async_retry
@@ -38,8 +38,12 @@ class BaseRagasLLM(ABC):
     def __post_init__(self):
         # If a cache_backend is provided, wrap the implementation methods at construction time.
         if self.cache is not None:
-            self.generate_text = cacher(cache_backend=self.cache)(self.generate_text)
-            self.agenerate_text = cacher(cache_backend=self.cache)(self.agenerate_text)
+            self.generate_text = cacher(
+                cache_backend=self.cache, identity=lambda: cache_identity(self)
+            )(self.generate_text)
+            self.agenerate_text = cacher(
+                cache_backend=self.cache, identity=lambda: cache_identity(self)
+            )(self.agenerate_text)
 
     def set_run_config(self, run_config: RunConfig):
         self.run_config = run_config
@@ -605,8 +609,12 @@ class InstructorLLM(InstructorBaseRagasLLM):
         self.is_async = self._check_client_async()
 
         if self.cache is not None:
-            self.generate = cacher(cache_backend=self.cache)(self.generate)  # type: ignore
-            self.agenerate = cacher(cache_backend=self.cache)(self.agenerate)  # type: ignore
+            self.generate = cacher(
+                cache_backend=self.cache, identity=lambda: cache_identity(self)
+            )(self.generate)  # type: ignore
+            self.agenerate = cacher(
+                cache_backend=self.cache, identity=lambda: cache_identity(self)
+            )(self.agenerate)  # type: ignore
 
     def _map_provider_params(self) -> t.Dict[str, t.Any]:
         """Route to provider-specific parameter mapping.

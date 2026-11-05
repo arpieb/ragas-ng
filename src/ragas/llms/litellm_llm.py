@@ -4,7 +4,7 @@ import logging
 import threading
 import typing as t
 
-from ragas.cache import CacheInterface, cacher
+from ragas.cache import CacheInterface, cache_identity, cacher
 from ragas.llms.base import InstructorBaseRagasLLM, InstructorTypeVar
 
 logger = logging.getLogger(__name__)
@@ -51,8 +51,12 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
         self.is_async = self._check_client_async()
 
         if self.cache is not None:
-            self.generate = cacher(cache_backend=self.cache)(self.generate)  # type: ignore
-            self.agenerate = cacher(cache_backend=self.cache)(self.agenerate)  # type: ignore
+            self.generate = cacher(
+                cache_backend=self.cache, identity=lambda: cache_identity(self)
+            )(self.generate)  # type: ignore
+            self.agenerate = cacher(
+                cache_backend=self.cache, identity=lambda: cache_identity(self)
+            )(self.agenerate)  # type: ignore
 
     def _check_client_async(self) -> bool:
         """Determine if the client is async-capable.

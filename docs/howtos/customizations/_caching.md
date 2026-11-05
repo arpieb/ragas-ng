@@ -2,6 +2,8 @@
 
 You can use caching to speed up your evaluations and testset generation by avoiding redundant computations. We use Exact Match Caching to cache the responses from the LLM and Embedding models.
 
+Cache entries are keyed on the input **and** on what produced the answer: the wrapper class, provider, model, model arguments (temperature, max tokens, system prompt) and the client's endpoint (`base_url`). So LLMs or embedding models configured differently can safely share one cache without returning each other's results.
+
 You can use the [DiskCacheBackend][ragas.cache.DiskCacheBackend] which uses a local disk cache to store the cached responses. You can also implement your own custom cacher by implementing the [CacheInterface][ragas.cache.CacheInterface].
 
 ## Using Caching with Modern LLMs and Embeddings
