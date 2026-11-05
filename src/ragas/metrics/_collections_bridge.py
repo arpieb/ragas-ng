@@ -29,6 +29,7 @@ from ragas.metrics.base import (
     SimpleBaseMetric,
     SingleTurnMetric,
 )
+from ragas.metrics.result import ScoreWithReason
 from ragas.run_config import RunConfig
 
 if t.TYPE_CHECKING:
@@ -134,7 +135,10 @@ class _CollectionsMetricAdapter(Metric):
                 continue
             kwargs[name] = value
         result = await self.metric.ascore(**kwargs)
-        return _as_score(getattr(result, "value", result), self.name)
+        score = _as_score(getattr(result, "value", result), self.name)
+        reason = getattr(result, "reason", None)
+        # Carry the metric's explanation through evaluate() (#116).
+        return ScoreWithReason(score, reason) if reason else score
 
 
 @dataclass(repr=False)
