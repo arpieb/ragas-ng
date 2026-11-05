@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import random
 import typing as t
 from abc import ABC, abstractmethod
@@ -408,6 +409,16 @@ class EvaluationDataset(RagasDataset[SingleTurnSampleOrMultiTurnSample]):
         return f"EvaluationDataset(features={self.features()}, len={len(self.samples)})"
 
 
+def _has_score(value: t.Any) -> bool:
+    """A row counts towards a metric's mean: not None and not NaN."""
+    if value is None:
+        return False
+    try:
+        return not math.isnan(value)
+    except TypeError:
+        return True  # non-numeric outputs (e.g. discrete labels) are present
+
+
 @dataclass
 class EvaluationResult:
     """
@@ -440,14 +451,49 @@ class EvaluationResult:
             metric_name: safe_nanmean(scores)
             for metric_name, scores in self._scores_dict.items()
         }
+        # (rows with a score, total rows) per metric. The mean skips rows that
+        # errored or are undefined (NaN), so without this a run where half the
+        # rows failed reports the same headline as a clean one (#53).
+        self._coverage = {
+            metric_name: (sum(_has_score(v) for v in scores), len(scores))
+            for metric_name, scores in self._scores_dict.items()
+        }
 
         # parse the traces
         run_id = str(self.run_id) if self.run_id is not None else None
         self.traces = parse_run_traces(self.ragas_traces, run_id)
 
     def __repr__(self) -> str:
-        score_strs = [f"'{k}': {v:0.4f}" for k, v in self._repr_dict.items()]
+        score_strs = []
+        for k, v in self._repr_dict.items():
+            entry = f"'{k}': {v:0.4f}"
+            scored, total = self._coverage[k]
+            if scored < total:
+                entry += f" (n={scored}/{total})"
+            score_strs.append(entry)
         return "{" + ", ".join(score_strs) + "}"
+
+    def summary(self) -> t.Dict[str, t.Dict[str, float]]:
+        """Per-metric mean with the number of rows it was computed over.
+
+        ``mean`` excludes rows without a score: rows whose metric raised (with
+        ``raise_exceptions=False``) and rows where the score is undefined
+        (NaN), e.g. no claims to judge. ``count`` is how many rows the mean
+        covers and ``missing`` how many it doesn't.
+
+        Example::
+
+            >>> result.summary()
+            {'faithfulness': {'mean': 0.86, 'count': 48, 'missing': 2}}
+        """
+        return {
+            name: {
+                "mean": self._repr_dict[name],
+                "count": self._coverage[name][0],
+                "missing": self._coverage[name][1] - self._coverage[name][0],
+            }
+            for name in self._repr_dict
+        }
 
     def __getitem__(self, key: str) -> t.List[float]:
         return self._scores_dict[key]
