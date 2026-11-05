@@ -5,10 +5,13 @@ from typing import List
 
 import numpy as np
 
+from ragas.metrics.collections._text import split_sentences
+from ragas.metrics.collections._verdicts import judge_each
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
 
 from .util import (
+    ContextRecallClassification,
     ContextRecallInput,
     ContextRecallOutput,
     ContextRecallPrompt,
@@ -109,21 +112,33 @@ class ContextRecall(BaseMetric):
         # Combine contexts into a single string
         context = "\n".join(retrieved_contexts) if retrieved_contexts else ""
 
-        # Create input data and generate prompt
+        # The reference is split into sentences here and the judge classifies
+        # exactly those, one verdict each. The judge used to do the splitting
+        # itself, so a sentence it dropped silently left the denominator (#52).
+        statements = split_sentences(reference)
+        if not statements:
+            return MetricResult(value=np.nan)
         input_data = ContextRecallInput(
-            question=user_input, context=context, answer=reference
+            question=user_input,
+            context=context,
+            answer=reference,
+            statements=statements,
         )
         prompt_string = self.prompt.to_string(input_data)
 
-        # Get classifications from LLM
-        result = await self.llm.agenerate(prompt_string, ContextRecallOutput)
+        async def ask() -> List[ContextRecallClassification]:
+            result = await self.llm.agenerate(prompt_string, ContextRecallOutput)
+            return result.classifications
 
-        # Calculate score
-        if not result.classifications:
+        aligned = await judge_each(
+            statements,
+            ask,
+            text_of=lambda c: c.statement,
+            what="classifications",
+            metric=self.name,
+        )
+        if aligned is None:
             return MetricResult(value=np.nan)
 
-        # Count attributions
-        attributions = [c.attributed for c in result.classifications]
-        score = sum(attributions) / len(attributions) if attributions else np.nan
-
+        score = sum(1 for c in aligned if c.attributed) / len(aligned)
         return MetricResult(value=float(score))

@@ -190,3 +190,19 @@ These assumed space-separated Latin text:
 `ragas.metrics.collections.SemanticSimilarity`
 
 The score is the cosine similarity of the two embeddings, which can be slightly negative for unrelated texts, despite the metric being documented as 0–1. It is now clipped to `[0, 1]`, the same as AnswerRelevancy. **Who sees a difference:** only samples that scored below 0; they now score `0.0`. With `threshold` set, the score is binary as before.
+
+## AnswerCorrectness: no statements is undefined, not a perfect match ([#136](https://github.com/arpieb/ragas-ng/issues/136))
+
+`ragas.metrics.collections.AnswerCorrectness`
+
+When the response or the reference yielded no statements, the factuality part was set to `1.0` ("assume perfect match"). An evasive or one-word answer then got full factuality credit and scored about `0.75` or higher with the default weights. The sample now scores `NaN`, the same as FactualCorrectness ([#49](https://github.com/arpieb/ragas-ng/issues/49)), and shows as a missing row in `EvaluationResult.summary()`. **Who sees a difference:** only samples where statement extraction came back empty.
+
+## ContextRecall: one classification per reference sentence ([#52](https://github.com/arpieb/ragas-ng/issues/52))
+
+`ragas.metrics.collections.ContextRecall`
+
+The judge used to split the reference into statements itself, and recall was the fraction of whatever classifications it returned. A sentence it dropped silently left the denominator, and dropping an unsupported sentence *raised* recall.
+
+The reference is now split into sentences in code: on `. ! ?` before a capitalised word or digit, and after `。！？`, but not after common abbreviations like "Dr." or "e.g.". The judge gets that list and must return one classification per sentence, under the same matching, retry and NaN rule as Faithfulness above.
+
+**Who sees a difference:** scores move where the judge used to split differently, for example breaking one long sentence into several statements, or where it dropped sentences. Recall is now always out of the reference's sentence count.

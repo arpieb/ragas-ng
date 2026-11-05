@@ -2,12 +2,12 @@
 
 Context Recall measures how many of the relevant documents (or pieces of information) were successfully retrieved. It focuses on not missing important results. Higher recall means fewer relevant documents were left out. In short, recall is about not missing anything important. 
 
-Since it is about not missing anything, calculating context recall always requires a reference to compare against. The LLM-based Context Recall metric uses `reference` as a proxy to `reference_contexts`, which makes it easier to use as annotating reference contexts can be very time-consuming. To estimate context recall from the `reference`, the judge LLM breaks the reference into statements (roughly one per sentence) and classifies each one as attributable to the retrieved context or not. In an ideal scenario, every statement in the reference is attributable to the retrieved context.
+Since it is about not missing anything, calculating context recall always requires a reference to compare against. The LLM-based Context Recall metric uses `reference` as a proxy to `reference_contexts`, which makes it easier to use as annotating reference contexts can be very time-consuming. To estimate context recall from the `reference`, the reference is split into sentences, and the judge LLM classifies each sentence as attributable to the retrieved context or not. It must return exactly one classification per sentence. If its answer can't be matched to the sentences after one retry, the sample scores `NaN` rather than a ratio over a partial answer. In an ideal scenario, every statement in the reference is attributable to the retrieved context.
 
 The formula for calculating context recall is as follows:
 
 $$
-\text{Context Recall} = \frac{\text{Number of reference statements attributable to the retrieved context}}{\text{Total number of statements in the reference}}
+\text{Context Recall} = \frac{\text{Number of reference sentences attributable to the retrieved context}}{\text{Total number of sentences in the reference}}
 $$
 
 ## Example
@@ -41,7 +41,7 @@ Output:
 Context Recall Score: 0.5
 ```
 
-The reference makes two statements. The retrieved context supports the first, that the tower is in Paris, but says nothing about 1889, so one of two statements is recalled. A context like `"Paris is the capital of France."` supports neither statement and scores `0.0`: being about Paris is not enough.
+The reference has two sentences. The retrieved context supports the first, that the tower is in Paris, but says nothing about 1889, so one of two sentences is recalled. A context like `"Paris is the capital of France."` supports neither sentence and scores `0.0`: being about Paris is not enough.
 
 !!! note "Synchronous Usage"
     If you prefer synchronous code, you can use the `.score()` method instead of `.ascore()`:
