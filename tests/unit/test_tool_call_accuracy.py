@@ -141,8 +141,8 @@ class TestToolCallAccuracy:
         with pytest.warns(UserWarning, match="Length mismatch"):
             score = await tool_call_accuracy._multi_turn_ascore(sample, mock_callbacks)
 
-        # Should be 0 because sequences don't align (different lengths)
-        assert score == 0.0
+        # One of two calls matched: coverage penalty, not 0 (#62)
+        assert score == 0.5
 
     @pytest.mark.asyncio
     async def test_length_mismatch_fewer_predicted(
@@ -168,8 +168,8 @@ class TestToolCallAccuracy:
         with pytest.warns(UserWarning, match="Length mismatch"):
             score = await tool_call_accuracy._multi_turn_ascore(sample, mock_callbacks)
 
-        # Should be 0 because sequences don't align (different lengths)
-        assert score == 0.0
+        # One of two calls matched: coverage penalty, not 0 (#62)
+        assert score == 0.5
 
     @pytest.mark.asyncio
     async def test_partial_argument_match(self, tool_call_accuracy, mock_callbacks):

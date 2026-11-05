@@ -83,9 +83,7 @@ class NonLLMContextPrecisionWithReference(BaseMetric):
             await _best_match(self._similarity, rc, reference_contexts)
             for rc in retrieved_contexts
         ]
-        # `>=` here, but `>` in NonLLMContextRecall. Preserved from the legacy
-        # implementations, which differ on this; changing either would move
-        # scores for existing users.
+        # A context at or above the threshold counts (same rule as recall, #64).
         verdicts = [1 if score >= self.threshold else 0 for score in scores]
         return MetricResult(value=average_precision(verdicts))
 
@@ -95,7 +93,7 @@ class NonLLMContextRecall(BaseMetric):
     Context recall judged by string distance against reference contexts.
 
     Each reference context is matched against its closest retrieved context; a
-    match above ``threshold`` counts as recalled. The score is the proportion of
+    match at or above ``threshold`` counts as recalled. The score is the proportion of
     reference contexts recalled.
 
     Usage:
@@ -112,7 +110,7 @@ class NonLLMContextRecall(BaseMetric):
     Attributes:
         name: The metric name
         distance_measure: Which string distance to use (default Levenshtein)
-        threshold: Similarity above which a context counts as recalled
+        threshold: Similarity at or above which a context counts as recalled
         allowed_values: Score range (0.0 to 1.0)
     """
 
@@ -146,8 +144,10 @@ class NonLLMContextRecall(BaseMetric):
             await _best_match(self._similarity, rc, retrieved_contexts)
             for rc in reference_contexts
         ]
-        # `>` here, unlike the `>=` in NonLLMContextPrecisionWithReference.
-        verdicts = [1 if score > self.threshold else 0 for score in scores]
+        # `>=`, matching NonLLMContextPrecisionWithReference. Legacy used `>`
+        # here, so an exact match at threshold=1.0 counted for precision but not
+        # for recall (#64).
+        verdicts = [1 if score >= self.threshold else 0 for score in scores]
         if not verdicts:
             return MetricResult(value=float(np.nan))
         return MetricResult(value=sum(verdicts) / len(verdicts))

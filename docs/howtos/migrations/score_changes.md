@@ -148,3 +148,25 @@ ContextRecall and AnswerCorrectness are not covered. Their judge splits the refe
 **Who sees a difference:** anyone using `strictness > 1`. AnswerRelevancy averages over genuinely different questions, and criteria verdicts are real majority votes. Scores can move in either direction. Reasoning models (o-series, gpt-5+) still use the only temperature they accept, 1.0.
 
 `agenerate()` / `generate()` on `InstructorLLM` and `LiteLLMStructuredLLM` gain optional `temperature` and `sample_index` arguments. `sample_index` only distinguishes cache entries and is never sent to the provider.
+
+## ToolCallAccuracy: missing or extra calls are a coverage penalty, not 0 ([#62](https://github.com/arpieb/ragas-ng/issues/62))
+
+`ragas.metrics.collections.ToolCallAccuracy`
+
+The docstring promised a proportional coverage penalty for length mismatches, but alignment compared the full sequences, so **any** length difference scored `0` and the penalty code never ran. Extra calls also went unpenalized whenever the lengths happened to match up.
+
+| Case | Before | Now |
+|---|---|---|
+| 2 of 3 expected calls, in order | `0.0` | `0.67` |
+| all expected calls plus 1 extra (3 vs 2) | `0.0` | `0.67` |
+| a call to a tool not in the reference | `0.0` | `0.0` |
+| right tools, wrong order (strict) | `0.0` | `0.0` |
+| equal lengths | average argument accuracy | unchanged |
+
+Rule: the shorter list must be contained in the longer one, as an in-order subsequence under `strict_order=True` or as a multiset of tool names otherwise. The matched calls' argument accuracy is divided by the longer list's length. In flexible mode, when several calls share a tool name, each is paired with the counterpart whose arguments match best.
+
+## Non-LLM context recall: threshold is inclusive ([#64](https://github.com/arpieb/ragas-ng/issues/64))
+
+`ragas.metrics.collections.NonLLMContextRecall`
+
+Recall counted a reference context as recalled when similarity was `> threshold`; precision used `>=`. Both now use `>=`. **Who sees a difference:** only contexts whose similarity equals the threshold exactly. In practice that means `threshold=1.0`, where an exact match counted for precision but scored `0` for recall.
