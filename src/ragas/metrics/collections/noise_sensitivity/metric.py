@@ -1,10 +1,12 @@
 """Noise Sensitivity metrics v2 - Modern implementation with function-based prompts."""
 
+import asyncio
 import typing as t
 from typing import Dict, List, Literal
 
 import numpy as np
 
+from ragas.metrics.collections._concurrency import gather_bounded
 from ragas.metrics.collections._verdicts import judge_each
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
@@ -140,50 +142,45 @@ class NoiseSensitivity(BaseMetric):
                 "retrieved_contexts is missing. Please add retrieved_contexts to the test sample."
             )
 
-        # Step 1: Decompose reference and response into statements
-        gt_statements = await self._decompose_answer_into_statements(
-            reference, user_input
-        )
-        ans_statements = await self._decompose_answer_into_statements(
-            response, user_input
+        # Step 1: Decompose reference and response into statements (independent)
+        gt_statements, ans_statements = await asyncio.gather(
+            self._decompose_answer_into_statements(reference, user_input),
+            self._decompose_answer_into_statements(response, user_input),
         )
 
-        # Step 2: Evaluate statement faithfulness against each retrieved context
-        gt_verdictslist = []
-        ans_verdictslist = []
+        # Step 2: Check both statement sets against every retrieved context, and
+        # the answer statements against the reference. All 2N+1 checks are
+        # independent, so they run concurrently instead of as 2N+1 sequential
+        # round-trips under one per-job timeout (#58).
+        n = len(retrieved_contexts)
+        checks = await gather_bounded(
+            [
+                *(
+                    self._evaluate_statement_faithfulness(gt_statements, ctx)
+                    for ctx in retrieved_contexts
+                ),
+                *(
+                    self._evaluate_statement_faithfulness(ans_statements, ctx)
+                    for ctx in retrieved_contexts
+                ),
+                self._evaluate_statement_faithfulness(ans_statements, reference),
+            ]
+        )
+        gt_verdictslist = checks[:n]
+        ans_verdictslist = checks[n : 2 * n]
+        gt_to_ans_verdicts = checks[2 * n]
 
-        for ctx in retrieved_contexts:
-            # Evaluate ground truth statements against this context
-            gt_verdicts = await self._evaluate_statement_faithfulness(
-                gt_statements, ctx
-            )
-            gt_verdictslist.append(gt_verdicts)
-
-            # Evaluate answer statements against this context
-            ans_verdicts = await self._evaluate_statement_faithfulness(
-                ans_statements, ctx
-            )
-            ans_verdictslist.append(ans_verdicts)
-
-        # A context whose verdicts couldn't be matched to the statements leaves
-        # a hole in the matrices: the score is undefined (#52).
-        if any(v is None for v in gt_verdictslist + ans_verdictslist):
+        # A check whose verdicts couldn't be matched to the statements leaves a
+        # hole in the matrices: the score is undefined (#52).
+        if any(v is None for v in checks):
             return MetricResult(value=float("nan"))
 
         # Step 3: Build matrices for computation (exact legacy shape handling)
         answers = {}
         answers["retrieved2ground_truth"] = np.array(gt_verdictslist).T
         answers["retrieved2answer"] = np.array(ans_verdictslist).T
-
-        # Evaluate answer statements against reference (ground truth)
-        gt_to_ans_verdicts = await self._evaluate_statement_faithfulness(
-            ans_statements, reference
-        )
-        if gt_to_ans_verdicts is None:
-            return MetricResult(value=float("nan"))
-        answers["ground_truth2answer"] = np.array(gt_to_ans_verdicts)
         # Wrap in another array to match legacy shape handling
-        answers["ground_truth2answer"] = np.array([answers["ground_truth2answer"]])
+        answers["ground_truth2answer"] = np.array([np.array(gt_to_ans_verdicts)])
 
         # Convert all to boolean arrays
         answers = {k: v.astype(bool) for k, v in answers.items()}

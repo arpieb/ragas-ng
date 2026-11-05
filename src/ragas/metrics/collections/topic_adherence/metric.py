@@ -6,6 +6,7 @@ from typing import List, Literal, Union
 import numpy as np
 
 from ragas.messages import AIMessage, HumanMessage, ToolMessage
+from ragas.metrics.collections._concurrency import gather_bounded
 from ragas.metrics.collections._verdicts import judge_each
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
@@ -149,14 +150,18 @@ class TopicAdherence(BaseMetric):
         self, conversation: str, topics: List[str]
     ) -> np.ndarray:
         """Check which topics were answered (not refused) by the AI."""
-        answered = []
-        for topic in topics:
-            input_data = TopicRefusedInput(user_input=conversation, topic=topic)
-            prompt_str = self.topic_refused_prompt.to_string(input_data)
-            result = await self.llm.agenerate(prompt_str, TopicRefusedOutput)
-            # Invert: answered = NOT refused
-            answered.append(not result.refused_to_answer)
-        return np.array(answered, dtype=bool)
+        # One independent check per topic, run concurrently (#58).
+        results = await gather_bounded(
+            self.llm.agenerate(
+                self.topic_refused_prompt.to_string(
+                    TopicRefusedInput(user_input=conversation, topic=topic)
+                ),
+                TopicRefusedOutput,
+            )
+            for topic in topics
+        )
+        # Invert: answered = NOT refused
+        return np.array([not r.refused_to_answer for r in results], dtype=bool)
 
     async def _classify_topics(
         self, reference_topics: List[str], topics: List[str]
