@@ -1,6 +1,10 @@
 """Base class for collections metrics with modern component validation."""
 
 import asyncio
+import collections.abc
+import functools
+import inspect
+import re
 import typing as t
 
 from ragas.embeddings.base import BaseRagasEmbedding
@@ -8,6 +12,67 @@ from ragas.llms.base import InstructorBaseRagasLLM
 from ragas.metrics.base import SimpleBaseMetric
 from ragas.metrics.result import MetricResult
 from ragas.metrics.validators import NumericValidator
+
+_LIST_ANNOTATION = re.compile(
+    r"^(?:(?:t|typing)\.)?(?:Optional\[)?(?:(?:t|typing)\.)?(?:List|list|Sequence)\["
+)
+
+
+def _is_list_annotation(annotation: t.Any) -> bool:
+    """True for ``List[...]``/``Sequence[...]``, optionally wrapped in Optional.
+
+    Handles both evaluated annotations and the strings produced by
+    ``from __future__ import annotations``.
+    """
+    if annotation is inspect.Parameter.empty:
+        return False
+    if isinstance(annotation, str):
+        return bool(_LIST_ANNOTATION.match(annotation.strip()))
+    origin = t.get_origin(annotation)
+    if origin is t.Union:
+        args = [a for a in t.get_args(annotation) if a is not type(None)]
+        return len(args) == 1 and _is_list_annotation(args[0])
+    return origin in (list, collections.abc.Sequence)
+
+
+class ListInputError(TypeError, ValueError):
+    """A list-typed metric input received a bare string.
+
+    Subclasses ValueError as well, so callers that already caught the
+    ValueError some metrics raised for this case keep working.
+    """
+
+
+def _guard_list_inputs(ascore: t.Callable) -> t.Callable:
+    """Wrap ``ascore`` so list-typed inputs reject a bare string.
+
+    A ``str`` is iterable, so ``retrieved_contexts="some text"`` was silently
+    treated as a list of single characters: ContextPrecision made one judge
+    call per character and the join-based metrics scored garbage (#54).
+    """
+    sig = inspect.signature(ascore)
+    list_params = [
+        name
+        for name, p in sig.parameters.items()
+        if name != "self" and _is_list_annotation(p.annotation)
+    ]
+    if not list_params:
+        return ascore
+
+    @functools.wraps(ascore)
+    async def wrapper(self, *args, **kwargs):
+        bound = sig.bind_partial(self, *args, **kwargs)
+        for name in list_params:
+            value = bound.arguments.get(name)
+            if isinstance(value, (str, bytes)):
+                raise ListInputError(
+                    f"{type(self).__name__}.ascore(): '{name}' must be a list, got "
+                    f"a {type(value).__name__}. Wrap a single item in a list, "
+                    f"e.g. {name}=[value]."
+                )
+        return await ascore(self, *args, **kwargs)
+
+    return wrapper
 
 
 class BaseMetric(SimpleBaseMetric, NumericValidator):
@@ -28,6 +93,11 @@ class BaseMetric(SimpleBaseMetric, NumericValidator):
     Note: Subclasses define llm and/or embeddings fields only if they need them.
     The base classes handle all the core metric functionality - we just add modern component validation.
     """
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if "ascore" in cls.__dict__:
+            cls.ascore = _guard_list_inputs(cls.__dict__["ascore"])  # type: ignore[method-assign]
 
     def __init__(
         self,

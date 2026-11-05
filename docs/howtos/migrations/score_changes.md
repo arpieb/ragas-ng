@@ -96,3 +96,17 @@ A missing reference is a gap in the dataset, not a model failure. Scoring it `0.
 The score is the mean cosine similarity between the user's question and questions generated from the response. Cosine similarity can be slightly negative for unrelated embeddings, so the metric could return values like `-0.02` despite being documented as 0–1. Scores are now clipped to `[0, 1]`.
 
 **Who sees a difference:** only samples that scored below 0. They now score `0.0`.
+
+## Collections metrics reject a string where a list is expected ([#54](https://github.com/arpieb/ragas-ng/issues/54))
+
+All `ragas.metrics.collections` metrics
+
+A Python `str` is iterable, so passing `retrieved_contexts="some text"` instead of `["some text"]` was read as a list of single characters:
+
+- ContextPrecision made one judge call per character.
+- Metrics that join their contexts scored the characters as if they were contexts.
+- QuotedSpansAlignment returned `0.0`.
+
+Every list-typed `ascore()` input now raises `ListInputError` (a subclass of both `TypeError` and `ValueError`) for a bare string, before any LLM call. That covers `retrieved_contexts`, `reference_contexts`, the context-ID lists, `reference_topics`, and multi-turn `user_input` / `reference_tool_calls`.
+
+`evaluate()` users aren't affected: `SingleTurnSample` already rejects a string there.

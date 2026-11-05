@@ -235,11 +235,9 @@ class TestQuotedSpansAlignmentCollections:
         """Test with invalid contexts type."""
         metric = QuotedSpansAlignment()
 
-        result = await metric.ascore(
-            response="some text", retrieved_contexts="not a list"
-        )
-        assert result.value == 0.0
-        assert "Invalid input" in result.reason
+        # A bare string used to score 0.0; it is now rejected before scoring (#54).
+        with pytest.raises(TypeError, match="'retrieved_contexts' must be a list"):
+            await metric.ascore(response="some text", retrieved_contexts="not a list")
 
     @pytest.mark.asyncio
     async def test_empty_contexts(self):
