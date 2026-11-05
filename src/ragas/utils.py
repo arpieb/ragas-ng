@@ -47,7 +47,9 @@ def safe_nanmean(arr: t.List[float]) -> float:
     if len(arr) == 0:
         return np.nan  # or some other value or behavior for empty arrays
 
-    arr_numpy = np.asarray(arr)  # Ensure input is a numpy array
+    # dtype=float turns None (a row with no score) into NaN, so it is skipped
+    # like any other missing score instead of crashing np.isnan.
+    arr_numpy = np.asarray(arr, dtype=float)
 
     if np.isnan(arr_numpy).all():
         return np.nan  # or some other value or behavior for all-NaN arrays

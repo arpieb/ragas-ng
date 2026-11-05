@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import typing as t
 import warnings
 from uuid import UUID
@@ -53,6 +54,8 @@ from ragas.validation import (
 if t.TYPE_CHECKING:
     from ragas.callbacks import Callbacks
     from ragas.cost import TokenUsageCollector, TokenUsageParser
+
+logger = logging.getLogger(__name__)
 
 RAGAS_EVALUATION_CHAIN_NAME = "ragas evaluation"
 
@@ -339,6 +342,7 @@ async def aevaluate(
             ragas_traces=tracer.traces,
             run_id=_run_id,
         )
+        _warn_on_missing_scores(result)
         if not evaluation_group_cm.ended:
             evaluation_rm.on_chain_end({"scores": result.scores})
     finally:
@@ -493,3 +497,19 @@ def evaluate(
         from ragas.async_utils import run
 
         return run(_async_wrapper())
+
+
+def _warn_on_missing_scores(result: EvaluationResult) -> None:
+    """Say when a metric's mean leaves rows out.
+
+    The mean skips rows that errored or scored NaN, so a degraded run can
+    report a headline as good as (or better than) a clean one (#53).
+    """
+    for name, info in result.summary().items():
+        if info["missing"]:
+            total = info["count"] + info["missing"]
+            logger.warning(
+                f"{name}: {info['missing']} of {total} rows have no score (the "
+                f"metric errored or the score is undefined). The reported mean "
+                f"covers the other {info['count']}; see EvaluationResult.summary()."
+            )
