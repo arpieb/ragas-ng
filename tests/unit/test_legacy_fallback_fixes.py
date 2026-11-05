@@ -45,3 +45,29 @@ async def test_answer_accuracy_judge_two_swaps_roles():
     assert "User Answer: RESPONSE" in judge1 and "Reference Answer: REFERENCE" in judge1
     # judge 2: the reference is rated *as* the user answer (#63)
     assert "User Answer: REFERENCE" in judge2 and "Reference Answer: RESPONSE" in judge2
+
+
+@pytest.mark.asyncio
+async def test_instance_rubrics_without_user_input_has_no_literal_none():
+    from ragas.metrics._instance_specific_rubrics import InstanceRubrics
+
+    metric = InstanceRubrics(llm=MagicMock(spec=BaseRagasLLM))
+    captured = {}
+
+    async def generate(data, llm, callbacks=None):
+        captured["input"] = data
+        out = MagicMock()
+        out.score = 3
+        return out
+
+    metric.single_turn_prompt.generate = generate  # type: ignore[method-assign]
+    await metric._ascore(
+        {
+            "retrieved_contexts": ["ctx one", "ctx two"],
+            "response": "r",
+            "rubrics": {"score1_description": "bad"},
+        },
+        None,
+    )
+    assert "None" not in captured["input"].user_input
+    assert captured["input"].user_input == "Answer using context: ctx one\nctx two"
