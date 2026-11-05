@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from .base import BaseBackend
+from .base import BaseBackend, resolve_resource_path
 
 
 class LocalJSONLBackend(BaseBackend):
@@ -56,7 +56,7 @@ class LocalJSONLBackend(BaseBackend):
 
     def _get_file_path(self, data_type: str, name: str) -> Path:
         """Get the full file path for a dataset or experiment."""
-        return self._get_data_dir(data_type) / f"{name}.jsonl"
+        return resolve_resource_path(self._get_data_dir(data_type), name, ".jsonl")
 
     def _serialize_datetime(self, obj: t.Any) -> t.Any:
         """Serialize datetime objects to ISO format strings."""

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from .base import BaseBackend
+from .base import BaseBackend, resolve_resource_path
 
 
 class LocalCSVBackend(BaseBackend):
@@ -51,7 +51,7 @@ class LocalCSVBackend(BaseBackend):
 
     def _get_file_path(self, data_type: str, name: str) -> Path:
         """Get the full file path for a dataset or experiment."""
-        return self._get_data_dir(data_type) / f"{name}.csv"
+        return resolve_resource_path(self._get_data_dir(data_type), name, ".csv")
 
     def _load(self, data_type: str, name: str) -> t.List[t.Dict[str, t.Any]]:
         """Load data from CSV file, raising FileNotFoundError if file doesn't exist."""
