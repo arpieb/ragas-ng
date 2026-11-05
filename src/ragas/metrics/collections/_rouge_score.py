@@ -2,6 +2,7 @@
 
 import typing as t
 
+from ragas.metrics.collections._text import UnicodeTokenizer, is_ascii
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
 
@@ -46,12 +47,40 @@ class RougeScore(BaseMetric):
         name: str = "rouge_score",
         rouge_type: t.Literal["rouge1", "rougeL"] = "rougeL",
         mode: t.Literal["fmeasure", "precision", "recall"] = "fmeasure",
+        tokenizer: t.Union[t.Literal["auto", "default", "unicode"], t.Any] = "auto",
+        use_stemmer: bool = True,
         **kwargs,
     ):
-        """Initialize RougeScore metric."""
+        """Initialize RougeScore metric.
+
+        Args:
+            tokenizer: ``"auto"`` (default) uses rouge_score's own tokenizer when
+                both texts are ASCII, so English scores are unchanged, and
+                ``"unicode"`` otherwise. ``"default"`` always uses rouge_score's,
+                which drops every non-``[a-z0-9]`` character, so non-Latin text
+                scores 0. ``"unicode"`` keeps words in any script and splits CJK
+                into characters. Any object with a ``tokenize(text)`` method
+                (e.g. a language-specific segmenter) is used as-is.
+            use_stemmer: Porter-stem English tokens (as rouge_score does).
+                Never applied to non-ASCII tokens.
+        """
         super().__init__(name=name, **kwargs)
         self.rouge_type = rouge_type
         self.mode = mode
+        self.tokenizer = tokenizer
+        self.use_stemmer = use_stemmer
+
+    def _tokenizer_for(self, reference: str, response: str) -> t.Any:
+        """None means rouge_score's built-in tokenizer."""
+        if self.tokenizer == "default":
+            return None
+        if self.tokenizer == "auto":
+            if is_ascii(reference, response):
+                return None
+            return UnicodeTokenizer(self.use_stemmer)
+        if self.tokenizer == "unicode":
+            return UnicodeTokenizer(self.use_stemmer)
+        return self.tokenizer
 
     async def ascore(
         self,
@@ -78,7 +107,11 @@ class RougeScore(BaseMetric):
             )
 
         # Calculate ROUGE score
-        scorer = rouge_scorer.RougeScorer([self.rouge_type], use_stemmer=True)
+        scorer = rouge_scorer.RougeScorer(
+            [self.rouge_type],
+            use_stemmer=self.use_stemmer,
+            tokenizer=self._tokenizer_for(reference, response),
+        )
         scores = scorer.score(reference, response)
         score_value = getattr(scores[self.rouge_type], self.mode)
 

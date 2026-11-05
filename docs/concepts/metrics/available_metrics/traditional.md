@@ -131,7 +131,7 @@ You can pass additional arguments to the underlying `sacrebleu.corpus_bleu` func
 scorer = BleuScore(kwargs={"smooth_method": "exp"})
 ```
 
-Each sample is scored as one segment, the whole `response` against the whole `reference`. Unsmoothed BLEU is often `0` for short texts that share no 4-gram, so `smooth_method="exp"` is a good choice for short answers. For languages written without spaces, pick a matching tokenizer, for example `kwargs={"tokenize": "zh"}` (Chinese) or `kwargs={"tokenize": "char"}`.
+Each sample is scored as one segment, the whole `response` against the whole `reference`. Unsmoothed BLEU is often `0` for short texts that share no 4-gram, so `smooth_method="exp"` is a good choice for short answers. Unless you pass `tokenize`, Chinese text is tokenized with sacreBLEU's `"zh"` tokenizer and Japanese with `"char"`. The default `"13a"` splits on spaces, so it would treat a whole sentence as one word. All other text uses `"13a"`.
 
 ### Legacy Metrics API
 
@@ -210,6 +210,12 @@ You can change the `mode` to `precision`, `recall`, or `fmeasure` to calculate t
 
 ```python
 scorer = RougeScore(mode="recall")
+```
+
+**Languages other than English.** By default (`tokenizer="auto"`), text that is entirely ASCII is tokenized exactly as `rouge_score` does it. Any other text uses a Unicode-aware tokenizer that keeps words in every script and treats each Chinese or Japanese character as a token. `rouge_score`'s own tokenizer drops every character outside `a-z0-9`, so Cyrillic, Greek, Arabic or CJK text would otherwise score `0`. Porter stemming (`use_stemmer=True`) only ever applies to English tokens. For a language that needs real word segmentation (e.g. Thai), pass any object with a `tokenize(text)` method:
+
+```python
+scorer = RougeScore(tokenizer=MyThaiSegmenter())
 ```
 
 ### Legacy Metrics API

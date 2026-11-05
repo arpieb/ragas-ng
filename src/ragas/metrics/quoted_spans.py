@@ -19,9 +19,13 @@ from __future__ import annotations
 import re
 from typing import Dict, Sequence
 
-# Regular expression to extract both straight and curly quoted spans.  Matches
-# pairs of quotes and captures the inner text.
-_QUOTE_RE = re.compile(r"[\"" "''`´](.*?)[\"" "''`´]")
+from ragas.metrics.collections._text import unicode_words
+from ragas.metrics.collections.quoted_spans.util import QUOTE_RE
+
+# Shared with the collections metric. The pattern here had degraded to
+# straight quotes only (its curly-quote characters were lost), so curly,
+# guillemet and CJK quotes were never extracted (#51).
+_QUOTE_RE = QUOTE_RE
 
 
 def _normalize(text: str) -> str:
@@ -51,7 +55,7 @@ def _extract_quoted_spans(answer: str, *, min_len: int = 3) -> Sequence[str]:
     for match in _QUOTE_RE.finditer(answer):
         span = (match.group(1) or "").strip()
         # filter out spans shorter than min_len words
-        if len(span.split()) >= min_len:
+        if len(unicode_words(span)) >= min_len:
             spans.append(span)
     return spans
 

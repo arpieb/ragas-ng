@@ -5,9 +5,17 @@ from __future__ import annotations
 import re
 import typing as t
 
-QUOTE_RE = re.compile(
-    r'["\u201c\u201d\u201e\u201f\'\u2018\u2019`\u00b4](.*?)["\u201c\u201d\u201e\u201f\'\u2018\u2019`\u00b4]'
+from ragas.metrics.collections._text import unicode_words
+
+# Opening and closing quote characters: straight and curly English quotes,
+# low-9 quotes („ ‚), guillemets (« » ‹ ›), and CJK corner brackets (「」『』).
+_QUOTES = (
+    "\"'`\u00b4"
+    "\u201c\u201d\u201e\u201f\u2018\u2019\u201a"
+    "\u00ab\u00bb\u2039\u203a"
+    "\u300c\u300d\u300e\u300f"
 )
+QUOTE_RE = re.compile(f"[{re.escape(_QUOTES)}](.*?)[{re.escape(_QUOTES)}]")
 
 
 def normalize_text(text: str) -> str:
@@ -21,7 +29,8 @@ def extract_quoted_spans(answer: str, min_len: int = 3) -> t.List[str]:
 
     Args:
         answer: The model answer to search for quoted spans.
-        min_len: Minimum number of words required for a span to be considered.
+        min_len: Minimum number of words required for a span to be considered
+            (each CJK character counts as one).
             Shorter spans are ignored to avoid spurious matches.
 
     Returns:
@@ -30,7 +39,9 @@ def extract_quoted_spans(answer: str, min_len: int = 3) -> t.List[str]:
     spans: t.List[str] = []
     for match in QUOTE_RE.finditer(answer):
         span = (match.group(1) or "").strip()
-        if len(span.split()) >= min_len:
+        # unicode_words counts each CJK character as a token: a quoted Chinese
+        # sentence has no spaces, so split() saw one "word" and dropped it.
+        if len(unicode_words(span)) >= min_len:
             spans.append(span)
     return spans
 
