@@ -144,15 +144,18 @@ class SummaryScore(BaseMetric):
         questions = await self._generate_questions(text, keyphrases)
 
         if not questions:
-            # Match legacy behavior: log error and continue with empty list
-            logging.error("No questions generated, unable to calculate the score.")
-            questions = []
+            # Nothing to check the summary against: the score is undefined (#60).
+            logging.warning(
+                "SummaryScore: no questions generated from the reference contexts; "
+                "returning NaN."
+            )
+            return MetricResult(value=float("nan"))
 
         # Step 3: Check if summary can answer the questions
         answers = await self._generate_answers(response, questions)
 
         # Step 4: Calculate QA score
-        qa_score = self._compute_qa_score(answers)
+        qa_score = self._compute_qa_score(answers, len(questions))
 
         # Step 5: Calculate final score (with optional conciseness penalty)
         if self.length_penalty:
@@ -184,12 +187,24 @@ class SummaryScore(BaseMetric):
         result = await self.llm.agenerate(prompt_str, AnswersGenerated)
         return result.answers
 
-    def _compute_qa_score(self, answers: List[str]) -> float:
-        """Compute QA score as ratio of correct answers. Matches legacy behavior exactly."""
-        correct = sum([1 for a in answers if a.lower() == "1"])
-        return correct / len(
-            answers
-        )  # Will raise ZeroDivisionError if answers is empty (legacy behavior)
+    def _compute_qa_score(self, answers: List[str], n_questions: int) -> float:
+        """Fraction of the questions the summary answers.
+
+        The denominator is the number of questions asked, not the number of
+        answers returned. If the judge returns a different number of answers
+        they can't be matched to questions, so the score is NaN rather than a
+        ratio over whatever subset came back.
+        """
+        if n_questions == 0:
+            return float("nan")
+        if len(answers) != n_questions:
+            logging.warning(
+                f"SummaryScore: judge returned {len(answers)} answers for "
+                f"{n_questions} questions; returning NaN."
+            )
+            return float("nan")
+        correct = sum(1 for a in answers if a.strip().lower() == "1")
+        return correct / n_questions
 
     def _compute_conciseness_score(self, text: str, summary: str) -> float:
         """Compute conciseness score based on length ratio."""

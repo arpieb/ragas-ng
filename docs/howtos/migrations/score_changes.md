@@ -49,3 +49,17 @@ Response and reference were split on `". "` and passed to `sacrebleu.corpus_bleu
 Average precision divided by `relevant_count + 1e-10` unconditionally, so a perfect ranking scored `0.9999999999` and never `1.0`. The epsilon now applies only where it was needed: no relevant contexts gives `0.0`.
 
 **Who sees a difference:** every non-zero score rises by a relative ~1e-10. It's invisible at normal precision but breaks `score == 1.0` checks and CI thresholds set at 1.0.
+
+## SummaryScore: no crash, and a questions-based denominator ([#60](https://github.com/arpieb/ragas-ng/issues/60))
+
+`ragas.metrics.collections.SummaryScore`
+
+The QA component divided the number of `"1"` answers by the number of answers the judge *returned*:
+
+| | Before | Now |
+|---|---|---|
+| no questions generated | `ZeroDivisionError` (after an extra LLM call) | `NaN`, answer call skipped |
+| judge returns a different number of answers than questions | ratio over whatever came back | `NaN`, with a warning |
+| `" 1 "` (whitespace) | counted as unanswered | counted as answered |
+
+**Who sees a difference:** samples whose answer count didn't match the question count now score NaN instead of an over- or under-stated ratio. Samples that used to crash now return NaN.
