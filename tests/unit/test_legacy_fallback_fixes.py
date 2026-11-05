@@ -4,6 +4,7 @@ by direct imports from the private modules."""
 
 from __future__ import annotations
 
+import copy
 import typing as t
 from unittest.mock import MagicMock
 
@@ -82,3 +83,38 @@ def test_agent_goal_accuracy_output_type_is_binary(cls_name):
     from ragas.metrics.base import MetricOutputType
 
     assert getattr(ga, cls_name)().output_type == MetricOutputType.BINARY
+
+
+@pytest.mark.asyncio
+async def test_legacy_answer_relevancy_does_not_block_on_sync_embeddings():
+    from ragas.metrics._answer_relevance import (
+        AnswerRelevancy,
+        ResponseRelevanceOutput,
+    )
+
+    class AsyncOnlyEmbeddings:
+        def embed_query(self, text):
+            raise AssertionError("sync embedding call blocks the event loop (#75)")
+
+        embed_documents = embed_query
+
+        async def aembed_query(self, text):
+            return [1.0, 0.0]
+
+        async def aembed_documents(self, texts):
+            return [[1.0, 0.0] for _ in texts]
+
+    metric = AnswerRelevancy(
+        llm=MagicMock(spec=BaseRagasLLM),
+        embeddings=AsyncOnlyEmbeddings(),  # type: ignore[arg-type]
+    )
+
+    async def generate_multiple(data, llm, callbacks=None, n=1):
+        return [ResponseRelevanceOutput(question="q?", noncommittal=0)] * n
+
+    # question_generation is a class-level default shared by every instance:
+    # patch a copy so the stub doesn't leak into other tests.
+    metric.question_generation = copy.copy(metric.question_generation)
+    metric.question_generation.generate_multiple = generate_multiple  # type: ignore[method-assign]
+    score = await metric._ascore({"user_input": "q?", "response": "r"}, None)
+    assert score == pytest.approx(1.0)
