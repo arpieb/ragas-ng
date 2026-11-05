@@ -60,29 +60,44 @@ Answer Correctness Score: 0.95
 
 ### Calculation
 
-Let's calculate the answer correctness for the answer with low answer correctness. It is computed as the sum of factual correctness and the semantic similarity between the given answer and the ground truth.
+Answer correctness is a **weighted average** of two parts: a factuality score and the semantic similarity between the response and the reference.
 
-Factual correctness quantifies the factual overlap between the generated answer and the ground truth answer. This is done using the concepts of:
-- TP (True Positive): Facts or statements that are present in both the ground truth and the generated answer.
-- FP (False Positive): Facts or statements that are present in the generated answer but not in the ground truth.
-- FN (False Negative): Facts or statements that are present in the ground truth but not in the generated answer.
+**Factuality.** Both the response and the reference are broken into statements. A single LLM call then sorts them into:
+
+- TP (True Positive): statements in the response that are supported by the reference.
+- FP (False Positive): statements in the response that are not in the reference.
+- FN (False Negative): statements in the reference that are missing from the response.
 
 In the second example:
+
 - TP: `[Einstein was born in 1879]`
 - FP: `[Einstein was born in Spain]`
 - FN: `[Einstein was born in Germany]`
 
-Now, we can use the formula for the F1 score to quantify correctness based on the number of statements in each of these lists:
-
+The factuality score is the F-beta score of these counts (`beta=1.0` by default, which gives F1):
 
 $$
-\text{F1 Score} = {|\text{TP} \over {(|\text{TP}| + 0.5 \times (|\text{FP}| + |\text{FN}|))}}
+\text{Precision} = \frac{|TP|}{|TP| + |FP|}, \qquad \text{Recall} = \frac{|TP|}{|TP| + |FN|}
 $$
 
-Next, we calculate the semantic similarity between the generated answer and the ground truth. Read more about it [here](./semantic_similarity.md).
+$$
+F_\beta = \frac{(1 + \beta^2) \times \text{Precision} \times \text{Recall}}{\beta^2 \times \text{Precision} + \text{Recall}}
+$$
 
+Here that is `1 / (1 + 0.5 × (1 + 1)) = 0.5`.
 
-Once we have the semantic similarity, we take a weighted average of the semantic similarity and the factual similarity calculated above to arrive at the final score. You can adjust this weightage by modifying the `weights` parameter.
+!!! note "Not the same as FactualCorrectness"
+    This factuality score is AnswerCorrectness's own calculation. It is **not** the [FactualCorrectness](./factual_correctness.md) metric. FactualCorrectness decomposes claims with configurable atomicity and coverage and checks each direction (response → reference, reference → response) with separate NLI calls. AnswerCorrectness classifies both statement lists in one call. The two can give different numbers for the same sample.
+
+**Semantic similarity** between the response and the reference is computed as in [Semantic Similarity](./semantic_similarity.md).
+
+**Final score.** The weighted average of the two, with `weights=[0.75, 0.25]` (factuality, similarity) by default:
+
+$$
+\text{Answer Correctness} = \frac{w_f \times \text{factuality} + w_s \times \text{similarity}}{w_f + w_s}
+$$
+
+Set `weights=[1.0, 0.0]` to use factuality alone (no embeddings needed), or `beta` to weight recall (`beta > 1`) or precision (`beta < 1`) in the factuality score.
 
 ## Legacy Metrics API
 
