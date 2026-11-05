@@ -2,8 +2,32 @@
 
 import typing as t
 from abc import ABC, abstractmethod
+from pathlib import Path
 
 from pydantic import BaseModel
+
+
+def resolve_resource_path(data_dir: Path, name: str, suffix: str) -> Path:
+    """Map a dataset/experiment ``name`` to a file directly inside ``data_dir``.
+
+    Names are user input and become file names, so they must not be able to
+    address anything outside the backend's storage root. A name may contain
+    any characters except path separators and NUL, and may not be empty,
+    ``.`` or ``..``; such a name always joins to a file directly in
+    ``data_dir``. (The check is lexical on purpose: a dataset file that is
+    itself a symlink keeps working.)
+
+    Raises:
+        ValueError: if ``name`` is not a plain file name.
+    """
+    if not isinstance(name, str) or not name:
+        raise ValueError("Dataset/experiment name must be a non-empty string.")
+    if name in (".", "..") or any(c in name for c in ("/", "\\", "\x00")):
+        raise ValueError(
+            f"Invalid dataset/experiment name {name!r}: names may not contain "
+            "path separators or be '.' / '..'."
+        )
+    return data_dir / f"{name}{suffix}"
 
 
 class BaseBackend(ABC):
