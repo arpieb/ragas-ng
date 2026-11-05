@@ -62,9 +62,6 @@ dataset.to_pandas()
 Output
 ![testset](./testset_output.png)
 
-!!! note
-Generating synthetic test data can be confusing and hard, but if you need we are happy to help you with it. We have built pipelines to generate test data for various use cases. If you need help with it, please talk to us by booking a [slot](https://bit.ly/3EBYq4J) or drop us a line: [founders@vibrantlabs.com](mailto:founders@vibrantlabs.com).
-
 ## A Deeper Look
 
 Now that we have a seen how to generate a testset, let's take a closer look at the main components of the testset generation pipeline and how you can quickly customize it.
