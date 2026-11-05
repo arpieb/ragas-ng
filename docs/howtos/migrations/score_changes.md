@@ -41,3 +41,11 @@ Response and reference were split on `". "` and passed to `sacrebleu.corpus_bleu
 | segments scored | first response sentence, against any one reference sentence | the whole response against the whole reference |
 
 **Who sees a difference:** any multi-sentence response. A response whose first sentence matches the reference and whose remaining sentences are wrong used to score `1.0`. It now scores about `0.33`.
+
+## Context precision: perfect ranking is exactly 1.0 ([#57](https://github.com/arpieb/ragas-ng/issues/57))
+
+`ContextPrecision`, `ContextUtilization`, `ContextPrecisionWithReference`, `ContextPrecisionWithoutReference`, `NonLLMContextPrecisionWithReference` (collections)
+
+Average precision divided by `relevant_count + 1e-10` unconditionally, so a perfect ranking scored `0.9999999999` and never `1.0`. The epsilon now applies only where it was needed: no relevant contexts gives `0.0`.
+
+**Who sees a difference:** every non-zero score rises by a relative ~1e-10. It's invisible at normal precision but breaks `score == 1.0` checks and CI thresholds set at 1.0.

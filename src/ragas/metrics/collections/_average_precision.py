@@ -11,8 +11,10 @@ import typing as t
 def average_precision(verdicts: t.Sequence[int]) -> float:
     """Mean of the precision@k values taken at each relevant position.
 
-    Rewards relevant contexts appearing early in the ranking. The ``1e-10`` guard
-    keeps an all-zero verdict list at 0.0 rather than dividing by zero.
+    Rewards relevant contexts appearing early in the ranking. With no relevant
+    contexts (all-zero or empty verdicts) the score is 0.0. A perfect ranking
+    scores exactly 1.0; an unconditional ``+1e-10`` in the denominator used to
+    cap it at 0.9999999999 (#57).
     """
     cumsum = 0
     numerator = 0.0
@@ -21,5 +23,6 @@ def average_precision(verdicts: t.Sequence[int]) -> float:
         if v:
             numerator += cumsum / (i + 1)
 
-    denominator = cumsum + 1e-10
-    return numerator / denominator
+    if cumsum == 0:
+        return 0.0
+    return numerator / cumsum

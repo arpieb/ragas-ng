@@ -171,6 +171,11 @@ class TestAveragePrecisionHelper:
     def test_known_values(self, verdicts, expected):
         assert average_precision(verdicts) == pytest.approx(expected, abs=1e-9)
 
+    @pytest.mark.parametrize("verdicts", [[1], [1, 1], [1, 1, 1, 0], [1, 0, 0]])
+    def test_perfect_ranking_is_exactly_one(self, verdicts):
+        # no epsilon: relevant contexts all ranked first must give exactly 1.0 (#57)
+        assert average_precision(verdicts) == 1.0
+
     def test_earlier_hits_score_higher(self):
         assert average_precision([1, 0, 0]) > average_precision([0, 0, 1])
 
