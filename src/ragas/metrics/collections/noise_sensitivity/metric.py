@@ -5,10 +5,12 @@ from typing import Dict, List, Literal
 
 import numpy as np
 
+from ragas.metrics.collections._verdicts import judge_each
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
 
 from .util import (
+    StatementFaithfulnessAnswer,
     StatementFaithfulnessInput,
     StatementFaithfulnessOutput,
     StatementFaithfulnessPrompt,
@@ -155,13 +157,18 @@ class NoiseSensitivity(BaseMetric):
             gt_verdicts = await self._evaluate_statement_faithfulness(
                 gt_statements, ctx
             )
-            gt_verdictslist.append(np.array(gt_verdicts))
+            gt_verdictslist.append(gt_verdicts)
 
             # Evaluate answer statements against this context
             ans_verdicts = await self._evaluate_statement_faithfulness(
                 ans_statements, ctx
             )
-            ans_verdictslist.append(np.array(ans_verdicts))
+            ans_verdictslist.append(ans_verdicts)
+
+        # A context whose verdicts couldn't be matched to the statements leaves
+        # a hole in the matrices: the score is undefined (#52).
+        if any(v is None for v in gt_verdictslist + ans_verdictslist):
+            return MetricResult(value=float("nan"))
 
         # Step 3: Build matrices for computation (exact legacy shape handling)
         answers = {}
@@ -172,6 +179,8 @@ class NoiseSensitivity(BaseMetric):
         gt_to_ans_verdicts = await self._evaluate_statement_faithfulness(
             ans_statements, reference
         )
+        if gt_to_ans_verdicts is None:
+            return MetricResult(value=float("nan"))
         answers["ground_truth2answer"] = np.array(gt_to_ans_verdicts)
         # Wrap in another array to match legacy shape handling
         answers["ground_truth2answer"] = np.array([answers["ground_truth2answer"]])
@@ -195,16 +204,25 @@ class NoiseSensitivity(BaseMetric):
 
     async def _evaluate_statement_faithfulness(
         self, statements: List[str], context: str
-    ) -> List[int]:
-        """Evaluate faithfulness of statements against context using NLI."""
+    ) -> t.Optional[List[int]]:
+        """Evaluate faithfulness of statements against context using NLI.
+
+        One verdict per statement, or None if the judge's verdicts can't be
+        matched to the statements (#52).
+        """
         input_data = StatementFaithfulnessInput(context=context, statements=statements)
         prompt_str = self.faithfulness_prompt.to_string(input_data)
-        result = await self.llm.agenerate(prompt_str, StatementFaithfulnessOutput)
 
-        verdict_list = [
-            1 if statement.verdict else 0 for statement in result.statements
-        ]
-        return verdict_list
+        async def ask() -> List[StatementFaithfulnessAnswer]:
+            result = await self.llm.agenerate(prompt_str, StatementFaithfulnessOutput)
+            return result.statements
+
+        aligned = await judge_each(
+            statements, ask, text_of=lambda v: v.statement, metric=self.name
+        )
+        if aligned is None:
+            return None
+        return [1 if v.verdict else 0 for v in aligned]
 
     def _compute_score(self, answers: Dict) -> float:
         """Compute noise sensitivity score from faithfulness matrices."""
