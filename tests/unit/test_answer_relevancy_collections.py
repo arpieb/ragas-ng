@@ -16,7 +16,7 @@ from ragas.metrics.collections.answer_relevancy.util import AnswerRelevanceOutpu
 def make_metric(question_vec, generated_vec, noncommittal=0):
     llm = MagicMock(spec=InstructorLLM)
 
-    async def agenerate(prompt, model):
+    async def agenerate(prompt, model, **kwargs):
         return AnswerRelevanceOutput(question="generated?", noncommittal=noncommittal)
 
     llm.agenerate = agenerate

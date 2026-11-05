@@ -555,11 +555,20 @@ class InstructorBaseRagasLLM(ABC):
 
     @abstractmethod
     def generate(
-        self, prompt: str, response_model: t.Type[InstructorTypeVar]
+        self,
+        prompt: str,
+        response_model: t.Type[InstructorTypeVar],
+        temperature: t.Optional[float] = None,
+        sample_index: t.Optional[int] = None,
     ) -> InstructorTypeVar:
         """Generate a response using the configured LLM.
 
         For async clients, this will run the async method in the appropriate event loop.
+
+        ``temperature`` overrides the configured temperature for this call, for
+        metrics that deliberately draw several samples (``strictness``).
+        ``sample_index`` does not reach the provider; it only gives each sample
+        its own cache entry so a cache doesn't collapse N samples into one.
         """
 
     @abstractmethod
@@ -567,8 +576,30 @@ class InstructorBaseRagasLLM(ABC):
         self,
         prompt: str,
         response_model: t.Type[InstructorTypeVar],
+        temperature: t.Optional[float] = None,
+        sample_index: t.Optional[int] = None,
     ) -> InstructorTypeVar:
-        """Asynchronously generate a response using the configured LLM."""
+        """Asynchronously generate a response using the configured LLM.
+
+        See ``generate`` for ``temperature`` and ``sample_index``.
+        """
+
+    @staticmethod
+    def _with_sampling(
+        model_args: t.Dict[str, t.Any], temperature: t.Optional[float]
+    ) -> t.Dict[str, t.Any]:
+        """``model_args`` with a per-call temperature applied.
+
+        A sampled call also drops ``top_p``: the deterministic default (0.1)
+        restricts sampling to the top 10% of probability mass, under which a
+        higher temperature barely changes the output.
+        """
+        if temperature is None:
+            return model_args
+        args = dict(model_args)
+        args["temperature"] = temperature
+        args.pop("top_p", None)
+        return args
 
 
 class InstructorLLM(InstructorBaseRagasLLM):
@@ -616,8 +647,13 @@ class InstructorLLM(InstructorBaseRagasLLM):
                 cache_backend=self.cache, identity=lambda: cache_identity(self)
             )(self.agenerate)  # type: ignore
 
-    def _map_provider_params(self) -> t.Dict[str, t.Any]:
+    def _map_provider_params(
+        self, args: t.Optional[t.Dict[str, t.Any]] = None
+    ) -> t.Dict[str, t.Any]:
         """Route to provider-specific parameter mapping.
+
+        ``args`` defaults to ``self.model_args``; pass a per-call variant (e.g.
+        from ``_with_sampling``) to map that instead.
 
         Each provider may have different parameter requirements:
         - Google: Wraps parameters in generation_config and renames max_tokens
@@ -625,17 +661,21 @@ class InstructorLLM(InstructorBaseRagasLLM):
         - Anthropic: No special handling required (pass-through)
         - LiteLLM: No special handling required (routes internally, pass-through)
         """
+        if args is None:
+            args = self.model_args
         provider_lower = self.provider.lower()
 
         if provider_lower == "google":
-            return self._map_google_params()
+            return self._map_google_params(args)
         elif provider_lower in ("openai", "azure"):
-            return self._map_openai_params()
+            return self._map_openai_params(args)
         else:
             # Anthropic, LiteLLM, and other providers - pass through unchanged
-            return self.model_args.copy()
+            return args.copy()
 
-    def _map_openai_params(self) -> t.Dict[str, t.Any]:
+    def _map_openai_params(
+        self, args: t.Optional[t.Dict[str, t.Any]] = None
+    ) -> t.Dict[str, t.Any]:
         """Map parameters for OpenAI/Azure reasoning models with special constraints.
 
         Reasoning models (o-series and gpt-5 series) have unique requirements:
@@ -659,7 +699,7 @@ class InstructorLLM(InstructorBaseRagasLLM):
         - GPT-5 series: gpt-5, gpt-5-*, gpt-6, gpt-7, ... (all GPT-5+ models)
         - Other: codex-mini
         """
-        mapped_args = self.model_args.copy()
+        mapped_args = (self.model_args if args is None else args).copy()
 
         model_lower = self.model.lower()
 
@@ -715,7 +755,9 @@ class InstructorLLM(InstructorBaseRagasLLM):
 
         return mapped_args
 
-    def _map_google_params(self) -> t.Dict[str, t.Any]:
+    def _map_google_params(
+        self, args: t.Optional[t.Dict[str, t.Any]] = None
+    ) -> t.Dict[str, t.Any]:
         """Map parameters for Google Gemini models.
 
         Google models require parameters to be wrapped in a generation_config dict,
@@ -725,7 +767,7 @@ class InstructorLLM(InstructorBaseRagasLLM):
         generation_config_keys = {"temperature", "max_tokens", "top_p", "top_k"}
         generation_config = {}
 
-        for key, value in self.model_args.items():
+        for key, value in (self.model_args if args is None else args).items():
             if key in generation_config_keys:
                 if key == "max_tokens":
                     generation_config["max_output_tokens"] = value
@@ -862,11 +904,16 @@ class InstructorLLM(InstructorBaseRagasLLM):
                 asyncio.set_event_loop(None)
 
     def generate(
-        self, prompt: str, response_model: t.Type[InstructorTypeVar]
+        self,
+        prompt: str,
+        response_model: t.Type[InstructorTypeVar],
+        temperature: t.Optional[float] = None,
+        sample_index: t.Optional[int] = None,
     ) -> InstructorTypeVar:
         """Generate a response using the configured LLM.
 
         For async clients, this will run the async method in the appropriate event loop.
+        See ``InstructorBaseRagasLLM.generate`` for ``temperature``/``sample_index``.
         """
         messages = []
         if self.system_prompt:
@@ -876,11 +923,13 @@ class InstructorLLM(InstructorBaseRagasLLM):
         # If client is async, use the appropriate method to run it
         if self.is_async:
             result = self._run_async_in_current_loop(
-                self.agenerate(prompt, response_model)
+                self.agenerate(prompt, response_model, temperature, sample_index)
             )
         else:
             # Map parameters based on provider requirements
-            provider_kwargs = self._map_provider_params()
+            provider_kwargs = self._map_provider_params(
+                self._with_sampling(self.model_args, temperature)
+            )
 
             target = (
                 self.client
@@ -912,8 +961,13 @@ class InstructorLLM(InstructorBaseRagasLLM):
         self,
         prompt: str,
         response_model: t.Type[InstructorTypeVar],
+        temperature: t.Optional[float] = None,
+        sample_index: t.Optional[int] = None,
     ) -> InstructorTypeVar:
-        """Asynchronously generate a response using the configured LLM."""
+        """Asynchronously generate a response using the configured LLM.
+
+        See ``InstructorBaseRagasLLM.generate`` for ``temperature``/``sample_index``.
+        """
         messages = []
         if self.system_prompt:
             messages.append({"role": "system", "content": self.system_prompt})
@@ -926,7 +980,9 @@ class InstructorLLM(InstructorBaseRagasLLM):
             )
 
         # Map parameters based on provider requirements
-        provider_kwargs = self._map_provider_params()
+        provider_kwargs = self._map_provider_params(
+            self._with_sampling(self.model_args, temperature)
+        )
 
         target = (
             self.client

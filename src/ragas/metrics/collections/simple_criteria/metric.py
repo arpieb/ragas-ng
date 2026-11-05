@@ -3,6 +3,7 @@
 import typing as t
 from collections import Counter
 
+from ragas.metrics.collections._sampling import sample_n
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
 
@@ -130,11 +131,9 @@ class SimpleCriteriaScore(BaseMetric):
         )
         prompt_str = self.prompt.to_string(prompt_input)
 
-        judgements: t.List[SimpleCriteriaOutput] = []
-        for _ in range(self.strictness):
-            judgements.append(
-                await self.llm.agenerate(prompt_str, SimpleCriteriaOutput)
-            )
+        judgements = await sample_n(
+            self.llm, prompt_str, SimpleCriteriaOutput, self.strictness
+        )
 
         score = Counter(j.score for j in judgements).most_common(1)[0][0]
         reason = next(j.reason for j in judgements if j.score == score)

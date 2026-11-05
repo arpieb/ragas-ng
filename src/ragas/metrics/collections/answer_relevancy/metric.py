@@ -4,6 +4,7 @@ import typing as t
 
 import numpy as np
 
+from ragas.metrics.collections._sampling import sample_n
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
 
@@ -113,12 +114,11 @@ class AnswerRelevancy(BaseMetric):
         generated_questions = []
         noncommittal_flags = []
 
-        for _ in range(self.strictness):
-            # Create input data and generate prompt
-            input_data = AnswerRelevanceInput(response=response)
-            prompt_string = self.prompt.to_string(input_data)
-            result = await self.llm.agenerate(prompt_string, AnswerRelevanceOutput)
-
+        input_data = AnswerRelevanceInput(response=response)
+        prompt_string = self.prompt.to_string(input_data)
+        for result in await sample_n(
+            self.llm, prompt_string, AnswerRelevanceOutput, self.strictness
+        ):
             if result.question:
                 generated_questions.append(result.question)
                 noncommittal_flags.append(result.noncommittal)
