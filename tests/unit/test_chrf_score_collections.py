@@ -1,5 +1,7 @@
 """Tests for CHRFScore metric (collections implementation)."""
 
+import math
+
 import pytest
 
 try:
@@ -69,7 +71,8 @@ class TestCHRFScoreCollections:
         metric = CHRFScore()
 
         result = await metric.ascore(reference="", response="Some text")
-        assert result.value == 0.0
+        # a missing reference is a data gap, not a model failure (#61)
+        assert math.isnan(result.value)
         assert "Empty input" in result.reason
 
     @pytest.mark.asyncio
@@ -87,25 +90,32 @@ class TestCHRFScoreCollections:
         metric = CHRFScore()
 
         result = await metric.ascore(reference="   ", response="Some text")
-        assert result.value == 0.0
+        assert math.isnan(result.value)
         assert "Empty input" in result.reason
 
     @pytest.mark.asyncio
     async def test_invalid_reference_type(self):
-        """Test that non-string reference returns 0.0."""
+        """Non-string reference (e.g. None from a missing column) is NaN."""
         metric = CHRFScore()
 
         result = await metric.ascore(reference=123, response="text")
-        assert result.value == 0.0
+        assert math.isnan(result.value)
         assert "Invalid input" in result.reason
 
     @pytest.mark.asyncio
+    async def test_missing_reference_is_nan(self):
+        metric = CHRFScore()
+
+        result = await metric.ascore(reference=None, response="text")  # type: ignore[arg-type]
+        assert math.isnan(result.value)
+
+    @pytest.mark.asyncio
     async def test_invalid_response_type(self):
-        """Test that non-string response returns 0.0."""
+        """Non-string response is invalid input, so NaN."""
         metric = CHRFScore()
 
         result = await metric.ascore(reference="text", response=456)
-        assert result.value == 0.0
+        assert math.isnan(result.value)
         assert "Invalid input" in result.reason
 
     @pytest.mark.asyncio

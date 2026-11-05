@@ -74,16 +74,25 @@ class CHRFScore(BaseMetric):
                 "Please install it using `pip install sacrebleu`"
             )
 
+        # A missing or unusable reference is a gap in the dataset, not a
+        # model failure, so the score is undefined (NaN) rather than 0 (#61).
         if not isinstance(reference, str) or not isinstance(response, str):
             return MetricResult(
-                value=0.0,
+                value=float("nan"),
                 reason="Invalid input: reference and response must be strings",
             )
 
-        if not reference.strip() or not response.strip():
+        if not reference.strip():
+            return MetricResult(
+                value=float("nan"),
+                reason="Empty input: reference is empty, score is undefined",
+            )
+
+        # An empty response against a real reference is a genuine miss.
+        if not response.strip():
             return MetricResult(
                 value=0.0,
-                reason="Empty input: reference or response is empty",
+                reason="Empty input: response is empty",
             )
 
         # corpus_chrf expects hypotheses as list of strings and references as list of list of strings

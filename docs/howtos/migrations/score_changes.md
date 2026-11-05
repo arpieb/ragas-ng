@@ -63,3 +63,15 @@ The QA component divided the number of `"1"` answers by the number of answers th
 | `" 1 "` (whitespace) | counted as unanswered | counted as answered |
 
 **Who sees a difference:** samples whose answer count didn't match the question count now score NaN instead of an over- or under-stated ratio. Samples that used to crash now return NaN.
+
+## CHRFScore: missing reference is NaN, not 0.0 ([#61](https://github.com/arpieb/ragas-ng/issues/61))
+
+`ragas.metrics.collections.CHRFScore`
+
+| Input | Before | Now |
+|---|---|---|
+| reference empty, whitespace, `None` or not a string | `0.0` | `NaN` |
+| response not a string | `0.0` | `NaN` |
+| response empty, valid reference | `0.0` | `0.0` (unchanged) |
+
+A missing reference is a gap in the dataset, not a model failure. Scoring it `0.0` pulled the mean down for something the model didn't do. As with other undefined scores, NaN rows are left out of the mean.
