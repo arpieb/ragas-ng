@@ -1,5 +1,7 @@
 """Tests for ToolCallAccuracy metric (collections implementation)."""
 
+import warnings
+
 import pytest
 
 from ragas.messages import AIMessage, HumanMessage, ToolCall
@@ -160,5 +162,76 @@ class TestToolCallAccuracyCollections:
                 user_input=user_input,
                 reference_tool_calls=ref_tool_calls,
             )
-        # Sequences don't align (different lengths), so score is 0
-        assert result.value == 0.0
+        # search matched, filter missing: 1 of 2 calls, coverage penalty (#62)
+        assert result.value == 0.5
+
+
+class TestLengthMismatchCoverage:
+    """#62: a length mismatch applies the documented coverage penalty.
+
+    The shorter list must be contained in the longer one (in order when
+    strict); matched argument accuracy is divided by the longer length.
+    """
+
+    @staticmethod
+    async def score(pred, ref, strict=True):
+        metric = ToolCallAccuracy(strict_order=strict)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            result = await metric.ascore(
+                user_input=[AIMessage(content="", tool_calls=pred)],
+                reference_tool_calls=ref,
+            )
+        return result.value
+
+    A = ToolCall(name="a", args={"x": 1})
+    B = ToolCall(name="b", args={"y": 2})
+    C = ToolCall(name="c", args={"z": 3})
+
+    @pytest.mark.asyncio
+    async def test_missing_call_in_the_middle_is_a_coverage_gap(self):
+        assert await self.score([self.A, self.C], [self.A, self.B, self.C]) == (
+            pytest.approx(2 / 3)
+        )
+
+    @pytest.mark.asyncio
+    async def test_extra_call_costs_the_same_as_a_missing_one(self):
+        extra = await self.score([self.A, self.B, self.C], [self.A, self.C])
+        missing = await self.score([self.A, self.C], [self.A, self.B, self.C])
+        assert extra == missing == pytest.approx(2 / 3)
+
+    @pytest.mark.asyncio
+    async def test_wrong_order_is_still_zero_when_strict(self):
+        assert await self.score([self.C, self.A], [self.A, self.B, self.C]) == 0.0
+
+    @pytest.mark.asyncio
+    async def test_flexible_order_matches_by_name(self):
+        assert await self.score(
+            [self.C, self.A], [self.A, self.B, self.C], strict=False
+        ) == pytest.approx(2 / 3)
+
+    @pytest.mark.asyncio
+    async def test_unknown_tool_is_still_zero(self):
+        D = ToolCall(name="d", args={})
+        assert await self.score([self.A, D], [self.A, self.B, self.C]) == 0.0
+        assert (
+            await self.score([self.A, D], [self.A, self.B, self.C], strict=False) == 0.0
+        )
+
+    @pytest.mark.asyncio
+    async def test_argument_accuracy_still_counts(self):
+        wrong_args = ToolCall(name="a", args={"x": 999})
+        assert await self.score([wrong_args], [self.A, self.B]) == 0.0
+        assert await self.score([self.A], [self.A, self.B]) == pytest.approx(0.5)
+
+    @pytest.mark.asyncio
+    async def test_flexible_duplicates_pair_by_best_arguments(self):
+        a1 = ToolCall(name="a", args={"x": 1})
+        a2 = ToolCall(name="a", args={"x": 2})
+        assert await self.score([a2], [a1, a2], strict=False) == pytest.approx(0.5)
+
+    @pytest.mark.asyncio
+    async def test_equal_length_unchanged(self):
+        assert await self.score([self.A, self.B], [self.A, self.B]) == 1.0
+        assert await self.score([self.B, self.A], [self.A, self.B]) == 0.0
+        assert await self.score([self.B, self.A], [self.A, self.B], strict=False) == 1.0

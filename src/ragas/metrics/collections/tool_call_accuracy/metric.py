@@ -28,9 +28,12 @@ class ToolCallAccuracy(BaseMetric):
     - Flexible order: Tool calls can be in any order (parallel evaluation)
 
     Score calculation:
-    - If sequences don't align: score = 0
-    - If sequences align: score = (average argument accuracy) * sequence_alignment_factor
-    - Length mismatches apply proportional coverage penalty
+    - The shorter call list must be contained in the longer one: as an in-order
+      subsequence (strict) or as a multiset of tool names (flexible). If not,
+      some call is wrong and the score is 0.
+    - Otherwise: score = sum of argument accuracy over matched calls, divided by
+      the longer list's length. Equal lengths give the average argument
+      accuracy; each missing or extra call lowers the score proportionally.
 
     Usage:
         >>> from ragas.metrics.collections import ToolCallAccuracy
@@ -77,14 +80,49 @@ class ToolCallAccuracy(BaseMetric):
         self.strict_order = strict_order
         super().__init__(name=name, **kwargs)
 
-    def _is_sequence_aligned(
-        self, pred_sequence: List[str], ref_sequence: List[str]
-    ) -> bool:
-        """Check if tool call sequences are aligned."""
+    def _match_calls(
+        self, pred: List[ToolCall], ref: List[ToolCall]
+    ) -> t.Optional[t.List[t.Tuple[ToolCall, ToolCall]]]:
+        """(pred, ref) pairs covering every call of the shorter list, or None.
+
+        None means the shorter list is not contained in the longer one, i.e.
+        some call names a tool the other side never called (or, in strict
+        mode, calls tools out of order).
+        """
+        shorter, longer = (pred, ref) if len(pred) <= len(ref) else (ref, pred)
+        shorter_is_pred = shorter is pred
+        matched: t.List[t.Tuple[ToolCall, ToolCall]] = []
+
         if self.strict_order:
-            return pred_sequence == ref_sequence
+            # in-order subsequence, greedily left to right
+            j = 0
+            for call in shorter:
+                while j < len(longer) and longer[j].name != call.name:
+                    j += 1
+                if j == len(longer):
+                    return None
+                matched.append((call, longer[j]))
+                j += 1
         else:
-            return sorted(pred_sequence) == sorted(ref_sequence)
+            # multiset match by name; among same-name candidates, take the one
+            # whose arguments agree best
+            unused = list(longer)
+            for call in sorted(shorter, key=sorted_key_for_tool_call):
+                candidates = [c for c in unused if c.name == call.name]
+                if not candidates:
+                    return None
+                best = max(
+                    candidates,
+                    key=lambda c: (
+                        exact_match_args(call.args, c.args)
+                        if shorter_is_pred
+                        else exact_match_args(c.args, call.args)
+                    ),
+                )
+                unused.remove(best)
+                matched.append((call, best))
+
+        return [(a, b) if shorter_is_pred else (b, a) for a, b in matched]
 
     async def ascore(
         self,
@@ -123,48 +161,24 @@ class ToolCallAccuracy(BaseMetric):
             warnings.warn("Reference tool calls are empty but predictions exist")
             return MetricResult(value=0.0)
 
-        # Sort tool calls if not using strict order
-        if not self.strict_order:
-            pred_tool_calls = sorted(pred_tool_calls, key=sorted_key_for_tool_call)
-            reference_tool_calls = sorted(
-                reference_tool_calls, key=sorted_key_for_tool_call
-            )
-
-        # Check for length mismatch
+        # Pair up calls. The shorter list must be contained in the longer one:
+        # as an in-order subsequence (strict_order) or as a multiset of names
+        # (flexible). A call that isn't in the other list at all is a wrong
+        # call and scores 0, as before. Missing or extra calls are a coverage
+        # gap: the matched calls' argument accuracy is divided by the longer
+        # list's length, so each missing or extra call costs the same (#62).
+        # Equal-length inputs score exactly as before.
         if len(pred_tool_calls) != len(reference_tool_calls):
             warnings.warn(
                 f"Length mismatch: predicted tool calls ({len(pred_tool_calls)}) "
                 f"vs reference tool calls ({len(reference_tool_calls)}). "
-                f"Only the first {min(len(pred_tool_calls), len(reference_tool_calls))} "
-                f"tool calls will be compared."
+                f"Unmatched calls count against the score."
             )
 
-        # Extract sequences and check alignment
-        tool_call_pred_sequence = [tc.name for tc in pred_tool_calls]
-        tool_call_ref_sequence = [tc.name for tc in reference_tool_calls]
+        pairs = self._match_calls(pred_tool_calls, reference_tool_calls)
+        if pairs is None:
+            return MetricResult(value=0.0)
 
-        sequence_aligned = int(
-            self._is_sequence_aligned(tool_call_pred_sequence, tool_call_ref_sequence)
-        )
-
-        # Calculate argument accuracy for matching tool calls
-        score = 0.0
-        compared_count = min(len(pred_tool_calls), len(reference_tool_calls))
-
-        for ref_tool_call, pred_tool_call in zip(reference_tool_calls, pred_tool_calls):
-            if ref_tool_call.name == pred_tool_call.name:
-                arg_score = exact_match_args(pred_tool_call.args, ref_tool_call.args)
-                score += arg_score
-
-        # Normalize by reference length
-        score /= len(reference_tool_calls)
-
-        # Apply coverage penalty for length mismatch
-        if compared_count < len(reference_tool_calls):
-            coverage_penalty = compared_count / len(reference_tool_calls)
-            score *= coverage_penalty
-
-        # Apply sequence alignment factor
-        final_score = score * sequence_aligned
-
+        total = sum(exact_match_args(pred.args, ref.args) for pred, ref in pairs)
+        final_score = total / max(len(pred_tool_calls), len(reference_tool_calls))
         return MetricResult(value=float(final_score))

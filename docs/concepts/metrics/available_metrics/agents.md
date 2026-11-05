@@ -165,6 +165,7 @@ The metric requires `user_input` (conversation messages) and `reference_tool_cal
 - Evaluates sequence alignment (correct tools in correct order)
 - Evaluates argument accuracy (correct parameters for each tool)
 - Final score = (argument accuracy) × (sequence aligned ? 1 : 0)
+- **Missing or extra calls** don't zero the score if the shorter list of calls is contained in the longer one (in order, under strict mode). The matched calls' argument accuracy is divided by the longer list's length, so each missing or extra call costs the same. For example, 2 of 3 expected calls made correctly scores `0.67`. A call to a tool the other side never used, or calls out of order under strict mode, still scores `0`.
 
 ### Example: Basic Usage
 
