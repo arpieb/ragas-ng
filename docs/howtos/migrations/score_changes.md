@@ -230,3 +230,15 @@ scored 0.99999999, not 1.0. A reference with no entities scored 0.0. Recall is
 undefined there, and it is now NaN. **Who sees a difference:** every sample
 moves by at most 1e-8, and samples whose reference has no entities now show as
 missing rows in `EvaluationResult.summary()`.
+
+## DynamicFewShotPrompt: no examples below the threshold ([#93](https://github.com/arpieb/ragas-ng/issues/93))
+
+`ragas.prompt.DynamicFewShotPrompt` (the prompts of aligned `DiscreteMetric`,
+`NumericMetric` and `RankingMetric` metrics)
+
+When no stored example reached `similarity_threshold`, the prompt included the
+most recent examples anyway, presented as similar ones. It now includes no
+examples in that case, which matches `FewShotPydanticPrompt`. **Who sees a
+difference:** aligned metrics with an embedding model, on inputs unlike any of
+their stored examples. The judge now sees no examples for those inputs, so its
+verdicts can change. Lower `similarity_threshold` to include more examples.

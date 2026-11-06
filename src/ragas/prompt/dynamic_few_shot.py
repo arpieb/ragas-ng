@@ -9,11 +9,10 @@ import warnings
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-import numpy as np
-
 from ragas.embeddings.base import BaseRagasEmbedding as BaseEmbedding
 
 from .simple_prompt import Prompt
+from .utils import check_example_count, get_examples_from_store, nearest_indices
 
 if t.TYPE_CHECKING:
     from pydantic import BaseModel
@@ -22,9 +21,13 @@ if t.TYPE_CHECKING:
 class SimpleExampleStore(ABC):
     @abstractmethod
     def get_examples(
-        self, data: t.Dict, top_k: int = 5
+        self, data: t.Dict, top_k: int = 5, threshold: float = 0.7
     ) -> t.List[t.Tuple[t.Dict, t.Dict]]:
-        """Get top_k most similar examples to data."""
+        """Get up to ``top_k`` examples similar to ``data``.
+
+        Only examples with similarity at least ``threshold`` qualify.
+        ``top_k=0`` returns none.
+        """
         pass
 
     @abstractmethod
@@ -70,23 +73,22 @@ class SimpleInMemoryExampleStore(SimpleExampleStore):
     def get_examples(
         self, data: t.Dict, top_k: int = 5, threshold: float = 0.7
     ) -> t.List[t.Tuple[t.Dict, t.Dict]]:
-        """Get examples most similar to the input data."""
-        if not self._examples:
+        """Get up to ``top_k`` examples similar to ``data``.
+
+        With an embedding model, only examples whose similarity reaches
+        ``threshold`` are returned, possibly none. Without one, the most
+        recent examples are returned. ``top_k=0`` returns none (#92).
+        """
+        if check_example_count(top_k) == 0 or not self._examples:
             return []
 
         if not self.embedding_model or not self._embeddings_list:
             # If no embedding model, return the most recent examples
             return self._examples[-top_k:]
 
-        # Get embedding for the query
-        query_embedding = self._get_embedding(data)
-
-        # Find most similar examples
         indices = self._get_nearest_examples(
-            query_embedding, self._embeddings_list, top_k, threshold
+            self._get_embedding(data), self._embeddings_list, top_k, threshold
         )
-
-        # Return the examples at those indices
         return [self._examples[i] for i in indices]
 
     def _get_nearest_examples(
@@ -96,29 +98,13 @@ class SimpleInMemoryExampleStore(SimpleExampleStore):
         top_k: int = 3,
         threshold: float = 0.7,
     ) -> t.List[int]:
-        """Find indices of the nearest examples based on cosine similarity."""
-        # Convert to numpy arrays for efficient computation
-        query = np.array(query_embedding)
-        embed_matrix = np.array(embeddings)
+        """Indices of the nearest examples at or above ``threshold``.
 
-        # Calculate cosine similarity
-        similarities = np.dot(embed_matrix, query) / (
-            np.linalg.norm(embed_matrix, axis=1) * np.linalg.norm(query) + 1e-8
-        )
-
-        # Get indices of similarities above threshold
-        valid_indices = np.where(similarities >= threshold)[0]
-
-        # Sort by similarity and get top-k
-        if len(valid_indices) > 0:
-            top_indices = valid_indices[
-                np.argsort(similarities[valid_indices])[-top_k:]
-            ]
-            # Convert numpy indices to Python ints
-            return [int(idx) for idx in top_indices]
-
-        # If no examples meet threshold, return most recent examples
-        return list(range(max(0, len(embeddings) - top_k), len(embeddings)))
+        Examples below the threshold are never returned. This used to fall
+        back to the most recent examples when none qualified, showing
+        dissimilar examples as similar ones.
+        """
+        return nearest_indices(query_embedding, embeddings, top_k, threshold)
 
     def __len__(self):
         return len(self._examples)
@@ -176,8 +162,11 @@ class DynamicFewShotPrompt(Prompt):
         # Get dynamic examples if we have a store and inputs
         dynamic_examples = []
         if self.example_store and kwargs:
-            dynamic_examples = self.example_store.get_examples(
-                kwargs, self.max_similar_examples, self.similarity_threshold
+            dynamic_examples = get_examples_from_store(
+                self.example_store,
+                kwargs,
+                self.max_similar_examples,
+                self.similarity_threshold,
             )
 
         # Add examples in a simple format

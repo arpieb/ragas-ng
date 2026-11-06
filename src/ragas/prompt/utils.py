@@ -104,3 +104,81 @@ def extract_json(text: str) -> str:
             return text[start_idx : i + 1]
 
     return text  # In case of unbalanced JSON, return the original text
+
+
+def check_example_count(top_k: int, name: str = "top_k") -> int:
+    """Validate a requested number of examples or history entries.
+
+    ``0`` means none. Slicing with ``[-0:]`` returned everything (#92), so
+    callers return early on 0 instead. Negative counts are an error.
+    """
+    if top_k < 0:
+        raise ValueError(f"{name} must be 0 or more, got {top_k}")
+    return top_k
+
+
+def nearest_indices(
+    query_embedding: t.Sequence[float],
+    embeddings: t.Sequence[t.Sequence[float]],
+    top_k: int,
+    threshold: float,
+) -> t.List[int]:
+    """Indices of the ``top_k`` embeddings most similar to the query.
+
+    Only embeddings whose cosine similarity is at least ``threshold`` count;
+    if none qualify, the result is empty. The order is ascending similarity,
+    so the most similar example is last, closest to the query in the prompt,
+    as before.
+    """
+    import numpy as np
+
+    if check_example_count(top_k) == 0 or len(embeddings) == 0:
+        return []
+    query = np.asarray(query_embedding, dtype=float)
+    matrix = np.asarray(embeddings, dtype=float)
+    similarities = (
+        matrix @ query / (np.linalg.norm(matrix, axis=1) * np.linalg.norm(query) + 1e-8)
+    )
+    valid = np.where(similarities >= threshold)[0]
+    if len(valid) == 0:
+        return []
+    ranked = valid[np.argsort(similarities[valid], kind="stable")]
+    return [int(i) for i in ranked[-top_k:]]
+
+
+_warned_store_types: t.Set[type] = set()
+
+
+def get_examples_from_store(
+    store: t.Any, data: t.Any, top_k: int, threshold: float
+) -> t.Any:
+    """Call ``store.get_examples`` with the threshold, if it takes one.
+
+    The abstract ``get_examples`` once had no ``threshold`` parameter, so
+    custom stores written against it can't accept it (#93). Those are called
+    without it, with a one-time warning that the threshold is ignored.
+    """
+    import inspect
+    import warnings
+
+    try:
+        params = inspect.signature(store.get_examples).parameters
+    except (TypeError, ValueError):
+        params = {}
+    accepts_threshold = "threshold" in params or any(
+        p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()
+    )
+    if accepts_threshold:
+        return store.get_examples(data, top_k, threshold=threshold)
+
+    store_type = type(store)
+    if store_type not in _warned_store_types:
+        _warned_store_types.add(store_type)
+        warnings.warn(
+            f"{store_type.__name__}.get_examples() takes no `threshold` "
+            "argument, so the similarity threshold is ignored. Add a "
+            "`threshold: float` parameter to apply it.",
+            UserWarning,
+            stacklevel=3,
+        )
+    return store.get_examples(data, top_k)
