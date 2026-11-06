@@ -186,50 +186,98 @@ class PydanticPrompt(BasePrompt, t.Generic[InputModel, OutputModel]):
         )
         prompt_value = PromptValue(text=self.to_string(processed_data))
 
-        # Handle different LLM types with different interfaces
-        # 1. BaseRagasLLM have generate() with n, temperature, stop, callbacks
-        # 2. InstructorLLM has generate()/agenerate() with only prompt and response_model
-        if isinstance(llm, InstructorBaseRagasLLM):
-            # This is an InstructorLLM - use its generate()/agenerate() method
-            # InstructorLLM.generate()/agenerate() only takes prompt and response_model parameters
-            from ragas.llms.base import InstructorLLM
-
-            instructor_llm = t.cast(InstructorLLM, llm)
-            if instructor_llm.is_async:
-                result = await llm.agenerate(
-                    prompt=prompt_value.text,
-                    response_model=self.output_model,
-                )
-            else:
-                result = llm.generate(
-                    prompt=prompt_value.text,
-                    response_model=self.output_model,
-                )
-            # Wrap the single response in an LLMResult-like structure for consistency
-            from ragas.llms.output import Generation, LLMResult
-
-            generation = Generation(text=result.model_dump_json())
-            resp = LLMResult(generations=[[generation]])
-        else:
-            # This is a standard BaseRagasLLM - use generate()
-            ragas_llm = t.cast(BaseRagasLLM, llm)
-            resp = await ragas_llm.generate(
-                prompt_value,
+        # Every failure ends the prompt's trace span: only parser errors did,
+        # so a raw ValidationError or a provider error left it open (#94).
+        try:
+            output_models = await self._generate_outputs(
+                llm=llm,
+                data=data,
+                prompt_value=prompt_value,
                 n=n,
                 temperature=temperature,
                 stop=stop,
-                callbacks=prompt_cb,
+                prompt_cb=prompt_cb,
+                retries_left=retries_left,
             )
+        except Exception as e:
+            error = as_output_parser_exception(e)
+            prompt_rm.on_chain_error(error=error)
+            if isinstance(error, RagasOutputParserException):
+                logger.error("Prompt %s failed to parse output: %s", self.name, e)
+            if error is not e:
+                raise error from e
+            raise
 
-        output_models = []
-        parser = RagasOutputParser(pydantic_object=self.output_model)
+        prompt_rm.on_chain_end({"output": output_models})
+
+        return output_models
+
+    async def _generate_outputs(
+        self,
+        llm: t.Union[BaseRagasLLM, InstructorBaseRagasLLM],
+        data: InputModel,
+        prompt_value: PromptValue,
+        n: int,
+        temperature: t.Optional[float],
+        stop: t.Optional[t.List[str]],
+        prompt_cb: Callbacks,
+        retries_left: int,
+    ) -> t.List[OutputModel]:
+        if isinstance(llm, InstructorBaseRagasLLM):
+            # llm_factory LLMs return a validated model per call and take no
+            # `n`. Always await agenerate(): it moves a sync client to a
+            # thread, while generate() blocked the event loop and serialised
+            # every concurrent prompt. For n > 1 make n concurrent calls that
+            # can differ, as collections' sample_n does: a sampling
+            # temperature and a sample_index each, so a cache keeps n
+            # samples. This used to make one call and warn.
+            import asyncio
+
+            from ragas.metrics.collections._sampling import SAMPLING_TEMPERATURE
+
+            if n <= 1:
+                results = [
+                    await llm.agenerate(
+                        prompt=prompt_value.text,
+                        response_model=self.output_model,
+                        temperature=temperature,
+                    )
+                ]
+            else:
+                results = await asyncio.gather(
+                    *(
+                        llm.agenerate(
+                            prompt=prompt_value.text,
+                            response_model=self.output_model,
+                            temperature=(
+                                SAMPLING_TEMPERATURE
+                                if temperature is None
+                                else temperature
+                            ),
+                            sample_index=i,
+                        )
+                        for i in range(n)
+                    )
+                )
+            return [
+                self.process_output(
+                    self.output_model.model_validate_json(r.model_dump_json()),
+                    data,  # type: ignore[arg-type]
+                )
+                for r in results
+            ]
+
+        ragas_llm = t.cast(BaseRagasLLM, llm)
+        resp = await ragas_llm.generate(
+            prompt_value,
+            n=n,
+            temperature=temperature,
+            stop=stop,
+            callbacks=prompt_cb,
+        )
 
         # Handle cases where LLM returns fewer generations than requested
-        if isinstance(llm, InstructorBaseRagasLLM):
-            available_generations = len(resp.generations)
-        else:
-            available_generations = len(resp.generations[0]) if resp.generations else 0
-
+        available_generations = len(resp.generations[0]) if resp.generations else 0
         actual_n = min(n, available_generations)
 
         if actual_n == 0:
@@ -244,36 +292,17 @@ class PydanticPrompt(BasePrompt, t.Generic[InputModel, OutputModel]):
                 f"Proceeding with {actual_n} generations."
             )
 
+        parser = RagasOutputParser(pydantic_object=self.output_model)
+        output_models = []
         for i in range(actual_n):
-            if isinstance(llm, InstructorBaseRagasLLM):
-                # For InstructorLLM, each generation is in a separate batch result
-                output_string = resp.generations[i][0].text
-            else:
-                # For Ragas LLMs, all generations are in the first batch
-                output_string = resp.generations[0][i].text
-            try:
-                # The parser needs a BaseRagasLLM for its retry path
-                if isinstance(llm, InstructorBaseRagasLLM):
-                    # Skip parsing retry for InstructorLLM since parser expects BaseRagasLLM
-                    answer = self.output_model.model_validate_json(output_string)
-                else:
-                    ragas_llm = t.cast(BaseRagasLLM, llm)
-                    answer = await parser.parse_output_string(
-                        output_string=output_string,
-                        prompt_value=prompt_value,
-                        llm=ragas_llm,
-                        callbacks=prompt_cb,
-                        retries_left=retries_left,
-                    )
-                processed_output = self.process_output(answer, data)  # type: ignore
-                output_models.append(processed_output)
-            except RagasOutputParserException as e:
-                prompt_rm.on_chain_error(error=e)
-                logger.error("Prompt %s failed to parse output: %s", self.name, e)
-                raise e
-
-        prompt_rm.on_chain_end({"output": output_models})
-
+            answer = await parser.parse_output_string(
+                output_string=resp.generations[0][i].text,
+                prompt_value=prompt_value,
+                llm=ragas_llm,
+                callbacks=prompt_cb,
+                retries_left=retries_left,
+            )
+            output_models.append(self.process_output(answer, data))  # type: ignore
         return output_models
 
     def process_input(self, input: InputModel) -> InputModel:
@@ -465,6 +494,18 @@ class RagasOutputParser(t.Generic[OutputModel]):
         """Validate ``text`` as JSON into the output model."""
         return self.pydantic_object.model_validate_json(text)
 
+    def _parse_lenient(self, text: str) -> OutputModel:
+        """Parse ``text`` as is, else the JSON found inside it.
+
+        Trying the text as is first matters when it is valid JSON that
+        contains a fenced block in a string value: ``extract_json`` jumps to
+        the first "```json" anywhere and would parse the inner block.
+        """
+        try:
+            return self.parse(text.strip())
+        except _TEXT_PARSE_ERRORS:
+            return self.parse(extract_json(text))
+
     async def parse_output_string(
         self,
         output_string: str,
@@ -473,31 +514,99 @@ class RagasOutputParser(t.Generic[OutputModel]):
         callbacks: Callbacks,
         retries_left: int = 1,
     ) -> OutputModel:
+        """Parse ``output_string``, asking the LLM to fix it if it doesn't parse.
+
+        ``retries_left`` is the number of fix attempts. Each fixed output is
+        parsed the same way as the original, including pulling JSON out of
+        code fences and surrounding text. When every attempt fails, raises
+        ``RagasOutputParserException`` from the last parse error.
+        """
         callbacks = callbacks or []
         try:
-            jsonstr = extract_json(output_string)
-            result = self.parse(jsonstr)
-        except (ValidationError, json.JSONDecodeError):
-            if retries_left != 0:
-                retry_rm, retry_cb = new_group(
-                    name="fix_output_format",
-                    inputs={"output_string": output_string},
-                    callbacks=callbacks,
-                )
-                fixed_output_string = await fix_output_format_prompt.generate(
+            return self._parse_lenient(output_string)
+        except _TEXT_PARSE_ERRORS as e:
+            last_error: Exception = e
+
+        attempt = output_string
+        for _ in range(max(retries_left, 0)):
+            retry_rm, retry_cb = new_group(
+                name="fix_output_format",
+                inputs={"output_string": attempt},
+                callbacks=callbacks,
+            )
+            try:
+                # retries_left=0: the fixer doesn't recurse into fixes of its
+                # own output; this loop is the only retry.
+                fixed = await fix_output_format_prompt.generate(
                     llm=llm,
                     data=OutputStringAndPrompt(
-                        output_string=output_string,
+                        output_string=attempt,
                         prompt_value=prompt_value.to_string(),
                     ),
                     callbacks=retry_cb,
-                    retries_left=retries_left - 1,
+                    retries_left=0,
                 )
-                retry_rm.on_chain_end({"fixed_output_string": fixed_output_string})
-                result = self.parse(fixed_output_string.text)
-            else:
-                raise RagasOutputParserException()
-        return result
+            except RagasOutputParserException as e:
+                # the fixer's own output didn't parse: a failed attempt
+                retry_rm.on_chain_error(error=e)
+                last_error = e
+                continue
+            except Exception as e:
+                retry_rm.on_chain_error(error=e)
+                raise
+            retry_rm.on_chain_end({"fixed_output_string": fixed})
+            try:
+                return self._parse_lenient(fixed.text)
+            except _TEXT_PARSE_ERRORS as e:
+                last_error = e
+                attempt = fixed.text
+
+        raise RagasOutputParserException(_short_error(last_error)) from last_error
+
+
+_TEXT_PARSE_ERRORS = (ValidationError, json.JSONDecodeError)
+
+
+def _short_error(error: BaseException, limit: int = 500) -> str:
+    text = f"{type(error).__name__}: {error}"
+    return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
+def _parse_error_types() -> t.Tuple[t.Type[BaseException], ...]:
+    """Exception types that mean the LLM's output couldn't be parsed."""
+    types: t.List[t.Type[BaseException]] = [ValidationError, json.JSONDecodeError]
+    try:
+        from instructor.core import (
+            IncompleteOutputException,
+            InstructorRetryException,
+            ResponseParsingError,
+            ValidationError as InstructorValidationError,
+        )
+
+        types += [
+            InstructorRetryException,
+            IncompleteOutputException,
+            ResponseParsingError,
+            InstructorValidationError,
+        ]
+    except ImportError:  # pragma: no cover - instructor is a dependency
+        pass
+    return tuple(types)
+
+
+def as_output_parser_exception(error: Exception) -> Exception:
+    """Map an output-parsing failure to ``RagasOutputParserException``.
+
+    Parse and validation errors from either LLM path become one type, with
+    the original kept as ``__cause__``, so callers handle a bad output the
+    same way whatever produced it. Anything else, such as a timeout or a
+    provider error, is returned unchanged.
+    """
+    if isinstance(error, RagasOutputParserException):
+        return error
+    if isinstance(error, _parse_error_types()):
+        return RagasOutputParserException(_short_error(error))
+    return error
 
 
 # Ragas Adaptation

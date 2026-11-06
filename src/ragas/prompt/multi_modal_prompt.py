@@ -19,7 +19,11 @@ from urllib3.util import parse_url as urllib3_parse_url
 
 from ragas.callbacks import ChainType, new_group
 from ragas.exceptions import RagasOutputParserException
-from ragas.prompt.pydantic_prompt import PydanticPrompt, RagasOutputParser
+from ragas.prompt.pydantic_prompt import (
+    PydanticPrompt,
+    RagasOutputParser,
+    as_output_parser_exception,
+)
 from ragas.prompt.value import Message, PromptValue
 
 if t.TYPE_CHECKING:
@@ -172,34 +176,37 @@ class ImageTextPrompt(PydanticPrompt, t.Generic[InputModel, OutputModel]):
         )
         prompt_value = self.to_prompt_value(processed_data)
 
-        ragas_llm = t.cast(BaseRagasLLM, llm)
-        resp = await ragas_llm.generate(
-            prompt_value,
-            n=n,
-            temperature=temperature,
-            stop=stop,
-            callbacks=prompt_cb,
-        )
+        # Every failure ends the prompt's trace span, and parse failures
+        # share one exception type, as in PydanticPrompt (#94).
+        try:
+            ragas_llm = t.cast(BaseRagasLLM, llm)
+            resp = await ragas_llm.generate(
+                prompt_value,
+                n=n,
+                temperature=temperature,
+                stop=stop,
+                callbacks=prompt_cb,
+            )
 
-        output_models = []
-        parser = RagasOutputParser(pydantic_object=self.output_model)  # type: ignore
-        for i in range(n):
-            output_string = resp.generations[0][i].text
-            try:
-                ragas_llm = t.cast(BaseRagasLLM, llm)
+            output_models = []
+            parser = RagasOutputParser(pydantic_object=self.output_model)  # type: ignore
+            for i in range(n):
                 answer = await parser.parse_output_string(
-                    output_string=output_string,
+                    output_string=resp.generations[0][i].text,
                     prompt_value=prompt_value,  # type: ignore
                     llm=ragas_llm,
                     callbacks=prompt_cb,
                     retries_left=retries_left,
                 )
-                processed_output = self.process_output(answer, data)  # type: ignore
-                output_models.append(processed_output)
-            except RagasOutputParserException as e:
-                prompt_rm.on_chain_error(error=e)
+                output_models.append(self.process_output(answer, data))  # type: ignore
+        except Exception as e:
+            error = as_output_parser_exception(e)
+            prompt_rm.on_chain_error(error=error)
+            if isinstance(error, RagasOutputParserException):
                 logger.error("Prompt %s failed to parse output: %s", self.name, e)
-                raise e
+            if error is not e:
+                raise error from e
+            raise
 
         prompt_rm.on_chain_end({"output": output_models})
         return output_models
