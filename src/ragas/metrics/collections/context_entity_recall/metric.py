@@ -146,7 +146,8 @@ class ContextEntityRecall(BaseMetric):
             context_entities: Entities from the context
 
         Returns:
-            Entity recall score (0.0-1.0)
+            Entity recall score (0.0-1.0), or NaN when the reference has no
+            entities and recall is undefined.
         """
         reference_set = set(reference_entities)
         context_set = set(context_entities)
@@ -154,8 +155,9 @@ class ContextEntityRecall(BaseMetric):
         # Calculate intersection
         entities_in_both = len(reference_set.intersection(context_set))
 
-        # Calculate recall: |intersection| / |reference|
-        # Add small epsilon to avoid division by zero
-        recall = entities_in_both / (len(reference_set) + 1e-8)
-
-        return recall
+        # |intersection| / |reference|. The denominator used to carry a 1e-8
+        # epsilon, so a perfect match scored 0.99999999 and a reference with no
+        # entities scored 0.0 rather than undefined.
+        if not reference_set:
+            return float("nan")
+        return entities_in_both / len(reference_set)

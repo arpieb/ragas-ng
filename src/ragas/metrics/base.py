@@ -18,7 +18,7 @@ from ragas.llms import BaseRagasLLM
 from ragas.losses import BinaryMetricLoss, MSELoss
 from ragas.metrics.validators import AllowedValuesType
 from ragas.prompt import FewShotPydanticPrompt, PromptMixin
-from ragas.run_config import RunConfig
+from ragas.run_config import RunConfig, in_run_scope
 from ragas.utils import camel_to_snake
 
 if t.TYPE_CHECKING:
@@ -184,7 +184,9 @@ class MetricWithLLM(Metric, PromptMixin):
                 f"Metric '{self.name}' has no valid LLM provided (self.llm is None). Please instantiate the metric with an LLM to run."
             )
         # Both BaseRagasLLM and InstructorBaseRagasLLM take retry settings (#73).
-        if hasattr(self.llm, "set_run_config"):
+        # Inside evaluate() the run scope supplies them; setting them on the
+        # (possibly shared) LLM would leak into other runs (#76).
+        if hasattr(self.llm, "set_run_config") and not in_run_scope():
             self.llm.set_run_config(run_config)
 
     def _optimize_instruction(
@@ -383,8 +385,9 @@ class MetricWithEmbeddings(Metric):
             raise ValueError(
                 f"Metric '{self.name}' has no valid embeddings provided (self.embeddings is None). Please initantiate a the metric with an embeddings to run."  # noqa
             )
-        # Only legacy BaseRagasEmbeddings has set_run_config method
-        if hasattr(self.embeddings, "set_run_config"):
+        # Only legacy BaseRagasEmbeddings has set_run_config method. Inside
+        # evaluate() the run scope supplies it instead (#76).
+        if hasattr(self.embeddings, "set_run_config") and not in_run_scope():
             self.embeddings.set_run_config(run_config)  # type: ignore[attr-defined]
 
 

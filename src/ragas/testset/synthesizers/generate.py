@@ -14,7 +14,7 @@ from ragas.embeddings.base import (
 )
 from ragas.executor import Executor
 from ragas.llms import BaseRagasLLM, LlamaIndexLLMWrapper
-from ragas.run_config import RunConfig
+from ragas.run_config import RunConfig, run_scope
 from ragas.testset.document import Document, DocumentLike
 from ragas.testset.graph import KnowledgeGraph, Node, NodeType
 from ragas.testset.persona import Persona, generate_personas_from_kg
@@ -463,11 +463,41 @@ class TestsetGenerator:
         4. Generate samples for each scenario.
         5. Compile the results into an EvaluationDataset.
         """
-        if run_config is not None:
-            # Both BaseRagasLLM and InstructorBaseRagasLLM take retry settings (#73).
-            if hasattr(self.llm, "set_run_config"):
-                self.llm.set_run_config(run_config)
+        # Token accounting: run-scoped, like the RunConfig, rather than set on
+        # self.llm, which may be shared -- and was never detached (#76).
+        cost_cb = None
+        if token_usage_parser is not None:
+            from ragas.cost import TokenUsageCollector
 
+            cost_cb = TokenUsageCollector(token_usage_parser=token_usage_parser)
+
+        with run_scope(run_config=run_config, usage_collector=cost_cb):
+            return self._generate(
+                testset_size=testset_size,
+                query_distribution=query_distribution,
+                num_personas=num_personas,
+                run_config=run_config,
+                batch_size=batch_size,
+                callbacks=callbacks,
+                cost_cb=cost_cb,
+                with_debugging_logs=with_debugging_logs,
+                raise_exceptions=raise_exceptions,
+                return_executor=return_executor,
+            )
+
+    def _generate(
+        self,
+        testset_size: int,
+        query_distribution: t.Optional[QueryDistribution],
+        num_personas: int,
+        run_config: t.Optional[RunConfig],
+        batch_size: t.Optional[int],
+        callbacks: t.Optional[Callbacks],
+        cost_cb: t.Optional[t.Any],
+        with_debugging_logs: bool,
+        raise_exceptions: bool,
+        return_executor: bool,
+    ) -> t.Union[Testset, Executor]:
         query_distribution = query_distribution or default_query_distribution(
             self.llm, self.knowledge_graph, self.llm_context
         )
@@ -475,19 +505,6 @@ class TestsetGenerator:
 
         # dict to store any callbacks we define
         ragas_callbacks = {}
-        # Token accounting. Not a callback handler any more -- it attaches to the
-        # generator's LLM and records the provider's raw completion directly.
-        cost_cb = None
-        if token_usage_parser is not None:
-            from ragas.cost import TokenUsageCollector
-
-            cost_cb = TokenUsageCollector(token_usage_parser=token_usage_parser)
-            # setattr rather than direct assignment: usage_collector lives on
-            # InstructorLLM, not the BaseRagasLLM ABC, and the hasattr guard does
-            # not narrow the declared type for assignment.
-            if self.llm is not None and hasattr(self.llm, "usage_collector"):
-                setattr(self.llm, "usage_collector", cost_cb)
-
         # `callbacks` may be a CallbackGroup or a plain list of handlers
         for cb in ragas_callbacks.values():
             if hasattr(callbacks, "add_handler"):

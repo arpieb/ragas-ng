@@ -1,5 +1,7 @@
 import logging
 import typing as t
+from contextlib import contextmanager, nullcontext
+from contextvars import ContextVar
 from dataclasses import dataclass
 
 import numpy as np
@@ -119,3 +121,73 @@ def add_async_retry(fn: WrappedFn, run_config: RunConfig) -> WrappedFn:
         after=tenacity_logger,
     )
     return r.wraps(fn)
+
+
+# -- run scope ---------------------------------------------------------------
+#
+# evaluate() and TestsetGenerator used to configure a run by setting
+# attributes on the metrics and LLMs they were given (metric.llm, the LLM's
+# run_config and usage_collector) and resetting them afterwards. Those objects
+# are often shared -- between threads, between concurrent runs, or with the
+# caller's own code -- so runs leaked into each other (#76). A run scope holds
+# the same settings in context variables instead: visible to every call made
+# inside the run (asyncio tasks, worker threads and run_sync copy the
+# context), invisible to anything outside it.
+
+_scope_active: ContextVar[bool] = ContextVar("ragas_run_scope_active", default=False)
+_scoped_run_config: ContextVar[t.Optional[RunConfig]] = ContextVar(
+    "ragas_scoped_run_config", default=None
+)
+_scoped_usage_collector: ContextVar[t.Optional[t.Any]] = ContextVar(
+    "ragas_scoped_usage_collector", default=None
+)
+
+
+def scoped_run_config() -> t.Optional[RunConfig]:
+    """The RunConfig of the enclosing run scope, if the run was given one."""
+    return _scoped_run_config.get()
+
+
+def scoped_usage_collector() -> t.Optional[t.Any]:
+    """The token usage collector of the enclosing run scope, if any."""
+    return _scoped_usage_collector.get()
+
+
+def in_run_scope() -> bool:
+    """Whether the caller is inside evaluate() / testset generation."""
+    return _scope_active.get()
+
+
+@contextmanager
+def run_scope(
+    run_config: t.Optional[RunConfig] = None,
+    usage_collector: t.Optional[t.Any] = None,
+) -> t.Iterator[None]:
+    """Apply ``run_config`` and ``usage_collector`` to LLM calls made inside.
+
+    ``run_config`` None leaves each LLM's own ``set_run_config`` (or the
+    defaults) in effect.
+    """
+    tokens = (
+        _scope_active.set(True),
+        _scoped_run_config.set(run_config),
+        _scoped_usage_collector.set(usage_collector),
+    )
+    try:
+        yield
+    finally:
+        _scoped_usage_collector.reset(tokens[2])
+        _scoped_run_config.reset(tokens[1])
+        _scope_active.reset(tokens[0])
+
+
+def capture_run_scope() -> t.Callable[[], t.ContextManager[None]]:
+    """Snapshot the current run scope, to re-enter it where the context is lost.
+
+    For work that runs later than it was scheduled, e.g. Executor jobs that
+    ``evaluate(return_executor=True)`` hands back to run outside the call.
+    """
+    if not in_run_scope():
+        return nullcontext
+    run_config, usage_collector = scoped_run_config(), scoped_usage_collector()
+    return lambda: run_scope(run_config=run_config, usage_collector=usage_collector)

@@ -16,7 +16,12 @@ from ragas.cache import CacheInterface, cache_identity, cacher
 from ragas.exceptions import LLMDidNotFinishException
 from ragas.llms._retry import acall_with_retry, call_with_retry
 from ragas.llms.output import Generation, LLMResult
-from ragas.run_config import RunConfig, add_async_retry
+from ragas.run_config import (
+    RunConfig,
+    add_async_retry,
+    scoped_run_config,
+    scoped_usage_collector,
+)
 
 if t.TYPE_CHECKING:
     from llama_index.core.base.llms.base import BaseLLM
@@ -93,7 +98,7 @@ class BaseRagasLLM(ABC):
             temperature = self.get_temperature(n)
 
         agenerate_text_with_retry = add_async_retry(
-            self.agenerate_text, self.run_config
+            self.agenerate_text, scoped_run_config() or self.run_config
         )
         result = await agenerate_text_with_retry(
             prompt=prompt,
@@ -651,15 +656,19 @@ class InstructorBaseRagasLLM(ABC):
     """Base class for LLMs using the Instructor library pattern.
 
     Provider calls are retried with exponential backoff on transient errors
-    (rate limits, timeouts, 5xx) per ``run_config``: ``RunConfig()``
-    defaults until ``set_run_config`` is called, which ``evaluate()`` and
-    ``TestsetGenerator`` do with theirs (#73).
+    (rate limits, timeouts, 5xx) per ``run_config`` (#73): the RunConfig
+    passed to ``evaluate()`` / ``TestsetGenerator`` for calls made inside that
+    run, else this LLM's ``set_run_config``, else ``RunConfig()`` defaults.
+    A run's config never sticks to the LLM (#76).
     """
 
     _run_config: t.Optional[RunConfig] = None
 
     @property
     def run_config(self) -> RunConfig:
+        scoped = scoped_run_config()
+        if scoped is not None:
+            return scoped
         if self._run_config is None:
             self._run_config = RunConfig()
         return self._run_config
@@ -762,9 +771,8 @@ class InstructorLLM(InstructorBaseRagasLLM):
         # Extract system_prompt separately (not passed to LLM API)
         self.system_prompt = self.model_args.pop("system_prompt", None)
 
-        # Set by evaluate()/TestsetGenerator when a token_usage_parser is supplied.
-        # Attached to the instance, so it holds on every path a call can take
-        # (worker threads, the shared sync-bridge loop).
+        # A collector you attach yourself. evaluate()/TestsetGenerator no longer
+        # set this: their collector is run-scoped (see _active_usage_collector).
         self.usage_collector: t.Optional[t.Any] = None
 
         self.cache = cache
@@ -960,6 +968,10 @@ class InstructorLLM(InstructorBaseRagasLLM):
         """
         return run_sync(coro)
 
+    def _active_usage_collector(self) -> t.Optional[t.Any]:
+        """The enclosing run's collector, else one attached to this LLM."""
+        return scoped_usage_collector() or self.usage_collector
+
     def _messages(self, prompt: str) -> t.List[t.Dict[str, str]]:
         messages = []
         if self.system_prompt:
@@ -982,7 +994,8 @@ class InstructorLLM(InstructorBaseRagasLLM):
             self._with_sampling(self.model_args, temperature)
         )
         target = self._target(client)
-        if self.usage_collector is not None:
+        collector = self._active_usage_collector()
+        if collector is not None:
             # create_with_completion also returns the provider's raw response,
             # which is the only place token counts are available. Gated so the
             # default path is byte-identical to before.
@@ -992,7 +1005,7 @@ class InstructorLLM(InstructorBaseRagasLLM):
                 response_model=response_model,
                 **provider_kwargs,
             )
-            self.usage_collector.record(raw)
+            collector.record(raw)
             return result
         return target.create(
             model=self.model,
@@ -1043,14 +1056,15 @@ class InstructorLLM(InstructorBaseRagasLLM):
             self._with_sampling(self.model_args, temperature)
         )
         target = self._target(self.client)
-        if self.usage_collector is not None:
+        collector = self._active_usage_collector()
+        if collector is not None:
             result, raw = await target.create_with_completion(
                 model=self.model,
                 messages=self._messages(prompt),
                 response_model=response_model,
                 **provider_kwargs,
             )
-            self.usage_collector.record(raw)
+            collector.record(raw)
             return result
         return await target.create(
             model=self.model,
