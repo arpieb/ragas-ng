@@ -132,33 +132,22 @@ class AnswerAccuracy(BaseMetric):
     async def _get_judge_rating(
         self, prompt_obj, query: str, user_answer: str, reference_answer: str
     ) -> float:
-        """Get rating from judge with retry logic."""
-        for retry in range(self.max_retries):
-            try:
-                input_data = AnswerAccuracyInput(
-                    query=query,
-                    user_answer=user_answer,
-                    reference_answer=reference_answer,
-                )
-                prompt_str = prompt_obj.to_string(input_data)
-                result = await self.llm.agenerate(prompt_str, AnswerAccuracyOutput)
-                rating = result.rating
+        """Get rating from judge.
 
-                # Validate rating is in expected range
-                if rating in [0, 2, 4]:
-                    return float(rating)
-                else:
-                    # Invalid rating - retry or return NaN
-                    if retry < self.max_retries - 1:
-                        continue  # Retry if invalid rating
-                    else:
-                        return float("nan")
-
-            except Exception:
-                if retry < self.max_retries - 1:
-                    continue  # Retry on exception
-                else:
-                    return float("nan")
+        Provider/transport errors from the LLM call propagate to the caller.
+        Only an invalid rating (after retries) yields NaN.
+        """
+        input_data = AnswerAccuracyInput(
+            query=query,
+            user_answer=user_answer,
+            reference_answer=reference_answer,
+        )
+        prompt_str = prompt_obj.to_string(input_data)
+        for _ in range(self.max_retries):
+            result = await self.llm.agenerate(prompt_str, AnswerAccuracyOutput)
+            rating = result.rating
+            if rating in [0, 2, 4]:
+                return float(rating)
 
         return float("nan")
 

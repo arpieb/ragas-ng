@@ -423,3 +423,10 @@ They now use each provider's listed replacement:
 - A `temperature` or `top_p` **you** pass (`llm_factory(..., temperature=0.2)`) is still sent. On current Claude models it fails, and the provider's error says why: only `temperature=1` is accepted on older API versions, and none on API `2026-10-21`.
 - A per-call temperature ragas chooses for sampling (`strictness`, legacy prompts with `n > 1`) is not sent to Claude. Through LiteLLM it is sent with `drop_params=True`, so LiteLLM drops it where a model rejects it.
 - The planned move of every call onto LiteLLM's parameter handling is #182.
+
+## NVIDIA collections metrics raise on LLM errors ([#185](https://github.com/arpieb/ragas-ng/issues/185))
+
+- `AnswerAccuracy`, `ResponseGroundedness` and `ContextRelevance` used to catch every exception from the judge call and turn it into `nan`. A misconfigured judge (wrong model, bad key, a provider rejecting a parameter) scored `nan` and the error was lost.
+- Provider and transport errors now propagate, as in other collections metrics. With `evaluate(raise_exceptions=False)` the row is still missing, and the error is logged.
+- Only an **invalid rating** (outside the metric scale after `max_retries` attempts) still gives `nan`.
+- `DataCompyScore` is unchanged: its `except` covers CSV parsing, not an LLM call.
