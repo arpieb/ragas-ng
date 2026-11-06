@@ -109,6 +109,8 @@ The documentation lives in [`docs/`](docs/) and is kept current with this fork. 
 make serve-docs
 ```
 
+The docs are published at <https://arpieb.github.io/ragas-ng/>. For AI agents, an [llms.txt](https://llmstxt.org/) index is at <https://arpieb.github.io/ragas-ng/llms.txt> and the full text at <https://arpieb.github.io/ragas-ng/llms-full.txt>.
+
 Upstream's hosted docs at docs.ragas.io describe the original project and will not match this fork on LangChain, provider setup or the metrics APIs.
 
 ## Getting help
