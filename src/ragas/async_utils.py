@@ -1,10 +1,125 @@
 """Async utils."""
 
 import asyncio
+import concurrent.futures
+import contextvars
 import logging
+import os
+import threading
 import typing as t
 
 logger = logging.getLogger(__name__)
+
+T = t.TypeVar("T")
+
+
+class _BridgeLoop:
+    """One event loop running forever on a daemon thread."""
+
+    def __init__(self) -> None:
+        self.pid = os.getpid()
+        self.loop = asyncio.new_event_loop()
+        self.thread = threading.Thread(
+            target=self._run, name="ragas-sync-bridge", daemon=True
+        )
+        self.thread.start()
+
+    def _run(self) -> None:
+        asyncio.set_event_loop(self.loop)
+        self.loop.run_forever()
+
+    def usable(self) -> bool:
+        return (
+            self.pid == os.getpid()
+            and self.thread.is_alive()
+            and not self.loop.is_closed()
+        )
+
+
+_bridge: t.Optional[_BridgeLoop] = None
+_bridge_lock = threading.Lock()
+
+
+def _bridge_loop() -> _BridgeLoop:
+    global _bridge
+    with _bridge_lock:
+        if _bridge is None or not _bridge.usable():
+            # Also after os.fork(): the child has the object but not the thread.
+            _bridge = _BridgeLoop()
+        return _bridge
+
+
+def _run_on_private_loop(coro: t.Coroutine[t.Any, t.Any, T]) -> T:
+    """Run ``coro`` to completion on a throwaway loop in a new thread."""
+    ctx = contextvars.copy_context()
+    box: t.Dict[str, t.Any] = {}
+
+    def target() -> None:
+        try:
+            box["result"] = ctx.run(asyncio.run, coro)
+        except BaseException as e:  # re-raised in the caller's thread
+            box["error"] = e
+
+    thread = threading.Thread(target=target)
+    thread.start()
+    thread.join()
+    if "error" in box:
+        raise box["error"]
+    return box["result"]
+
+
+def run_sync(coro: t.Coroutine[t.Any, t.Any, T]) -> T:
+    """Run ``coro`` from synchronous code and return its result.
+
+    Works whether or not the calling thread already runs an event loop
+    (Jupyter, an async web handler calling sync code). Every call runs on
+    the same long-lived background loop, so an async client used through
+    the sync API stays bound to one loop. The helpers this replaces made a
+    fresh loop per call and closed it, so an async client's pooled
+    connections belonged to a dead loop by the next call: "bound to a
+    different event loop" / "Event loop is closed" (#74).
+
+    The caller's contextvars are visible to ``coro``.
+
+    Using one async client both through ``await`` on your own loop and
+    through the sync API is still unsupported: the two loops would share
+    its connection pool. Use the async methods throughout in async code.
+    """
+    bridge = _bridge_loop()
+    if threading.current_thread() is bridge.thread:
+        # Already on the bridge loop (async code calling the sync API):
+        # blocking it to wait on itself would deadlock.
+        return _run_on_private_loop(coro)
+
+    ctx = contextvars.copy_context()
+    future: "concurrent.futures.Future[T]" = concurrent.futures.Future()
+    tasks: t.List["asyncio.Task[T]"] = []
+
+    def start() -> None:
+        if not future.set_running_or_notify_cancel():
+            coro.close()
+            return
+        task = bridge.loop.create_task(coro, context=ctx)
+        tasks.append(task)
+
+        def finish(done: "asyncio.Task[T]") -> None:
+            if done.cancelled():
+                future.set_exception(concurrent.futures.CancelledError())
+            elif done.exception() is not None:
+                future.set_exception(t.cast(BaseException, done.exception()))
+            else:
+                future.set_result(done.result())
+
+        task.add_done_callback(finish)
+
+    bridge.loop.call_soon_threadsafe(start)
+    try:
+        return future.result()
+    except BaseException:
+        # KeyboardInterrupt (or similar) while waiting: stop the work too.
+        if not future.cancel():
+            bridge.loop.call_soon_threadsafe(lambda: [x.cancel() for x in tasks])
+        raise
 
 
 def is_event_loop_running() -> bool:

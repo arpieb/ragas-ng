@@ -1,16 +1,14 @@
 """Shared utilities for embedding implementations."""
 
 import asyncio
-import threading
 import typing as t
 from concurrent.futures import ThreadPoolExecutor
 
 
-def run_async_in_current_loop(coro: t.Awaitable[t.Any]) -> t.Any:
-    """Run an async coroutine in the current event loop if possible.
+def run_async_in_current_loop(coro: t.Coroutine[t.Any, t.Any, t.Any]) -> t.Any:
+    """Run ``coro`` from sync code on ragas' shared background loop.
 
-    This handles Jupyter environments correctly by using a separate thread
-    when a running event loop is detected.
+    Kept for compatibility; see ``ragas.async_utils.run_sync`` (#74).
 
     Args:
         coro: The coroutine to run
@@ -21,53 +19,9 @@ def run_async_in_current_loop(coro: t.Awaitable[t.Any]) -> t.Any:
     Raises:
         Any exception raised by the coroutine
     """
-    try:
-        # Try to get the current event loop
-        loop = asyncio.get_event_loop()
+    from ragas.async_utils import run_sync
 
-        if loop.is_running():
-            # If the loop is already running (like in Jupyter notebooks),
-            # we run the coroutine in a separate thread with its own event loop
-            result_container: t.Dict[str, t.Any] = {"result": None, "exception": None}
-
-            def run_in_thread():
-                # Create a new event loop for this thread
-                new_loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(new_loop)
-                try:
-                    # Run the coroutine in this thread's event loop
-                    result_container["result"] = new_loop.run_until_complete(coro)
-                except Exception as e:
-                    # Capture any exceptions to re-raise in the main thread
-                    result_container["exception"] = e
-                finally:
-                    # Clean up the event loop
-                    new_loop.close()
-
-            # Start the thread and wait for it to complete
-            thread = threading.Thread(target=run_in_thread)
-            thread.start()
-            thread.join()
-
-            # Re-raise any exceptions that occurred in the thread
-            if result_container["exception"]:
-                raise result_container["exception"]
-
-            return result_container["result"]
-        else:
-            # Standard case - event loop exists but isn't running
-            return loop.run_until_complete(coro)
-
-    except RuntimeError:
-        # If we get a runtime error about no event loop, create a new one
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            return loop.run_until_complete(coro)
-        finally:
-            # Clean up
-            loop.close()
-            asyncio.set_event_loop(None)
+    return run_sync(coro)
 
 
 async def run_sync_in_async(func: t.Callable, *args, **kwargs) -> t.Any:
