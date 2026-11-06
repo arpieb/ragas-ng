@@ -435,3 +435,10 @@ Instructor's defaults (`ANTHROPIC_TOOLS` / `TOOLS`) force a tool call. `claude-s
 - Verified live with `claude-sonnet-5-5` and `claude-haiku-5-5` on both paths: generation, `AspectCritic` (with and without `strictness`), and `AnswerAccuracy`.
 - A `mode` you pass is kept, so `mode=instructor.Mode.ANTHROPIC_TOOLS` restores the old behavior for models that accept it.
 - A LiteLLM `Router` or module passed as `client` keeps instructor's default, because the model isn't known when it's wrapped. Pass `mode=` there.
+
+## NVIDIA collections metrics raise on LLM errors ([#185](https://github.com/arpieb/ragas-ng/issues/185))
+
+- `AnswerAccuracy`, `ResponseGroundedness` and `ContextRelevance` used to catch every exception from the judge call and turn it into `nan`. A misconfigured judge (wrong model, bad key, a provider rejecting a parameter) scored `nan` and the error was lost.
+- Provider and transport errors now propagate, as in other collections metrics. With `evaluate(raise_exceptions=False)` the row is still missing, and the error is logged.
+- Only an **invalid rating** (outside the metric scale after `max_retries` attempts) still gives `nan`.
+- `DataCompyScore` is unchanged: its `except` covers CSV parsing, not an LLM call.

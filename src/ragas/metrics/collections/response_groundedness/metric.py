@@ -132,32 +132,18 @@ class ResponseGroundedness(BaseMetric):
         return MetricResult(value=float(score))
 
     async def _get_judge_rating(self, prompt_obj, response: str, context: str) -> float:
-        """Get rating from judge with retry logic."""
-        for retry in range(self.max_retries):
-            try:
-                input_data = ResponseGroundednessInput(
-                    response=response, context=context
-                )
-                prompt_str = prompt_obj.to_string(input_data)
-                result = await self.llm.agenerate(
-                    prompt_str, ResponseGroundednessOutput
-                )
-                rating = result.rating
+        """Get rating from judge.
 
-                # Validate rating is in expected range
-                if rating in [0, 1, 2]:
-                    return float(rating)
-                else:
-                    if retry < self.max_retries - 1:
-                        continue  # Retry if invalid rating
-                    else:
-                        return float("nan")
-
-            except Exception:
-                if retry < self.max_retries - 1:
-                    continue  # Retry on exception
-                else:
-                    return float("nan")
+        Provider/transport errors from the LLM call propagate to the caller.
+        Only an invalid rating (after retries) yields NaN.
+        """
+        input_data = ResponseGroundednessInput(response=response, context=context)
+        prompt_str = prompt_obj.to_string(input_data)
+        for _ in range(self.max_retries):
+            result = await self.llm.agenerate(prompt_str, ResponseGroundednessOutput)
+            rating = result.rating
+            if rating in [0, 1, 2]:
+                return float(rating)
 
         return float("nan")
 
