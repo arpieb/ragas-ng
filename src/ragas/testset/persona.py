@@ -13,6 +13,7 @@ from ragas.testset.graph import KnowledgeGraph, Node
 
 if t.TYPE_CHECKING:
     from ragas.callbacks import Callbacks
+    from ragas.llms.base import InstructorBaseRagasLLM
 
 logger = logging.getLogger(__name__)
 
@@ -63,19 +64,39 @@ class PersonaGenerationPrompt(PydanticPrompt[StringIO, Persona]):
     ]
 
 
+def _normalise_persona_name(name: str) -> str:
+    return " ".join(name.split()).casefold()
+
+
 class PersonaList(BaseModel):
     personas: t.List[Persona]
 
-    def __getitem__(self, key: str) -> Persona:
+    def get(self, key: str) -> t.Optional[Persona]:
+        """Return the persona named ``key``, or None if there is none.
+
+        Names match ignoring case and surrounding or repeated whitespace,
+        because they come back from an LLM, which often changes either (#84).
+        An exact match wins over a normalised one.
+        """
         for persona in self.personas:
             if persona.name == key:
                 return persona
-        raise KeyError(f"No persona found with name '{key}'")
+        wanted = _normalise_persona_name(key)
+        for persona in self.personas:
+            if _normalise_persona_name(persona.name) == wanted:
+                return persona
+        return None
+
+    def __getitem__(self, key: str) -> Persona:
+        persona = self.get(key)
+        if persona is None:
+            raise KeyError(f"No persona found with name '{key}'")
+        return persona
 
 
 def generate_personas_from_kg(
     kg: KnowledgeGraph,
-    llm: BaseRagasLLM,
+    llm: t.Union[BaseRagasLLM, InstructorBaseRagasLLM],
     persona_generation_prompt: PersonaGenerationPrompt = PersonaGenerationPrompt(),
     num_personas: int = 3,
     filter_fn: t.Callable[[Node], bool] = default_filter,
@@ -87,7 +108,7 @@ def generate_personas_from_kg(
     parameters:
         kg: KnowledgeGraph
             The knowledge graph to generate personas from.
-        llm: BaseRagasLLM
+        llm: BaseRagasLLM or InstructorBaseRagasLLM
             The LLM to use for generating the persona.
         persona_generation_prompt: PersonaGenerationPrompt
             The prompt to use for generating the persona.

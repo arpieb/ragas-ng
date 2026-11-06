@@ -66,11 +66,15 @@ class MultiHopQuerySynthesizer(BaseSynthesizer[Scenario]):
             valid_personas = []
             for persona, concept_list in persona_item_mapping.items():
                 concept_list = [c.lower() for c in concept_list]
-                if (
-                    any(concept.lower() in concept_list for concept in combination)
-                    and persona_list[persona]
-                ):
-                    valid_personas.append(persona_list[persona])
+                if not any(concept.lower() in concept_list for concept in combination):
+                    continue
+                # the name came back from the LLM and may not match exactly;
+                # skip one that matches no persona instead of raising (#84)
+                matched = persona_list.get(persona)
+                if matched is None:
+                    logger.debug("No persona named %r; skipping it.", persona)
+                elif matched not in valid_personas:
+                    valid_personas.append(matched)
             dict["personas"] = valid_personas
             valid_nodes = []
             for node in nodes:

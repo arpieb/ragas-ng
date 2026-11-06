@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 
 from ragas.callbacks import new_group
 from ragas.cost import TokenUsageParser
+from ragas.dataset_schema import MultiTurnSample, SingleTurnSample
 from ragas.embeddings.base import (
     BaseRagasEmbeddings,
     LlamaIndexEmbeddingsWrapper,
@@ -36,8 +37,8 @@ if t.TYPE_CHECKING:
     from llama_index.core.schema import Document as LlamaIndexDocument
 
     from ragas.callbacks import Callbacks
-    from ragas.embeddings.base import BaseRagasEmbeddings
-    from ragas.llms.base import BaseRagasLLM
+    from ragas.embeddings.base import BaseRagasEmbedding, BaseRagasEmbeddings
+    from ragas.llms.base import BaseRagasLLM, InstructorBaseRagasLLM
     from ragas.testset.synthesizers import QueryDistribution
     from ragas.testset.synthesizers.base import BaseScenario
 
@@ -53,8 +54,12 @@ class TestsetGenerator:
 
     Attributes
     ----------
-    llm : BaseRagasLLM
-        The language model to use for the generation process.
+    llm : BaseRagasLLM or InstructorBaseRagasLLM
+        The language model to use for the generation process, such as the
+        output of ``llm_factory``.
+    embedding_model : BaseRagasEmbeddings or BaseRagasEmbedding
+        The embedding model used to build the knowledge graph, such as the
+        output of ``embedding_factory``.
     knowledge_graph : KnowledgeGraph, default empty
         The knowledge graph to use for the generation process.
     llm_context : Optional[str], default None
@@ -62,8 +67,8 @@ class TestsetGenerator:
         This context will be used to guide how the LLM generates queries and answers.
     """
 
-    llm: BaseRagasLLM
-    embedding_model: BaseRagasEmbeddings
+    llm: t.Union[BaseRagasLLM, InstructorBaseRagasLLM]
+    embedding_model: t.Union[BaseRagasEmbeddings, BaseRagasEmbedding]
     knowledge_graph: KnowledgeGraph = field(default_factory=KnowledgeGraph)
     persona_list: t.Optional[t.List[Persona]] = None
     llm_context: t.Optional[str] = None
@@ -92,8 +97,12 @@ class TestsetGenerator:
         documents: t.Sequence[DocumentLike],
         testset_size: int,
         transforms: t.Optional[Transforms] = None,
-        transforms_llm: t.Optional[BaseRagasLLM] = None,
-        transforms_embedding_model: t.Optional[BaseRagasEmbeddings] = None,
+        transforms_llm: t.Optional[
+            t.Union[BaseRagasLLM, InstructorBaseRagasLLM]
+        ] = None,
+        transforms_embedding_model: t.Optional[
+            t.Union[BaseRagasEmbeddings, BaseRagasEmbedding]
+        ] = None,
         query_distribution: t.Optional[QueryDistribution] = None,
         run_config: t.Optional[RunConfig] = None,
         callbacks: t.Optional[Callbacks] = None,
@@ -113,9 +122,9 @@ class TestsetGenerator:
             The number of test samples to generate
         transforms : Optional[Transforms], optional
             Custom transforms to apply to the documents, by default None
-        transforms_llm : Optional[BaseRagasLLM], optional
+        transforms_llm : Optional[BaseRagasLLM or InstructorBaseRagasLLM], optional
             LLM to use for transforms if different from instance LLM, by default None
-        transforms_embedding_model : Optional[BaseRagasEmbeddings], optional
+        transforms_embedding_model : Optional[BaseRagasEmbeddings or BaseRagasEmbedding], optional
             Embedding model to use for transforms if different from instance model, by default None
         query_distribution : Optional[QueryDistribution], optional
             Distribution of query types to generate, by default None
@@ -297,8 +306,12 @@ class TestsetGenerator:
         chunks: t.Sequence[t.Union[DocumentLike, str]],
         testset_size: int,
         transforms: t.Optional[Transforms] = None,
-        transforms_llm: t.Optional[BaseRagasLLM] = None,
-        transforms_embedding_model: t.Optional[BaseRagasEmbeddings] = None,
+        transforms_llm: t.Optional[
+            t.Union[BaseRagasLLM, InstructorBaseRagasLLM]
+        ] = None,
+        transforms_embedding_model: t.Optional[
+            t.Union[BaseRagasEmbeddings, BaseRagasEmbedding]
+        ] = None,
         query_distribution: t.Optional[QueryDistribution] = None,
         run_config: t.Optional[RunConfig] = None,
         callbacks: t.Optional[Callbacks] = None,
@@ -323,9 +336,9 @@ class TestsetGenerator:
             The number of test samples to generate
         transforms : Optional[Transforms], optional
             Custom transforms to apply to the chunks, by default None
-        transforms_llm : Optional[BaseRagasLLM], optional
+        transforms_llm : Optional[BaseRagasLLM or InstructorBaseRagasLLM], optional
             LLM to use for transforms if different from instance LLM, by default None
-        transforms_embedding_model : Optional[BaseRagasEmbeddings], optional
+        transforms_embedding_model : Optional[BaseRagasEmbeddings or BaseRagasEmbedding], optional
             Embedding model to use for transforms if different from instance model, by default None
         query_distribution : Optional[QueryDistribution], optional
             Distribution of query types to generate, by default None
@@ -520,26 +533,36 @@ class TestsetGenerator:
         )
 
         if with_debugging_logs:
-            # TODO: Edit this before pre-release
             from ragas.utils import patch_logger
 
-            patch_logger("ragas.experimental.testset.synthesizers", logging.DEBUG)
-            patch_logger("ragas.experimental.testset.graph", logging.DEBUG)
-            patch_logger("ragas.experimental.testset.transforms", logging.DEBUG)
+            patch_logger("ragas.testset.synthesizers", logging.DEBUG)
+            patch_logger("ragas.testset.graph", logging.DEBUG)
+            patch_logger("ragas.testset.transforms", logging.DEBUG)
 
+        # Personas for this run only: neither store generated personas on self
+        # nor shuffle the caller's list in place (the #76 pattern).
         if self.persona_list is None:
-            self.persona_list = generate_personas_from_kg(
+            personas = generate_personas_from_kg(
                 llm=self.llm,
                 kg=self.knowledge_graph,
                 num_personas=num_personas,
                 callbacks=callbacks,
             )
         else:
-            random.shuffle(self.persona_list)
+            personas = random.sample(self.persona_list, len(self.persona_list))
+        personas = personas[:num_personas]
 
+        # testset_size is a ceiling: the shares sum to exactly testset_size,
+        # and a synthesizer with a share of 0 is not run at all (#81).
         splits, _ = calculate_split_values(
             [prob for _, prob in query_distribution], testset_size
         )
+        planned = [
+            (synthesizer, split)
+            for (synthesizer, _), split in zip(query_distribution, splits)
+            if split > 0
+        ]
+
         # new group for Generation of Scenarios
         scenario_generation_rm, scenario_generation_grp = new_group(
             name="Scenario Generation",
@@ -555,28 +578,34 @@ class TestsetGenerator:
             keep_progress_bar=False,
             batch_size=batch_size,
         )
-        # generate samples
-        splits, _ = calculate_split_values(
-            [prob for _, prob in query_distribution], testset_size
-        )
-        for i, (scenario, _) in enumerate(query_distribution):
+        for synthesizer, split in planned:
             exec.submit(
-                scenario.generate_scenarios,
-                n=splits[i],
+                synthesizer.generate_scenarios,
+                n=split,
                 knowledge_graph=self.knowledge_graph,
-                persona_list=self.persona_list[:num_personas],
+                persona_list=personas,
                 callbacks=scenario_generation_grp,
             )
 
         try:
-            scenario_sample_list: t.List[t.List[BaseScenario]] = exec.results()
+            scenario_results: t.List[t.Any] = exec.results()
         except Exception as e:
             scenario_generation_rm.on_chain_error(e)
             raise e
-        else:
-            scenario_generation_rm.on_chain_end(
-                outputs={"scenario_sample_list": scenario_sample_list}
-            )
+
+        # With raise_exceptions=False a failed job yields NaN instead of a
+        # list; skip that synthesizer rather than crash on it (#82).
+        failed_synthesizers: t.List[str] = []
+        scenario_sample_list: t.List[t.List[BaseScenario]] = []
+        for (synthesizer, split), scenarios in zip(planned, scenario_results):
+            if isinstance(scenarios, list):
+                scenario_sample_list.append(scenarios[:split])
+            else:
+                failed_synthesizers.append(synthesizer.name)
+                scenario_sample_list.append([])
+        scenario_generation_rm.on_chain_end(
+            outputs={"scenario_sample_list": scenario_sample_list}
+        )
 
         # new group for Generation of Samples
         sample_generation_rm, sample_generation_grp = new_group(
@@ -592,11 +621,11 @@ class TestsetGenerator:
             batch_size=batch_size,
         )
         additional_testset_info: t.List[t.Dict] = []
-        for i, (synthesizer, _) in enumerate(query_distribution):
-            for sample in scenario_sample_list[i]:
+        for (synthesizer, _), scenarios in zip(planned, scenario_sample_list):
+            for scenario in scenarios:
                 exec.submit(
                     synthesizer.generate_sample,
-                    scenario=sample,
+                    scenario=scenario,
                     callbacks=sample_generation_grp,
                 )
                 # fill out the additional info for the TestsetSample
@@ -618,11 +647,50 @@ class TestsetGenerator:
         else:
             sample_generation_rm.on_chain_end(outputs={"eval_samples": eval_samples})
 
-        # build the testset
+        # build the testset; a failed sample is NaN under raise_exceptions=False
+        # and is left out rather than failing TestsetSample validation (#82)
         testsets = []
+        failed_samples = 0
         for sample, additional_info in zip(eval_samples, additional_testset_info):
+            if not isinstance(sample, (SingleTurnSample, MultiTurnSample)):
+                failed_samples += 1
+                continue
             testsets.append(TestsetSample(eval_sample=sample, **additional_info))
+
+        _warn_on_shortfall(
+            testset_size, len(testsets), failed_synthesizers, failed_samples
+        )
         testset = Testset(samples=testsets, cost_cb=cost_cb)
         testset_generation_rm.on_chain_end({"testset": testset})
 
         return testset
+
+
+def _warn_on_shortfall(
+    requested: int,
+    generated: int,
+    failed_synthesizers: t.List[str],
+    failed_samples: int,
+) -> None:
+    """Warn when the testset is smaller than ``testset_size``, and say why."""
+    if generated >= requested:
+        return
+    reasons = []
+    if failed_synthesizers:
+        reasons.append(
+            "scenario generation failed for " + ", ".join(failed_synthesizers)
+        )
+    if failed_samples:
+        reasons.append(f"{failed_samples} sample(s) failed")
+    if not reasons:
+        reasons.append(
+            "the knowledge graph did not yield enough scenarios; add documents "
+            "or change the query distribution"
+        )
+    warnings.warn(
+        f"Generated {generated} of the {requested} requested samples: "
+        + "; ".join(reasons)
+        + ".",
+        UserWarning,
+        stacklevel=4,
+    )
