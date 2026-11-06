@@ -36,10 +36,10 @@ class GoogleEmbeddings(BaseRagasEmbedding):
         # Old SDK (google-generativeai) - deprecated
         import google.generativeai as genai
         genai.configure(api_key="...")
-        embeddings = GoogleEmbeddings(client=genai, model="text-embedding-004")
+        embeddings = GoogleEmbeddings(client=genai, model="gemini-embedding-2")
 
         # Auto-import (tries new SDK first, falls back to old)
-        embeddings = GoogleEmbeddings(model="text-embedding-004")
+        embeddings = GoogleEmbeddings(model="gemini-embedding-2")
     """
 
     PROVIDER_NAME = "google"

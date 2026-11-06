@@ -125,7 +125,7 @@ class LlamaIndexLLMWrapper(BaseRagasLLM):
     #     from openai import OpenAI
     #     from ragas.llms import llm_factory
     #     client = OpenAI(api_key="...")
-    #     llm = llm_factory("gpt-4o-mini", client=client)
+    #     llm = llm_factory("gpt-6-luna", client=client)
     """
 
     def __init__(
@@ -141,7 +141,7 @@ class LlamaIndexLLMWrapper(BaseRagasLLM):
             "LlamaIndexLLMWrapper is deprecated and will be removed in a future version. "
             "Use llm_factory instead: "
             "from openai import OpenAI; from ragas.llms import llm_factory; "
-            "client = OpenAI(api_key='...'); llm = llm_factory('gpt-4o-mini', client=client)",
+            "client = OpenAI(api_key='...'); llm = llm_factory('gpt-6-luna', client=client)",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -416,7 +416,7 @@ def _get_instructor_client(
         return _patch_client_for_provider(client, provider_lower, mode=mode)
 
 
-DEFAULT_LLM_MODEL = "gpt-4o-mini"
+DEFAULT_LLM_MODEL = "gpt-6-luna"
 
 
 def default_llm() -> "InstructorBaseRagasLLM":
@@ -454,9 +454,9 @@ def llm_factory(
     - Explicit control available via adapter parameter
 
     Args:
-        model: Model name (e.g., "gpt-4o", "claude-3-sonnet", "gemini-2.0-flash").
+        model: Model name (e.g., "gpt-6-luna", "claude-sonnet-5-5", "gemini-3.6-flash").
                Without a client, any LiteLLM model string is accepted, such as
-               "anthropic/claude-sonnet-4-5" or "ollama/llama3".
+               "anthropic/claude-sonnet-5-5" or "ollama/llama3".
         provider: LLM provider (default: "openai").
                  Examples: openai, anthropic, google, groq, mistral, etc.
                  Without a client, a non-OpenAI provider is prefixed onto a bare
@@ -489,32 +489,32 @@ def llm_factory(
 
     Examples:
         # No client: routed through LiteLLM, credentials read from the environment
-        llm = llm_factory("gpt-4o-mini")
-        llm = llm_factory("anthropic/claude-sonnet-4-5")
+        llm = llm_factory("gpt-6-luna")
+        llm = llm_factory("anthropic/claude-sonnet-5-5")
         llm = llm_factory("llama3", provider="ollama")  # -> "ollama/llama3"
 
         # With an explicit client
         from openai import OpenAI
 
         client = OpenAI(api_key="...")
-        llm = llm_factory("gpt-4o-mini", client=client)
+        llm = llm_factory("gpt-6-luna", client=client)
         response = llm.generate(prompt, ResponseModel)
 
         # With caching (recommended for experiments)
         from ragas.cache import DiskCacheBackend
         cache = DiskCacheBackend()
-        llm = llm_factory("gpt-4o-mini", client=client, cache=cache)
+        llm = llm_factory("gpt-6-luna", client=client, cache=cache)
 
         # Anthropic
         from anthropic import Anthropic
         client = Anthropic(api_key="...")
-        llm = llm_factory("claude-3-sonnet", provider="anthropic", client=client)
+        llm = llm_factory("claude-sonnet-5-5", provider="anthropic", client=client)
 
         # Google Gemini, no SDK needed (reads GEMINI_API_KEY)
-        llm = llm_factory("gemini/gemini-2.0-flash")
+        llm = llm_factory("gemini/gemini-3.6-flash")
 
         # Explicit adapter selection
-        llm = llm_factory("gpt-4o-mini", client=client, adapter="litellm")
+        llm = llm_factory("gpt-6-luna", client=client, adapter="litellm")
 
         # Custom instructor mode for backends without response_format support
         import instructor
@@ -524,7 +524,7 @@ def llm_factory(
         # Async
         from openai import AsyncOpenAI
         client = AsyncOpenAI(api_key="...")
-        llm = llm_factory("gpt-4o-mini", client=client)
+        llm = llm_factory("gpt-6-luna", client=client)
         response = await llm.agenerate(prompt, ResponseModel)
     """
     if not model:
@@ -542,7 +542,7 @@ def llm_factory(
             raise ImportError(
                 "llm_factory() without an explicit client requires litellm. "
                 "Install it, or pass a client: "
-                "llm_factory('gpt-4o-mini', client=OpenAI())"
+                "llm_factory('gpt-6-luna', client=OpenAI())"
             ) from e
 
         # Prefix the model with the provider when the caller named one and the

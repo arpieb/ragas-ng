@@ -229,7 +229,7 @@ def test_litellm_adapter_wraps_a_router_async_with_a_sync_twin(record):
 
 
 def test_litellm_adapter_rejects_an_unusable_client():
-    with pytest.raises(ValueError, match="gemini/gemini-2.0-flash"):
+    with pytest.raises(ValueError, match="gemini/gemini-3.6-flash"):
         llm_factory("gemini-2.0-flash", provider="google", client=FakeOldGeminiModel())
 
 

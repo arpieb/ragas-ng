@@ -1,5 +1,9 @@
 # How to evaluate a Text to SQL Agent
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 In this guide, you'll learn how to systematically evaluate and improve a text-to-SQL system using Ragas.
 
 What you'll accomplish:
@@ -32,7 +36,7 @@ os.environ["OPENAI_API_KEY"] = "your-api-key-here"
 
 # Create agent
 openai_client = AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"])
-agent = Text2SQLAgent(client=openai_client, model_name="gpt-5-mini")
+agent = Text2SQLAgent(client=openai_client, model_name="gpt-5.6-terra")
 
 # Test with a sample query
 test_query = "How much open credit does customer Andrew Bennett?"
@@ -455,19 +459,19 @@ async def run_evaluation():
     # Run the experiment
     results = await text2sql_experiment.arun(
         dataset,
-        name="gpt-5-mini-prompt-v1",
-        model="gpt-5-mini",
+        name="gpt-5.6-terra-prompt-v1",
+        model="gpt-5.6-terra",
         prompt_file=None,
     )
 
     # Report results
-    print(f"✅ gpt-5-mini-prompt-v1: {len(results)} cases evaluated")
+    print(f"✅ gpt-5.6-terra-prompt-v1: {len(results)} cases evaluated")
 
     # Calculate and display accuracy
     accuracy_rate = sum(
         1 for r in results if r["execution_accuracy"] == "correct"
     ) / max(1, len(results))
-    print(f"gpt-5-mini-prompt-v1 Execution Accuracy: {accuracy_rate:.2%}")
+    print(f"gpt-5.6-terra-prompt-v1 Execution Accuracy: {accuracy_rate:.2%}")
 
 
 # Run the evaluation
@@ -488,7 +492,7 @@ await run_evaluation()
 
 **Configuration options:**
 
-- `model`: OpenAI model to use (default: "gpt-5-mini")
+- `model`: OpenAI model to use (default: "gpt-5.6-terra")
 - `prompt_file`: Custom prompt file (default: None for built-in prompt)
 - `limit`: Number of samples (default: None for all samples, specify a number to limit)
 - `name`: Custom experiment name for result tracking
@@ -643,19 +647,19 @@ async def run_v2_evaluation():
     # Run experiment
     results = await text2sql_experiment.arun(
         dataset,
-        name="gpt-5-mini-prompt-v2",
-        model="gpt-5-mini",
+        name="gpt-5.6-terra-prompt-v2",
+        model="gpt-5.6-terra",
         prompt_file="prompt_v2.txt",
     )
 
     # Report results
-    print(f"✅ gpt-5-mini-prompt-v2: {len(results)} cases evaluated")
+    print(f"✅ gpt-5.6-terra-prompt-v2: {len(results)} cases evaluated")
 
     # Calculate accuracy
     accuracy_rate = sum(
         1 for r in results if r["execution_accuracy"] == "correct"
     ) / max(1, len(results))
-    print(f"gpt-5-mini-prompt-v2 Execution Accuracy: {accuracy_rate:.2%}")
+    print(f"gpt-5.6-terra-prompt-v2 Execution Accuracy: {accuracy_rate:.2%}")
 
 
 await run_v2_evaluation()
@@ -734,19 +738,19 @@ async def run_v3_evaluation():
     # Run experiment
     results = await text2sql_experiment.arun(
         dataset,
-        name="gpt-5-mini-prompt-v3",
-        model="gpt-5-mini",
+        name="gpt-5.6-terra-prompt-v3",
+        model="gpt-5.6-terra",
         prompt_file="prompt_v3.txt",
     )
 
     # Report results
-    print(f"✅ gpt-5-mini-prompt-v3: {len(results)} cases evaluated")
+    print(f"✅ gpt-5.6-terra-prompt-v3: {len(results)} cases evaluated")
 
     # Calculate accuracy
     accuracy_rate = sum(
         1 for r in results if r["execution_accuracy"] == "correct"
     ) / max(1, len(results))
-    print(f"gpt-5-mini-prompt-v3 Execution Accuracy: {accuracy_rate:.2%}")
+    print(f"gpt-5.6-terra-prompt-v3 Execution Accuracy: {accuracy_rate:.2%}")
 
 
 await run_v3_evaluation()

@@ -1,5 +1,9 @@
 # How to Align an LLM as a Judge
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 In this guide, you'll learn how to systematically evaluate and align an LLM-as-judge metric with human expert judgments using Ragas.
 
 - Build a reusable evaluation pipeline for judge alignment
@@ -201,12 +205,12 @@ print(f"Dataset loaded with {len(dataset)} samples")
 
 # Initialize LLM client
 openai_client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-llm = llm_factory("gpt-4o-mini", client=openai_client)
+llm = llm_factory("gpt-6-luna", client=openai_client)
 
 # Run the experiment
 results = await judge_experiment.arun(
     dataset,
-    name="judge_baseline_v1_gpt-4o-mini",
+    name="judge_baseline_v1_gpt-6-luna",
     accuracy_metric=accuracy_metric,
     llm=llm,
 )
@@ -245,7 +249,7 @@ Let's examine the error distribution
     import pandas as pd
 
     # Load results
-    df = pd.read_csv("experiments/judge_baseline_v1_gpt-4o-mini.csv")
+    df = pd.read_csv("experiments/judge_baseline_v1_gpt-6-luna.csv")
 
     # Analyze misalignments
     false_positives = len(df[(df["judge_label"] == "pass") & (df["target"] == "fail")])
@@ -373,7 +377,7 @@ Run the evaluation again with the enhanced v2 prompt (same setup as baseline, ju
 # Use the same dataset and LLM setup from the baseline evaluation above
 results = await judge_experiment.arun(
     dataset,
-    name="judge_accuracy_v2_gpt-4o-mini",
+    name="judge_accuracy_v2_gpt-6-luna",
     accuracy_metric=accuracy_metric_v2,  # ← Using improved v2 prompt
     llm=llm,
 )
@@ -399,7 +403,7 @@ If you need to iterate further:
 
 - Analyze remaining errors to identify patterns (are they false positives or false negatives?)
 - Annotate your reasoning along with label - this will help while improving the LLM Judge, you can add these as few shot examples as well.
-- **Use smarter models** - More capable models like GPT-5 or Claude 4.5 Sonnet generally perform better as judges
+- **Use smarter models** - More capable models such as GPT-6.1 Sol or Claude Sonnet 5.5 generally perform better as judges
 - **Leverage AI assistants** - This guide was created using Cursor AI agents to analyze failures and iterate on prompts. You can use AI coding agents (Cursor, Claude, etc.) or frameworks like [DSPy](https://github.com/stanfordnlp/dspy) to systematically optimize judge prompts
 - Stop when alignment plateaus across 2-3 iterations or meets your business threshold
 

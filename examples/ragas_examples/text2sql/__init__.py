@@ -18,7 +18,7 @@ Usage:
     
     # Create and use agent
     client = AsyncOpenAI(api_key="your-api-key")
-    agent = Text2SQLAgent(client=client, model_name="gpt-5-mini")
+    agent = Text2SQLAgent(client=client, model_name="gpt-5.6-terra")
     result = await agent.query("What is the total revenue?")
     
     # Execute SQL queries
@@ -30,7 +30,7 @@ Usage:
         results = await text2sql_experiment.arun(
             dataset,
             name="my_evaluation",
-            model="gpt-5-mini",
+            model="gpt-5.6-terra",
             prompt_file=None,
         )
         return results

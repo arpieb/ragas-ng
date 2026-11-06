@@ -1,5 +1,9 @@
 # Compare models provided by VertexAI on RAG-based Q&A task using Ragas metrics
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 This tutorial is part of a three-part series on how to use Vertex AI models with Ragas. It is recommended that you have gone through [Getting Started: Ragas with Vertex AI](./vertexai_x_ragas.md), even if you have not followed it you’ll be golden. You can check to the Align LLM Metrics tutorial by [clicking](./vertexai_alignment.md).
 
 ## Overview
@@ -172,7 +176,7 @@ from ragas.embeddings import embedding_factory
 from ragas.llms import llm_factory
 
 evaluator_llm = llm_factory("vertex_ai/gemini-pro")
-evaluator_embeddings = embedding_factory("vertex_ai/text-embedding-004")
+evaluator_embeddings = embedding_factory("vertex_ai/gemini-embedding-2")
 ```
 
 ### **Ragas metrics**
@@ -242,8 +246,8 @@ generation_config = {
     "temperature": 0.1,
 }
 
-model_a_name = "gemini-1.5-pro"
-model_b_name = "gemini-1.0-pro"
+model_a_name = "gemini-3.8-flash"
+model_b_name = "gemini-3.6-flash"
 
 gemini_model_15 = GenerativeModel(
     model_a_name,
@@ -466,7 +470,7 @@ display_eval_report(
 ```
 Output
 
-## gemini-1.5-pro Eval Result
+## gemini-3.8-flash Eval Result
 
 ### Summary Metrics
   <div id="summary-metrics">
@@ -558,7 +562,7 @@ display_eval_report(
 ```
 Output
 
-## gemini-1.0-pro Eval Result
+## gemini-3.6-flash Eval Result
 ### Summary Metrics
 <div id="summary-metrics">
     <table border=1>

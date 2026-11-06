@@ -7,6 +7,8 @@ from typing import Any, Dict, Optional
 
 import openai
 
+from ragas.llms.base import is_reasoning_model
+
 SYSTEM_MESSAGE = """You are a mathematical problem-solving agent. You can only use these four atomic tools to solve problems:
 - add(a, b): Add two numbers
 - sub(a, b): Subtract b from a  
@@ -43,7 +45,7 @@ class MathToolsAgent:
     def __init__(
         self,
         client,
-        model_name: str = "gpt-4o",
+        model_name: str = "gpt-6-luna",
         system_message: str = SYSTEM_MESSAGE,
         logdir: str = "logs",
     ):
@@ -294,12 +296,19 @@ class MathToolsAgent:
                 )
 
                 # Call OpenAI API with function calling
+                # Reasoning models (gpt-6-luna) support function calling on
+                # Chat Completions only with reasoning_effort="none".
+                extra = (
+                    {"reasoning_effort": "none"}
+                    if is_reasoning_model(self.model_name)
+                    else {}
+                )
                 response = self.client.chat.completions.create(
                     model=self.model_name,
                     messages=messages,
                     tools=self.tools,
                     tool_choice="auto",
-                    # temperature=0
+                    **extra,
                 )
 
                 message = response.choices[0].message
@@ -390,7 +399,7 @@ class MathToolsAgent:
 
 
 def get_default_agent(
-    model_name: str = "gpt-4o", logdir: str = "logs"
+    model_name: str = "gpt-6-luna", logdir: str = "logs"
 ) -> MathToolsAgent:
     """Get a default instance of the MathToolsAgent with OpenAI client"""
     openai_client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))

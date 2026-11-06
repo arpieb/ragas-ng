@@ -125,7 +125,7 @@ from ragas.metrics.collections import (
 )
 
 async_llm_client = AsyncOpenAI()
-evaluator_llm = llm_factory("gpt-4o-mini", client=async_llm_client)
+evaluator_llm = llm_factory("gpt-6-luna", client=async_llm_client)
 
 # AnswerRelevancy's embeddings still run synchronously, so pair it with a sync client.
 embedding_client = OpenAI()

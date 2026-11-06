@@ -61,7 +61,7 @@ generator_embeddings = embedding_factory(
 
 # OpenAI:
 # client = OpenAI()
-# generator_llm = llm_factory("gpt-4o-mini", client=client)
+# generator_llm = llm_factory("gpt-6-luna", client=client)
 # generator_embeddings = embedding_factory("openai", model="text-embedding-3-small", client=client)
 ```
 

@@ -1,5 +1,9 @@
 # How to Evaluate and Improve a RAG App
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 In this guide, you'll learn how to evaluate and iteratively improve a RAG (Retrieval-Augmented Generation) app using Ragas.
 
 ## What you'll accomplish
@@ -71,7 +75,7 @@ print(f"Answer: {result['answer']}")
             llm_client: AsyncOpenAI,
             retriever: BM25Retriever,
             system_prompt=None,
-            model="gpt-4o-mini",
+            model="gpt-6-luna",
             default_k=3,
         ):
             self.llm_client = llm_client
@@ -316,7 +320,10 @@ async def run_evaluation():
     openai_client = get_openai_client()
     retriever = BM25Retriever()
     rag = RAG(
-        llm_client=openai_client, retriever=retriever, model="gpt-5-mini", mode="naive"
+        llm_client=openai_client,
+        retriever=retriever,
+        model="gpt-5.6-terra",
+        mode="naive",
     )
     llm = get_llm_client()
 
@@ -495,7 +502,7 @@ async def run_agentic_evaluation():
     rag = RAG(
         llm_client=openai_client,
         retriever=retriever,
-        model="gpt-5-mini",
+        model="gpt-5.6-terra",
         mode="agentic",
     )
     llm = get_llm_client()

@@ -1,4 +1,8 @@
 ## Installing Ragas and Other Dependencies
+
+--8<--
+earlier_run_outputs.md
+--8<--
 Install Ragas with pip and set up Swarm locally:
 
 
@@ -437,7 +441,7 @@ sample = MultiTurnSample(
 
 scorer = AgentGoalAccuracyWithReference()
 
-evaluator_llm = llm_factory("gpt-4o-mini", client=OpenAI())
+evaluator_llm = llm_factory("gpt-6-luna", client=OpenAI())
 scorer.llm = evaluator_llm
 await scorer.multi_turn_ascore(sample)
 ```

@@ -58,7 +58,7 @@ class TestFaithfulnessE2EMigration:
 
             from ragas.llms import llm_factory
 
-            return llm_factory("gpt-4o", client=openai.OpenAI())
+            return llm_factory("gpt-6-luna", client=openai.OpenAI())
         except ImportError as e:
             pytest.skip(f"LLM factory not available: {e}")
         except Exception as e:
@@ -73,7 +73,7 @@ class TestFaithfulnessE2EMigration:
             from ragas.llms.base import llm_factory
 
             client = openai.AsyncOpenAI()
-            return llm_factory("gpt-4o", client=client)
+            return llm_factory("gpt-6-luna", client=client)
         except ImportError as e:
             pytest.skip(f"LLM factory not available: {e}")
         except Exception as e:

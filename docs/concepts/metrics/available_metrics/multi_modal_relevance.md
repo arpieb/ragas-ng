@@ -13,7 +13,7 @@ from ragas.metrics.collections import MultiModalRelevance
 
 # Setup - use a vision-capable model
 client = AsyncOpenAI()
-llm = llm_factory("gpt-4o", client=client)  # Vision-capable model required
+llm = llm_factory("gpt-6-luna", client=client)  # Vision-capable model required
 
 # Create metric instance
 metric = MultiModalRelevance(llm=llm)
@@ -87,5 +87,5 @@ The metric supports multiple types of context inputs:
 
 ### Requirements
 
-- A vision-capable LLM is required (e.g., `gpt-4o`, `gpt-4-vision-preview`, `claude-3-opus`, `gemini-pro-vision`)
+- A vision-capable LLM is required (e.g., `gpt-6-luna`, `gpt-6-luna`, `claude-opus-5-5`, `gemini-3.6-flash`)
 - For the Collections API, use `llm_factory` to create the LLM instance

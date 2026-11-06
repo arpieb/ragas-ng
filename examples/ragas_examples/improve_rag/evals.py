@@ -170,7 +170,7 @@ async def evaluate_rag(row: Dict[str, Any], rag: RAG, llm) -> Dict[str, Any]:
     return result
 
 
-async def run_experiment(mode: str = "naive", model: str = "gpt-4o-mini", name: Optional[str] = None):
+async def run_experiment(mode: str = "naive", model: str = "gpt-6-luna", name: Optional[str] = None):
     """
     Simple function to run RAG evaluation experiment.
     
@@ -209,7 +209,7 @@ async def run_experiment(mode: str = "naive", model: str = "gpt-4o-mini", name: 
         dataset, 
         name=name or f"{datetime.now().strftime('%Y%m%d-%H%M%S')}_{'agenticrag' if mode == 'agentic' else 'naiverag'}",
         rag=rag,
-        llm=llm_factory("gpt-4o-mini", client=openai_client, temperature=1, top_p=None)
+        llm=llm_factory("gpt-6-luna", client=openai_client, temperature=1, top_p=None)
     )
     
     # Print basic results
@@ -235,6 +235,6 @@ if __name__ == "__main__":
     else:
         logger.info("Running in NAIVE mode")
     
-    asyncio.run(run_experiment(mode=mode, model="gpt-4o-mini"))
+    asyncio.run(run_experiment(mode=mode, model="gpt-6-luna"))
 
 

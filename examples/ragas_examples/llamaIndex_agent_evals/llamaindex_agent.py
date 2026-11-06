@@ -41,7 +41,7 @@ async def list_items(
         return f"Current shopping list:\n{items_text}"
 
 
-llm = GoogleGenAI(model="gemini-2.0-flash", api_key=os.environ["GOOGLE_API_KEY"])
+llm = GoogleGenAI(model="gemini-3.6-flash", api_key=os.environ["GOOGLE_API_KEY"])
 
 workflow = FunctionAgent(
     tools=[add_item, remove_item, list_items],

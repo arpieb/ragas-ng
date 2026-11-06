@@ -54,7 +54,7 @@ class FactualCorrectness(BaseMetric):
         >>>
         >>> # Setup dependencies
         >>> client = AsyncOpenAI()
-        >>> llm = llm_factory("gpt-4o-mini", client=client)
+        >>> llm = llm_factory("gpt-6-luna", client=client)
         >>>
         >>> # Create metric instance
         >>> metric = FactualCorrectness(llm=llm, mode="f1", beta=1.0)

@@ -19,7 +19,7 @@ from openai import OpenAI
 
 client = OpenAI(api_key="your-key")
 llm = llm_factory(
-    "gpt-4o",
+    "gpt-6-luna",
     client=client,
     system_prompt="You are a helpful assistant that evaluates RAG systems.",
 )
@@ -102,7 +102,7 @@ from ragas.embeddings.base import embedding_factory
 config = {
     "project_id": "<your-project-id>",
     "location": "us-central1",  # e.g., "us-central1", "us-east1"
-    "chat_model_id": "gemini-1.5-pro-002",
+    "chat_model_id": "gemini-3.8-flash",
     "embedding_model_id": "text-embedding-005",
 }
 

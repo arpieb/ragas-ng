@@ -1,5 +1,9 @@
 # Context Precision
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 Context Precision is a metric that evaluates the retriever's ability to rank relevant chunks higher than irrelevant ones for a given query in the retrieved context. Specifically, it assesses the degree to which relevant chunks in the retrieved context are placed at the top of the ranking.
 
 It is calculated as the mean of the precision@k for each chunk in the context. Precision@k is the ratio of the number of relevant chunks at rank k to the total number of chunks at rank k.
@@ -27,7 +31,7 @@ from ragas.metrics.collections import ContextPrecision
 
 # Setup LLM
 client = AsyncOpenAI()
-llm = llm_factory("gpt-4o-mini", client=client)
+llm = llm_factory("gpt-6-luna", client=client)
 
 # Create metric
 scorer = ContextPrecision(llm=llm)
@@ -71,7 +75,7 @@ from ragas.metrics.collections import ContextUtilization
 
 # Setup LLM
 client = AsyncOpenAI()
-llm = llm_factory("gpt-4o-mini", client=client)
+llm = llm_factory("gpt-6-luna", client=client)
 
 # Create metric
 scorer = ContextUtilization(llm=llm)

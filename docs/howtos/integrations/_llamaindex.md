@@ -1,5 +1,9 @@
 # LlamaIndex
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 [LlamaIndex](https://github.com/run-llama/llama_index) is a data framework for LLM applications to ingest, structure, and access private or domain-specific data. Makes it super easy to connect LLMs with your own data. But in order to figure out the best configuration for LlamaIndex and your data you need an object measure of the performance. This is where ragas comes in. Ragas will help you evaluate your `QueryEngine` and gives you the confidence to tweak the configuration to get the highest score.
 
 This guide assumes you are familiar with the LlamaIndex framework.
@@ -29,7 +33,7 @@ from llama_index.llms.openai import OpenAI
 from llama_index.embeddings.openai import OpenAIEmbedding
 
 # generator with openai models
-generator_llm = OpenAI(model="gpt-4o")
+generator_llm = OpenAI(model="gpt-6-luna")
 embeddings = OpenAIEmbedding(model="text-embedding-3-large")
 
 generator = TestsetGenerator.from_llama_index(
@@ -195,7 +199,7 @@ from ragas.metrics import (
 # init metrics with evaluator LLM
 from ragas.llms import LlamaIndexLLMWrapper
 
-evaluator_llm = LlamaIndexLLMWrapper(OpenAI(model="gpt-4o"))
+evaluator_llm = LlamaIndexLLMWrapper(OpenAI(model="gpt-6-luna"))
 metrics = [
     Faithfulness(llm=evaluator_llm),
     AnswerRelevancy(llm=evaluator_llm),

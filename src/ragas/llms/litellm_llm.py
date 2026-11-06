@@ -41,7 +41,7 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
 
         Args:
             client: LiteLLM client instance
-            model: Model name (e.g., "gemini-2.0-flash")
+            model: Model name (e.g., "gemini-3.6-flash")
             provider: Provider name
             cache: Optional cache backend for caching LLM responses
             system_prompt: Optional system prompt to prepend to all messages

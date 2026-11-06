@@ -1,5 +1,9 @@
 # Nvidia Metrics
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 ## Answer Accuracy
 
 **Answer Accuracy** measures the agreement between a model’s response and a reference ground truth for a given question. This is done via two distinct "LLM-as-a-Judge" prompts that each return a rating (0, 2, or 4). The metric converts these ratings into a [0,1] scale and then takes the average of the two scores from the judges. Higher scores indicate that the model’s answer closely matches the reference.
@@ -18,7 +22,7 @@ from ragas.metrics.collections import AnswerAccuracy
 
 # Setup LLM
 client = AsyncOpenAI()
-llm = llm_factory("gpt-4o-mini", client=client)
+llm = llm_factory("gpt-6-luna", client=client)
 
 # Create metric
 scorer = AnswerAccuracy(llm=llm)
@@ -144,7 +148,7 @@ from ragas.metrics.collections import ContextRelevance
 
 # Setup LLM
 client = AsyncOpenAI()
-llm = llm_factory("gpt-4o-mini", client=client)
+llm = llm_factory("gpt-6-luna", client=client)
 
 # Create metric
 scorer = ContextRelevance(llm=llm)
@@ -258,7 +262,7 @@ from ragas.metrics.collections import ResponseGroundedness
 
 # Setup LLM
 client = AsyncOpenAI()
-llm = llm_factory("gpt-4o-mini", client=client)
+llm = llm_factory("gpt-6-luna", client=client)
 
 # Create metric
 scorer = ResponseGroundedness(llm=llm)

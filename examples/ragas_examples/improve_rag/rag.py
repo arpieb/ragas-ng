@@ -136,7 +136,7 @@ class RAG:
         except (urllib.error.URLError, OSError):
             return False
 
-    def __init__(self, llm_client: AsyncOpenAI, retriever: BM25Retriever, mode="naive", system_prompt=None, model="gpt-4o-mini", default_k=3):
+    def __init__(self, llm_client: AsyncOpenAI, retriever: BM25Retriever, mode="naive", system_prompt=None, model="gpt-6-luna", default_k=3):
         # Enable MLflow autolog for OpenAI API calls (optional - only if server is running)
         self._mlflow_enabled = False
         if os.environ.get("MLFLOW_TRACKING_URI") or self._check_mlflow_server():

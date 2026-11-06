@@ -859,14 +859,17 @@ In `evals.py`, update the LLM configuration:
 ```python
 from ragas.llms import llm_factory
 
-# Use Anthropic Claude
-llm = llm_factory("claude-3-5-sonnet-20241022", provider="anthropic")
+# Without a client, llm_factory routes through LiteLLM ("provider/model")
+# and reads the provider's API key from the environment.
 
-# Use Google Gemini
-llm = llm_factory("gemini-1.5-pro", provider="google")
+# Use Anthropic Claude (ANTHROPIC_API_KEY)
+llm = llm_factory("anthropic/claude-sonnet-5-5")
 
-# Use local Ollama
-llm = llm_factory("mistral", provider="ollama", base_url="http://localhost:11434")
+# Use Google Gemini (GEMINI_API_KEY)
+llm = llm_factory("gemini/gemini-3.6-flash")
+
+# Use local Ollama (OLLAMA_API_BASE, default http://localhost:11434)
+llm = llm_factory("ollama/mistral")
 ```
 
 ### Customize Test Cases

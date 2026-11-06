@@ -22,7 +22,7 @@ def legacy_llm():
     Skips if LLM factory is not available or API key is missing.
     """
     try:
-        return create_legacy_llm("gpt-3.5-turbo")
+        return create_legacy_llm("gpt-5.6-terra")
     except Exception as e:
         pytest.skip(str(e))
 
@@ -35,7 +35,7 @@ def modern_llm():
     Skips if LLM factory is not available or API key is missing.
     """
     try:
-        return create_modern_llm("openai", model="gpt-3.5-turbo")
+        return create_modern_llm("openai", model="gpt-5.6-terra")
     except Exception as e:
         pytest.skip(str(e))
 

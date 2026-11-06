@@ -41,7 +41,7 @@ from ragas.llms import llm_factory
 client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
 
 # Create LLM - adapter is auto-detected for google provider
-llm = llm_factory("gemini-2.0-flash", provider="google", client=client)
+llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
 ```
 
 ### Option 2: No Client (LiteLLM)
@@ -52,7 +52,7 @@ from the environment:
 ```python
 from ragas.llms import llm_factory
 
-llm = llm_factory("gemini/gemini-2.0-flash")
+llm = llm_factory("gemini/gemini-3.6-flash")
 ```
 
 !!! note "Legacy `google-generativeai` SDK"
@@ -70,23 +70,24 @@ import os
 from openai import OpenAI
 from ragas.llms import llm_factory
 
-# Requires running: litellm --model gemini-2.0-flash
+# Requires running: litellm --model gemini-3.6-flash
 client = OpenAI(
     api_key="anything",
     base_url="http://0.0.0.0:4000",  # LiteLLM proxy endpoint
 )
 
 # Create LLM with explicit adapter selection
-llm = llm_factory("gemini-2.0-flash", client=client, adapter="litellm")
+llm = llm_factory("gemini-3.6-flash", client=client, adapter="litellm")
 ```
 
 ## Supported Models
 
 Ragas works with all Gemini models:
 
-- **Latest**: `gemini-2.0-flash` (recommended)
-- **1.5 Series**: `gemini-1.5-pro`, `gemini-1.5-flash`
-- **1.0 Series**: `gemini-1.0-pro`
+- **Flash**: `gemini-3.6-flash` (stable; used in the examples on this page) and `gemini-3.8-flash` (newest)
+- **Flash-Lite**: `gemini-3.5-flash-lite`, the fastest and cheapest
+
+Older models (Gemini 1.x, 2.0) are shut down; 2.5 models shut down on December 1, 2026.
 
 For the latest models and pricing, see [Google AI Studio](https://aistudio.google.com/apikey).
 
@@ -130,7 +131,7 @@ from ragas.metrics import (
 
 # Initialize Gemini client (new SDK)
 client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
-llm = llm_factory("gemini-2.0-flash", provider="google", client=client)
+llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
 
 # Create sample evaluation data
 data = {
@@ -176,7 +177,7 @@ from ragas.metrics import (
 
 # Initialize Gemini client (new SDK)
 client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
-llm = llm_factory("gemini-2.0-flash", provider="google", client=client)
+llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
 
 # Initialize Google embeddings (multiple options):
 
@@ -231,7 +232,7 @@ from ragas.metrics import (
 
 # Initialize Gemini client (new SDK)
 client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
-llm = llm_factory("gemini-2.0-flash", provider="google", client=client)
+llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
 
 # Create sample evaluation data
 data = {
@@ -260,15 +261,15 @@ print(results)
 
 ### Model Selection
 
-- **gemini-2.0-flash**: Best for speed and efficiency
-- **gemini-1.5-pro**: Better reasoning for complex evaluations
-- **gemini-1.5-flash**: Good balance of speed and cost
+- **gemini-3.6-flash**: Stable; a good balance of speed, cost and quality
+- **gemini-3.8-flash**: Google's newest Flash model, with better reasoning for complex evaluations
+- **gemini-3.5-flash-lite**: Fastest and cheapest, for simple or very high-volume metrics
 
 ### Cost Optimization
 
 Gemini models are cost-effective. For large-scale evaluations:
 
-1. Use `gemini-2.0-flash` for most metrics
+1. Use `gemini-3.6-flash` for most metrics
 2. Consider batch processing for multiple evaluations
 3. Cache prompts when possible (Gemini supports prompt caching)
 
@@ -283,7 +284,7 @@ from ragas.llms import llm_factory
 
 # Create client (new SDK)
 client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
-llm = llm_factory("gemini-2.0-flash", provider="google", client=client)
+llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
 
 # Use in async evaluation
 # response = await llm.agenerate(prompt, ResponseModel)
@@ -300,7 +301,7 @@ Ragas automatically selects the appropriate adapter based on your setup:
 
 # Explicit selection (if needed)
 llm = llm_factory(
-    "gemini-2.0-flash",
+    "gemini-3.6-flash",
     client=client,
     adapter="litellm",  # Explicit adapter selection
 )
@@ -342,7 +343,7 @@ client = OpenAI(
     api_key=os.environ.get("GOOGLE_API_KEY"),
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
 )
-llm = llm_factory("gemini-2.0-flash", provider="openai", client=client)
+llm = llm_factory("gemini-3.6-flash", provider="openai", client=client)
 ```
 
 2. Track the upstream issue: [instructor#1658](https://github.com/567-labs/instructor/issues/1658)
@@ -370,13 +371,13 @@ If a model isn't available:
 from openai import OpenAI
 
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-llm = llm_factory("gpt-4o", client=client)
+llm = llm_factory("gpt-6-luna", client=client)
 
 # After: Gemini with new SDK
 from google import genai
 
 client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
-llm = llm_factory("gemini-2.0-flash", provider="google", client=client)
+llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
 ```
 
 ### From Anthropic
@@ -386,13 +387,13 @@ llm = llm_factory("gemini-2.0-flash", provider="google", client=client)
 from anthropic import Anthropic
 
 client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-llm = llm_factory("claude-3-sonnet", provider="anthropic", client=client)
+llm = llm_factory("claude-sonnet-5-5", provider="anthropic", client=client)
 
 # After: Gemini with new SDK
 from google import genai
 
 client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
-llm = llm_factory("gemini-2.0-flash", provider="google", client=client)
+llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
 ```
 
 ### From Legacy google-generativeai SDK
@@ -402,14 +403,14 @@ llm = llm_factory("gemini-2.0-flash", provider="google", client=client)
 import google.generativeai as genai
 
 genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
-client = genai.GenerativeModel("gemini-2.0-flash")
-llm = llm_factory("gemini-2.0-flash", provider="google", client=client)
+client = genai.GenerativeModel("gemini-3.6-flash")
+llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
 
 # After: New SDK (recommended)
 from google import genai
 
 client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
-llm = llm_factory("gemini-2.0-flash", provider="google", client=client)
+llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
 ```
 
 ## Using with Metrics Collections (Modern Approach)
@@ -427,7 +428,7 @@ from ragas.metrics.collections import AnswerCorrectness, ContextPrecision
 client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
 
 # Create LLM
-llm = llm_factory("gemini-2.0-flash", provider="google", client=client)
+llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
 
 # Create embeddings using the same client
 embeddings = GoogleEmbeddings(client=client, model="gemini-embedding-001")
@@ -474,7 +475,7 @@ Pass custom parameters to Gemini:
 
 ```python
 llm = llm_factory(
-    "gemini-2.0-flash",
+    "gemini-3.6-flash",
     client=client,
     temperature=0.5,
     max_tokens=2048,

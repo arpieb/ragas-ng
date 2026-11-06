@@ -17,7 +17,7 @@ async def run_prompt(ticket_text: str, prompt_file: str = "promptv1.txt"):
     user_message = f'Ticket: "{ticket_text}"'
 
     response = await client.chat.completions.create(
-        model="gpt-5-mini-2025-08-07",
+        model="gpt-5.6-terra",
         response_format={"type": "json_object"},
         messages=[
             {"role": "system", "content": system_prompt},

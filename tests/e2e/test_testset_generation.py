@@ -22,7 +22,7 @@ def test_testset_generation_e2e():
     ]
 
     # llm_factory requires an explicit client
-    generator_llm = llm_factory("gpt-4o", client=openai.OpenAI())
+    generator_llm = llm_factory("gpt-6-luna", client=openai.OpenAI())
     generator_embeddings = embedding_factory()
 
     generator = TestsetGenerator(

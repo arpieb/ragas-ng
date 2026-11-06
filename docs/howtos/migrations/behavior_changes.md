@@ -391,3 +391,28 @@ await run.arun(dataset, backend="local/csv", backend_kwargs={"root_dir": "./data
 `max_workers` is a keyword-only parameter of `arun`, like `name`, `backend`
 and `backend_kwargs`, so an experiment function can't receive a parameter of
 that name through `arun`.
+
+## Retired model IDs replaced ([#176](https://github.com/arpieb/ragas-ng/issues/176))
+
+Docs, examples, `ragas quickstart` templates and docstrings named models that their providers have shut down, or will shut down soon:
+- `gpt-3.5-turbo`, `gpt-4`, `gpt-4.1-nano` and `gemini-2.0-flash`, which fail today;
+- `gpt-5-mini` and `gpt-5-nano` (2026-12-11), and `claude-sonnet-4-5` (2026-11-30);
+- `gpt-4o` and `gpt-4o-mini` (2027-01-14).
+
+They now use each provider's listed replacement:
+
+| Was | Now |
+|---|---|
+| `gpt-4o`, `gpt-4o-mini`, `gpt-4.1`, `gpt-4.1-mini` | `gpt-6-luna` |
+| `gpt-3.5-turbo`, `gpt-5-mini` | `gpt-5.6-terra` |
+| `gpt-4.1-nano`, `gpt-5-nano` | `gpt-5.6-luna` |
+| `gpt-4`, `gpt-4-turbo`, `gpt-5`, `o1`/`o3` | `gpt-5.6-sol` |
+| `claude-sonnet-4-5`, Claude 3.x Sonnet | `claude-sonnet-5-5` |
+| `gemini-2.0-flash`, `gemini-1.5-flash` | `gemini-3.6-flash` |
+| `gemini-1.5-pro`, `gemini-2.5-pro` | `gemini-3.8-flash` |
+| `text-embedding-004` (Gemini) | `gemini-embedding-2` |
+
+- **The default judge model changed:** see [Score changes](score_changes.md#the-default-judge-model-is-gpt-6-luna-176).
+- **The new OpenAI models are all reasoning models.** `llm_factory()` already maps parameters for them. Code that calls the OpenAI client directly can't send `temperature` (other than 1) or `max_tokens` (use `max_completion_tokens`). On Chat Completions, `gpt-6-luna` supports tool calls only with `reasoning_effort="none"`. The `workflow_eval` and `agent_evals` templates were updated accordingly.
+- **Docs output:** pages that show LLM output from earlier runs say so at the top. That output was produced with the old models.
+- **Your own code:** if it names any of the old IDs, switch it as well. See your provider's deprecations page.

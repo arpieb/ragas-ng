@@ -13,7 +13,7 @@ from ragas.llms import llm_factory
 from ragas.metrics.collections import Faithfulness
 
 client = AsyncOpenAI()
-llm = llm_factory("gpt-4o-mini", client=client)
+llm = llm_factory("gpt-6-luna", client=client)
 
 metric = Faithfulness(llm=llm)
 ```

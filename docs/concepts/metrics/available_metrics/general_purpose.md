@@ -1,5 +1,9 @@
 # General Purpose Metrics
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 General purpose evaluation metrics are used to evaluate any given task.
 
 ## Aspect Critic
@@ -62,7 +66,7 @@ from ragas.dataset_schema import SingleTurnSample
 
 # Setup
 client = AsyncOpenAI()
-llm = llm_factory("gpt-4o-mini", client=client)
+llm = llm_factory("gpt-6-luna", client=client)
 
 # Create clarity scorer (0-10 scale)
 clarity_metric = DiscreteMetric(

@@ -1,5 +1,9 @@
 # Generating a Synthetic Test Set for RAG-Based Question Answering with Ragas
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 ## Overview
 
 In this tutorial, we'll explore the **test set generation module in Ragas** to create a **synthetic test set** for a **Retrieval-Augmented Generation (RAG)-based question-answering bot**. Our goal is to design a **Ragas Airline Assistant** capable of answering customer queries on various topics, including:
@@ -42,7 +46,7 @@ from openai import OpenAI
 import openai
 
 
-generator_llm = llm_factory("gpt-4o-mini", client=OpenAI())
+generator_llm = llm_factory("gpt-6-luna", client=OpenAI())
 openai_client = openai.OpenAI()
 generator_embeddings = OpenAIEmbeddings(
     client=openai_client, model="text-embedding-3-small"

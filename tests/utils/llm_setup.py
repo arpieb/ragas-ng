@@ -40,7 +40,7 @@ def check_api_key(provider: str = "openai") -> bool:
     return True
 
 
-def create_legacy_llm(model: str = "gpt-3.5-turbo", **kwargs):
+def create_legacy_llm(model: str = "gpt-5.6-terra", **kwargs):
     """Create an LLM instance using the unified llm_factory.
 
     Args:
@@ -71,7 +71,7 @@ def create_legacy_llm(model: str = "gpt-3.5-turbo", **kwargs):
 
 def create_modern_llm(
     provider: str = "openai",
-    model: str = "gpt-3.5-turbo",
+    model: str = "gpt-5.6-terra",
     client: Optional[any] = None,
     **kwargs,
 ):

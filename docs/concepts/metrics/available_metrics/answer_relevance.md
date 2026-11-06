@@ -1,5 +1,9 @@
 ## Answer Relevancy
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 !!! note "Formerly Response Relevancy"
     This metric was also called **Response Relevancy**. The legacy class `ResponseRelevancy` is the same metric, and its score column is `answer_relevancy` too. Use `AnswerRelevancy` in new code.
 
@@ -38,7 +42,7 @@ from ragas.metrics.collections import AnswerRelevancy
 
 # Setup LLM and embeddings
 client = AsyncOpenAI()
-llm = llm_factory("gpt-4o-mini", client=client)
+llm = llm_factory("gpt-6-luna", client=client)
 embeddings = embedding_factory("openai", model="text-embedding-3-small", client=client)
 
 # Create metric

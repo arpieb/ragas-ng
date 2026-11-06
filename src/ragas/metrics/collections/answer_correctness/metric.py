@@ -41,7 +41,7 @@ class AnswerCorrectness(BaseMetric):
         >>>
         >>> # Setup dependencies
         >>> client = AsyncOpenAI()
-        >>> llm = llm_factory("gpt-4o-mini", client=client)
+        >>> llm = llm_factory("gpt-6-luna", client=client)
         >>> embeddings = embedding_factory("openai", model="text-embedding-ada-002", client=client, interface="modern")
         >>>
         >>> # Create metric instance

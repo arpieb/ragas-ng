@@ -263,3 +263,11 @@ whose prompts were customised, where the hand-off falls back to legacy (see
   instead of one.
 - The NVIDIA metrics' fixed `temperature=0.1` judge calls now run at 0.1
   rather than the LLM's configured temperature.
+
+## The default judge model is gpt-6-luna ([#176](https://github.com/arpieb/ragas-ng/issues/176))
+
+`evaluate()`, testset generation and the testset transforms fall back to `ragas.llms.base.DEFAULT_LLM_MODEL` when you don't pass an `llm`. That was `gpt-4o-mini`, which OpenAI shuts down on 2027-01-14. It is now **`gpt-6-luna`**, OpenAI's listed replacement and its cost tier ($0.10 / $0.50 per 1M input/output tokens, vs. $0.15 / $0.60).
+
+- **Scores change** for any run that relied on the default. It's a different judge.
+- `gpt-6-luna` is a reasoning model, so ragas doesn't send it the low default `temperature` or `top_p`. The default goes through LiteLLM, which sends no sampling parameters, so the provider's default applies. With an OpenAI client, ragas sends `temperature=1`. Output is capped only if you set `max_tokens` (see [LLM adapters](../llm-adapters.md)). The default judge is therefore no longer near-deterministic at `temperature=0.01`, and runs vary more from one to the next.
+- OpenAI publishes no dated snapshot of `gpt-6-luna`, so the default can't be pinned. To keep scores comparable across runs and upgrades, pass your own `llm=llm_factory("<model>", ...)` with the exact model you want, and record it with your results.

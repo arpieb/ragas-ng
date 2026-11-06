@@ -167,7 +167,7 @@ from ragas.llms import llm_factory
 from ragas.metrics.collections import AnswerRelevancy, ContextPrecision, Faithfulness
 
 client = AsyncOpenAI()
-evaluator_llm = llm_factory("gpt-4o-mini", client=client)
+evaluator_llm = llm_factory("gpt-6-luna", client=client)
 evaluator_embeddings = embedding_factory(
     "openai", model="text-embedding-3-small", client=client
 )

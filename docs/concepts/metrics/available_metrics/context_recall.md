@@ -1,5 +1,9 @@
 # Context Recall
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 Context Recall measures how many of the relevant documents (or pieces of information) were successfully retrieved. It focuses on not missing important results. Higher recall means fewer relevant documents were left out. In short, recall is about not missing anything important. 
 
 Since it is about not missing anything, calculating context recall always requires a reference to compare against. The LLM-based Context Recall metric uses `reference` as a proxy to `reference_contexts`, which makes it easier to use as annotating reference contexts can be very time-consuming. To estimate context recall from the `reference`, the reference is split into sentences, and the judge LLM classifies each sentence as attributable to the retrieved context or not. It must return exactly one classification per sentence. If its answer can't be matched to the sentences after one retry, the sample scores `NaN` rather than a ratio over a partial answer. In an ideal scenario, every statement in the reference is attributable to the retrieved context.
@@ -19,7 +23,7 @@ from ragas.metrics.collections import ContextRecall
 
 # Setup LLM
 client = AsyncOpenAI()
-llm = llm_factory("gpt-4o-mini", client=client)
+llm = llm_factory("gpt-6-luna", client=client)
 
 # Create metric
 scorer = ContextRecall(llm=llm)

@@ -38,7 +38,7 @@ class AgentGoalAccuracyWithReference(BaseMetric):
         >>> from ragas.messages import HumanMessage, AIMessage, ToolMessage
         >>>
         >>> client = AsyncOpenAI()
-        >>> llm = llm_factory("gpt-4o-mini", client=client)
+        >>> llm = llm_factory("gpt-6-luna", client=client)
         >>>
         >>> metric = AgentGoalAccuracyWithReference(llm=llm)
         >>>
@@ -154,7 +154,7 @@ class AgentGoalAccuracyWithoutReference(BaseMetric):
         >>> from ragas.messages import HumanMessage, AIMessage, ToolMessage
         >>>
         >>> client = AsyncOpenAI()
-        >>> llm = llm_factory("gpt-4o-mini", client=client)
+        >>> llm = llm_factory("gpt-6-luna", client=client)
         >>>
         >>> metric = AgentGoalAccuracyWithoutReference(llm=llm)
         >>>

@@ -218,8 +218,8 @@ class CustomRetriever:
 Change the model in `evals.py`:
 
 ```python
-# Use GPT-4 for better accuracy
-rag = RAG(llm_client=client, retriever=retriever, model="gpt-4o")
+# Use a larger model for better accuracy
+rag = RAG(llm_client=client, retriever=retriever, model="gpt-6.1-sol")
 
 # Or use a different provider
 from anthropic import Anthropic

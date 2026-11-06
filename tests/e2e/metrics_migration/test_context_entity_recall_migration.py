@@ -64,7 +64,7 @@ class TestContextEntityRecallE2EMigration:
         try:
             from ragas.llms.base import llm_factory
 
-            return llm_factory("gpt-4o")  # Using GPT-4o for best alignment
+            return llm_factory("gpt-6-luna")
         except ImportError as e:
             pytest.skip(f"LLM factory not available: {e}")
         except Exception as e:
@@ -79,7 +79,7 @@ class TestContextEntityRecallE2EMigration:
             from ragas.llms import llm_factory
 
             client = openai.AsyncOpenAI()
-            return llm_factory("gpt-4o", client=client)
+            return llm_factory("gpt-6-luna", client=client)
         except ImportError as e:
             pytest.skip(f"Instructor LLM factory not available: {e}")
         except Exception as e:

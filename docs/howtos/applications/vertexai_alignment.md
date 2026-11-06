@@ -1,5 +1,9 @@
 # Aligning LLM Evaluators with Human Judgment
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 This tutorial is part of a three-part series on how to use Vertex AI models with Ragas. It is recommended that you have gone through [Getting Started: Ragas with Vertex AI](./vertexai_x_ragas.md), even if you have not, you can easily follow this. You can navigate to the Model Comparison tutorial using the [link](./vertexai_model_comparision.md).
 
 ## Overview
@@ -81,8 +85,8 @@ Import the required wrappers and define your evaluator LLM and embedder.
 from ragas.embeddings import embedding_factory
 from ragas.llms import llm_factory
 
-evaluator_llm = llm_factory("vertex_ai/gemini-2.0-flash-001")
-evaluator_embeddings = embedding_factory("vertex_ai/text-embedding-004")
+evaluator_llm = llm_factory("vertex_ai/gemini-3.6-flash")
+evaluator_embeddings = embedding_factory("vertex_ai/gemini-embedding-2")
 ```
 
 ### Ragas metrics
@@ -269,7 +273,7 @@ from ragas.embeddings import embedding_factory
 from ragas.llms import llm_factory
 
 evaluator_llm = llm_factory("vertex_ai/gemini-pro")
-evaluator_embeddings = embedding_factory("vertex_ai/text-embedding-004")
+evaluator_embeddings = embedding_factory("vertex_ai/gemini-embedding-2")
 ```
 
 

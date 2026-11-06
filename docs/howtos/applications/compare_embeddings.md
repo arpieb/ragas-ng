@@ -51,7 +51,7 @@ from ragas.llms import llm_factory
 from ragas.testset import TestsetGenerator
 
 openai_client = OpenAI()
-generator_llm = llm_factory("gpt-4o-mini", client=openai_client)
+generator_llm = llm_factory("gpt-6-luna", client=openai_client)
 generator_embeddings = embedding_factory(
     "openai", model="text-embedding-3-small", client=openai_client
 )
@@ -116,7 +116,7 @@ from openai import AsyncOpenAI
 
 from ragas.metrics.collections import ContextPrecisionWithReference, ContextRecall
 
-evaluator_llm = llm_factory("gpt-4o-mini", client=AsyncOpenAI())
+evaluator_llm = llm_factory("gpt-6-luna", client=AsyncOpenAI())
 metrics = [
     ContextPrecisionWithReference(llm=evaluator_llm),
     ContextRecall(llm=evaluator_llm),

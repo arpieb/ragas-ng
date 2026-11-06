@@ -63,9 +63,9 @@ import asyncio
 from ragas.llms import llm_factory
 from ragas.metrics import DiscreteMetric
 
-# Any LiteLLM model string works: "gpt-4o-mini", "anthropic/claude-sonnet-5-5",
+# Any LiteLLM model string works: "gpt-6-luna", "anthropic/claude-sonnet-5-5",
 # "gemini/gemini-3.8-flash", "ollama/qwen3.8:27b", ...
-llm = llm_factory("gpt-4o-mini")
+llm = llm_factory("gpt-6-luna")
 
 metric = DiscreteMetric(
     name="summary_accuracy",
@@ -88,7 +88,7 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-> **Note**: Set the API key your provider needs, such as `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`. You can still pass an explicit client, such as `llm_factory("gpt-4o", client=AsyncOpenAI())`, if you prefer.
+> **Note**: Set the API key your provider needs, such as `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`. You can still pass an explicit client, such as `llm_factory("gpt-6-luna", client=AsyncOpenAI())`, if you prefer.
 
 ### Start from a template project
 

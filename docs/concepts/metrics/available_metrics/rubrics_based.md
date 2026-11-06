@@ -20,7 +20,7 @@ from ragas.metrics.collections import DomainSpecificRubrics
 
 # Setup
 client = AsyncOpenAI()
-llm = llm_factory("gpt-4o-mini", client=client)
+llm = llm_factory("gpt-6-luna", client=client)
 
 # Reference-free evaluation (default)
 metric = DomainSpecificRubrics(llm=llm)
@@ -129,7 +129,7 @@ from ragas.metrics.collections import InstanceSpecificRubrics
 
 # Setup
 client = AsyncOpenAI()
-llm = llm_factory("gpt-4o-mini", client=client)
+llm = llm_factory("gpt-6-luna", client=client)
 
 metric = InstanceSpecificRubrics(llm=llm)
 

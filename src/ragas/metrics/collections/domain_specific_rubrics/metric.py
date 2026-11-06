@@ -44,7 +44,7 @@ class DomainSpecificRubrics(BaseMetric):
         >>> from ragas.metrics.collections import DomainSpecificRubrics
         >>>
         >>> client = AsyncOpenAI()
-        >>> llm = llm_factory("gpt-4o-mini", client=client)
+        >>> llm = llm_factory("gpt-6-luna", client=client)
         >>>
         >>> # Reference-free evaluation
         >>> metric = DomainSpecificRubrics(llm=llm)

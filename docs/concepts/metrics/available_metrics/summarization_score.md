@@ -1,5 +1,9 @@
 # Tasks Metrics
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 ## Summarization Score
 
 The **Summarization Score** metric measures how well a summary (`response`) captures the important information from the `reference_contexts`. The intuition behind this metric is that a good summary should contain all the important information present in the context.
@@ -36,7 +40,7 @@ from ragas.metrics.collections import SummaryScore
 
 # Setup LLM
 client = AsyncOpenAI()
-llm = llm_factory("gpt-4o-mini", client=client)
+llm = llm_factory("gpt-6-luna", client=client)
 
 # Create metric
 scorer = SummaryScore(llm=llm)

@@ -1,5 +1,9 @@
 # Agentic or Tool use
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 Agentic or tool use workflows can be evaluated in multiple dimensions. Here are some of the metrics that can be used to evaluate the performance of agents or tools in a given task.
 
 
@@ -34,7 +38,7 @@ from ragas.messages import HumanMessage, AIMessage, ToolMessage, ToolCall
 async def evaluate_topic_adherence():
     # Setup LLM
     client = AsyncOpenAI()
-    llm = llm_factory("gpt-4o-mini", client=client)
+    llm = llm_factory("gpt-6-luna", client=client)
 
     user_input = [
         HumanMessage(
@@ -130,7 +134,7 @@ from ragas.metrics import TopicAdherenceScore  # Legacy import
 from ragas.llms import llm_factory
 from openai import OpenAI
 
-evaluator_llm = llm_factory("gpt-4o", client=OpenAI())
+evaluator_llm = llm_factory("gpt-6-luna", client=OpenAI())
 
 sample = MultiTurnSample(
     user_input=[...],  # conversation messages
@@ -528,7 +532,7 @@ from ragas.messages import AIMessage, HumanMessage, ToolCall, ToolMessage
 async def evaluate_agent_goal_accuracy_with_reference():
     # Setup LLM
     client = AsyncOpenAI()
-    llm = llm_factory("gpt-4o-mini", client=client)
+    llm = llm_factory("gpt-6-luna", client=client)
 
     user_input = [
         HumanMessage(
@@ -595,7 +599,7 @@ from ragas.messages import AIMessage, HumanMessage, ToolCall, ToolMessage
 async def evaluate_agent_goal_accuracy_without_reference():
     # Setup LLM
     client = AsyncOpenAI()
-    llm = llm_factory("gpt-4o-mini", client=client)
+    llm = llm_factory("gpt-6-luna", client=client)
 
     user_input = [
         HumanMessage(
@@ -658,7 +662,7 @@ from ragas.metrics import AgentGoalAccuracyWithReference  # Legacy import
 from ragas.llms import llm_factory
 from openai import OpenAI
 
-evaluator_llm = llm_factory("gpt-4o", client=OpenAI())
+evaluator_llm = llm_factory("gpt-6-luna", client=OpenAI())
 
 sample = MultiTurnSample(
     user_input=[...],  # conversation messages

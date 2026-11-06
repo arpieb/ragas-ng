@@ -40,7 +40,7 @@ def test_amnesty_e2e():
     )
 
     client = AsyncOpenAI()
-    llm = llm_factory("gpt-4o-mini", client=client)  # pin the judge model
+    llm = llm_factory("gpt-6-luna", client=client)  # pin the judge model
     embeddings = embedding_factory(
         "openai", model="text-embedding-3-small", client=client
     )

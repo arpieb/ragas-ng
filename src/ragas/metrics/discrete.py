@@ -41,7 +41,7 @@ class DiscreteMetric(SimpleLLMMetric, DiscreteValidator):
     >>>
     >>> # Create an LLM instance
     >>> client = OpenAI(api_key="your-api-key")
-    >>> llm = llm_factory("gpt-4o-mini", client=client)
+    >>> llm = llm_factory("gpt-6-luna", client=client)
     >>>
     >>> # Create a custom discrete metric
     >>> metric = DiscreteMetric(

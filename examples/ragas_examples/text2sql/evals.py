@@ -195,7 +195,7 @@ async def main():
     logger.info("=" * 40)
     
     # Configuration
-    model = "gpt-5-mini"
+    model = "gpt-5.6-terra"
     prompt_file = None
     name = "demo_evaluation"
     limit = 5  # Only evaluate 5 samples for demo

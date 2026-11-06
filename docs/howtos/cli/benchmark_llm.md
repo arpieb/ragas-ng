@@ -31,8 +31,8 @@ uv run python evals.py
 To benchmark a specific model:
 
 ```sh
-uv run python evals.py --model gpt-4o
-uv run python evals.py --model gpt-3.5-turbo
+uv run python evals.py --model gpt-6-luna
+uv run python evals.py --model gpt-5.6-terra
 ```
 
 ## Project Structure
@@ -56,7 +56,7 @@ benchmark_llm/
 The template benchmarks LLM performance on structured output tasks:
 
 - **Task**: Calculate customer discount percentages based on profile
-- **Models**: Compare GPT-4, GPT-3.5, Claude, Gemini, etc.
+- **Models**: Compare GPT, Claude, Gemini and other models
 - **Output Format**: JSON with discount percentage
 - **Metric**: Discount accuracy (correct/incorrect)
 
@@ -70,7 +70,7 @@ Calculates discounts from customer profiles:
 from prompt import run_prompt
 
 profile = "Premium customer, 5 years tenure, $50k annual spend"
-result = await run_prompt(profile, model="gpt-4o")
+result = await run_prompt(profile, model="gpt-6-luna")
 # Returns: {"discount_percentage": 15}
 ```
 
@@ -103,14 +103,14 @@ The template includes `evals/datasets/discount_benchmark.csv` with:
 Run the same evaluation across different models:
 
 ```sh
-# GPT-4
-uv run python evals.py --model gpt-4o
+# GPT-6 Luna
+uv run python evals.py --model gpt-6-luna
 
-# GPT-3.5
-uv run python evals.py --model gpt-3.5-turbo
+# GPT-5.6 Terra
+uv run python evals.py --model gpt-5.6-terra
 
 # Claude
-uv run python evals.py --model claude-3-5-sonnet-20241022
+uv run python evals.py --model claude-sonnet-5-5
 
 # Compare results
 ```
@@ -153,12 +153,14 @@ Compare model performance:
 ```python
 import pandas as pd
 
-gpt4_results = pd.read_csv("evals/experiments/gpt4_benchmark.csv")
-gpt35_results = pd.read_csv("evals/experiments/gpt35_benchmark.csv")
+luna_results = pd.read_csv("evals/experiments/luna_benchmark.csv")
+terra_results = pd.read_csv("evals/experiments/terra_benchmark.csv")
 
-print(f"GPT-4 Accuracy: {(gpt4_results['discount_accuracy'] == 'correct').mean():.1%}")
 print(
-    f"GPT-3.5 Accuracy: {(gpt35_results['discount_accuracy'] == 'correct').mean():.1%}"
+    f"GPT-6 Luna accuracy: {(luna_results['discount_accuracy'] == 'correct').mean():.1%}"
+)
+print(
+    f"GPT-5.6 Terra accuracy: {(terra_results['discount_accuracy'] == 'correct').mean():.1%}"
 )
 ```
 

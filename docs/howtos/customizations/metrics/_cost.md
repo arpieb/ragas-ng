@@ -1,5 +1,9 @@
 # Understand Cost and Usage of Operations
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 When using LLMs for evaluation and test set generation, cost will be an important factor. Ragas provides you some tools to help you with that.
 
 ## Understanding `TokenUsageParser`
@@ -22,7 +26,7 @@ os.environ["OPENAI_API_KEY"] = "your-api-key"
 from langchain_openai.chat_models import ChatOpenAI
 from langchain_core.prompt_values import StringPromptValue
 
-gpt4o = ChatOpenAI(model="gpt-4o")
+gpt4o = ChatOpenAI(model="gpt-6-luna")
 p = StringPromptValue(text="hai there")
 llm_result = gpt4o.generate_prompt([p])
 
@@ -97,7 +101,7 @@ results.total_tokens()
 
 You can compute the cost for each run by passing in the cost per token to `Result.total_cost()` function.
 
-In this case GPT-4o costs $5 for 1M input tokens and $15 for 1M output tokens.
+In this example the model costs $5 per 1M input tokens and $15 per 1M output tokens. Use your own model's prices.
 
 
 ```python

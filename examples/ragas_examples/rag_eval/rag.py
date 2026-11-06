@@ -86,7 +86,7 @@ class ExampleRAG:
         retriever: Optional[BaseRetriever] = None,
         system_prompt: Optional[str] = None,
         logdir: str = "logs",
-        model: str = "gpt-4o",
+        model: str = "gpt-6-luna",
     ):
         """
         Initialize RAG system
@@ -98,7 +98,7 @@ class ExampleRAG:
             retriever: Document retriever (defaults to SimpleKeywordRetriever)
             system_prompt: System prompt template for generation
             logdir: Directory for trace log files
-            model: Model name sent to ``llm_client`` (was hard-coded to gpt-4o)
+            model: Model name sent to ``llm_client`` (was hard-coded to gpt-6-luna)
         """
         self.llm_client = llm_client
         self.model = model
@@ -445,7 +445,7 @@ class ExampleRAG:
 
 
 def default_rag_client(
-    llm_client, logdir: str = "logs", model: str = "gpt-4o"
+    llm_client, logdir: str = "logs", model: str = "gpt-6-luna"
 ) -> ExampleRAG:
     """
     Create a default RAG client over the bundled documents.
