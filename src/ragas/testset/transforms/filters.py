@@ -62,14 +62,15 @@ class CustomNodeFilter(LLMBasedNodeFilter):
     rubrics: t.Dict[str, str] = field(default_factory=lambda: DEFAULT_RUBRICS)
 
     async def custom_filter(self, node: Node, kg: KnowledgeGraph) -> bool:
+        # A chunk is scored against its document's summary. A pre-chunked
+        # chunk has no parent document, so fall back to its own summary (#85).
+        summary = ""
         if node.type.name == "CHUNK":
             parent_nodes = get_parent_nodes(node, kg)
-            if len(parent_nodes) > 0:
-                summary = parent_nodes[0].properties.get("summary", "")
-            else:
-                summary = ""
-        else:
-            summary = node.properties.get("summary", "")
+            if parent_nodes:
+                summary = parent_nodes[0].properties.get("summary") or ""
+        if not summary:
+            summary = node.properties.get("summary") or ""
 
         if summary == "":
             logger.warning(

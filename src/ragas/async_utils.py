@@ -3,6 +3,7 @@
 import asyncio
 import concurrent.futures
 import contextvars
+import inspect
 import logging
 import os
 import threading
@@ -259,6 +260,7 @@ def run_async_tasks(
     max_workers: int = -1,
     *,
     cancel_check: t.Optional[t.Callable[[], bool]] = None,
+    fail_fast: bool = False,
 ) -> t.List[t.Any]:
     """
     Execute async tasks with optional batching and progress tracking.
@@ -270,6 +272,9 @@ def run_async_tasks(
         batch_size: Optional size for batching tasks. If None, runs all concurrently
         show_progress: Whether to display progress bars
         max_workers: Maximum number of concurrent tasks (-1 for unlimited)
+        fail_fast: Stop at the first failed task: cancel the tasks still
+            pending, skip the batches not yet started, and raise that error.
+            By default every task runs and the first error is raised at the end.
     """
     from ragas.utils import ProgressBarManager, batched
 
@@ -279,10 +284,17 @@ def run_async_tasks(
         first_exception = None
         pbm = ProgressBarManager(progress_bar_desc, show_progress)
 
+        def _stop() -> bool:
+            if fail_fast and first_exception is not None:
+                return True
+            return cancel_check is not None and cancel_check()
+
+        stop_check = _stop if (fail_fast or cancel_check is not None) else None
+
         if not batch_size:
             with pbm.create_single_bar(total_tasks) as pbar:
                 async for result in process_futures(
-                    as_completed(tasks, max_workers, cancel_check=cancel_check)
+                    as_completed(tasks, max_workers, cancel_check=stop_check)
                 ):
                     if isinstance(result, Exception):
                         logger.error(
@@ -302,9 +314,11 @@ def run_async_tasks(
             )
             with overall_pbar, batch_pbar:
                 for i, batch in enumerate(batches, 1):
+                    if fail_fast and first_exception is not None:
+                        break
                     pbm.update_batch_bar(batch_pbar, i, n_batches, len(batch))
                     async for result in process_futures(
-                        as_completed(batch, max_workers, cancel_check=cancel_check)
+                        as_completed(batch, max_workers, cancel_check=stop_check)
                     ):
                         if isinstance(result, Exception):
                             logger.error(
@@ -317,6 +331,15 @@ def run_async_tasks(
                         results.append(result)
                         batch_pbar.update(1)
                     overall_pbar.update(len(batch))
+
+        # Close coroutines that never started (cancelled before running or in
+        # a batch that was skipped), so they don't warn "never awaited".
+        for coro in tasks:
+            if (
+                inspect.iscoroutine(coro)
+                and inspect.getcoroutinestate(coro) == inspect.CORO_CREATED
+            ):
+                coro.close()
 
         # Raise the first exception encountered to fail fast with clear error message
         if first_exception is not None:
