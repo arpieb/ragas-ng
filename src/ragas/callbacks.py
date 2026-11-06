@@ -396,13 +396,21 @@ def parse_run_traces(
             metric_traces.scores[metric_trace.name] = metric_trace.outputs.get(
                 "output", {}
             )
-            # get all the prompt IO from the metric trace
+            # get all the prompt IO from the metric trace. A metric may run the
+            # same prompt several times (FactualCorrectness: once per
+            # direction, NLI per statement batch); keying by name alone kept
+            # only the last call (#78). Repeats are numbered in call order:
+            # "name", "name (2)", "name (3)", ...
             prompt_traces = {}
-            for i, prompt_uuid in enumerate(metric_trace.children):
+            seen: t.Dict[str, int] = {}
+            for prompt_uuid in metric_trace.children:
                 prompt_trace = traces[prompt_uuid]
                 output = prompt_trace.outputs.get("output", {})
                 output = output[0] if isinstance(output, list) else output
-                prompt_traces[f"{prompt_trace.name}"] = {
+                name = f"{prompt_trace.name}"
+                seen[name] = seen.get(name, 0) + 1
+                key = name if seen[name] == 1 else f"{name} ({seen[name]})"
+                prompt_traces[key] = {
                     "input": prompt_trace.inputs.get("data", {}),
                     "output": output,
                 }

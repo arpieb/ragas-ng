@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import collections.abc
 import copy
 import logging
 import typing as t
@@ -168,14 +169,20 @@ async def _aevaluate(
         helicone_config.session_name = "ragas-evaluation"
         helicone_config.session_id = str(uuid.uuid4())
 
-    if dataset is None:
-        raise ValueError("Provide dataset!")
+    # Fail up front with the fix, rather than with an AttributeError deep in
+    # the run or a NaN per job (#77).
+    dataset = _coerce_dataset(dataset)
+    _check_models(llm, embeddings)
 
-    # Check metrics are correct type
-    if not isinstance(metrics, (type(None), list)):
-        raise TypeError(
-            "Metrics should be provided in a list, e.g: metrics=[BleuScore()]"
-        )
+    # Check metrics are correct type: any sequence (a list or a tuple)
+    if metrics is not None:
+        if isinstance(metrics, (str, bytes)) or not isinstance(
+            metrics, collections.abc.Sequence
+        ):
+            raise TypeError(
+                "Metrics should be provided in a list, e.g: metrics=[BleuScore()]"
+            )
+        metrics = list(metrics)
 
     # Collections metrics (ragas.metrics.collections) implement SimpleBaseMetric,
     # not the legacy Metric protocol evaluate() drives, so they used to be
@@ -391,13 +398,17 @@ def evaluate(
 
     Parameters
     ----------
-    dataset : Dataset, EvaluationDataset
-        The dataset used by the metrics to evaluate the RAG pipeline.
+    dataset : Dataset, EvaluationDataset, or list
+        The dataset used by the metrics to evaluate the RAG pipeline. A list
+        of samples (SingleTurnSample / MultiTurnSample) or of dicts is
+        converted to an EvaluationDataset.
     metrics : list[Metric], optional
         List of metrics to use for evaluation. If not provided, ragas will run
         the evaluation on the best set of metrics to give a complete view.
-    llm : BaseRagasLLM, optional
+    llm : BaseRagasLLM or InstructorBaseRagasLLM, optional
         The language model (LLM) to use to generate the score for calculating the metrics.
+        Must be a ragas LLM, e.g. from ``llm_factory()``; a raw provider client
+        raises TypeError.
         If not provided, ragas will use the default
         language model for metrics that require an LLM. This can be overridden by the LLM
         specified in the metric level with `metric.llm`.
@@ -501,6 +512,61 @@ def evaluate(
     from ragas.async_utils import run_sync
 
     return run_sync(_async_wrapper())
+
+
+def _coerce_dataset(dataset: t.Any) -> t.Union[Dataset, EvaluationDataset]:
+    """The dataset as one evaluate() can run, or a TypeError saying what fits.
+
+    A list of samples or of dicts is converted; it used to fail later with
+    "'list' object has no attribute 'get_sample_type'".
+    """
+    if dataset is None:
+        raise ValueError("Provide dataset!")
+    if isinstance(dataset, (EvaluationDataset, Dataset)):
+        return dataset
+    if isinstance(dataset, (list, tuple)):
+        if not dataset:
+            raise ValueError("The dataset is empty.")
+        if all(isinstance(s, (SingleTurnSample, MultiTurnSample)) for s in dataset):
+            return EvaluationDataset(samples=list(dataset))
+        if all(isinstance(s, dict) for s in dataset):
+            return EvaluationDataset.from_list(list(dataset))
+        raise TypeError(
+            "A list dataset must hold only samples (SingleTurnSample / "
+            "MultiTurnSample) or only dicts; got "
+            f"{sorted({type(s).__name__ for s in dataset})}."
+        )
+    raise TypeError(
+        "dataset must be an EvaluationDataset, a Hugging Face datasets.Dataset, "
+        f"or a list of samples or dicts; got {type(dataset).__name__}. "
+        "For example: EvaluationDataset.from_list([{'user_input': ..., "
+        "'response': ...}])"
+    )
+
+
+def _check_models(llm: t.Any, embeddings: t.Any) -> None:
+    """Reject an llm/embeddings that ragas can't call, before the run starts.
+
+    A raw provider client used to be accepted and fail in every job, giving
+    NaN scores and one AttributeError per row instead of a clear error.
+    """
+    if llm is not None and not isinstance(llm, (BaseRagasLLM, InstructorBaseRagasLLM)):
+        raise TypeError(
+            f"llm must be a ragas LLM, got {type(llm).__module__}."
+            f"{type(llm).__name__}. Wrap your client or model name with "
+            "llm_factory: from ragas.llms import llm_factory; "
+            "llm = llm_factory('gpt-4o-mini', client=client)"
+        )
+    if embeddings is not None and not isinstance(
+        embeddings, (BaseRagasEmbeddings, BaseRagasEmbedding)
+    ):
+        raise TypeError(
+            f"embeddings must be ragas embeddings, got "
+            f"{type(embeddings).__module__}.{type(embeddings).__name__}. Wrap "
+            "your client with embedding_factory: from ragas.embeddings import "
+            "embedding_factory; embeddings = embedding_factory('openai', "
+            "client=client)"
+        )
 
 
 def _default_metrics() -> t.List[Metric]:
