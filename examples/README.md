@@ -1,96 +1,91 @@
 # Ragas Examples
 
-Official examples demonstrating how to use Ragas for evaluating different types of AI applications including RAG systems, agents, prompts, workflows, and LLM benchmarking. These examples might be unstable and are subject to change.
+Example projects for evaluating different kinds of LLM applications with Ragas: RAG systems, agents, prompts, workflows, text-to-SQL and LLM benchmarking. They are the source of the `ragas quickstart` templates. They may change between releases.
 
 ## Installation
 
-### From PyPI (after release)
-```bash
-pip install "ragas[examples]"
-```
-
-### Local Development
-Install both main ragas and examples packages in editable mode:
+The examples are the `ragas-examples` package, a member of this repository's uv workspace. Neither package is published to PyPI from this fork, so install from a clone:
 
 ```bash
-cd /path/to/ragas
-uv pip install -e . -e ./examples
-```
-
-Or using regular pip:
-```bash
-cd /path/to/ragas  
+git clone https://github.com/arpieb/ragas-ng.git
+cd ragas-ng
+uv sync --package ragas-examples
+# or, with pip, in editable mode:
 pip install -e . -e ./examples
 ```
 
-## Available Examples
+Some examples need extra dependencies, available as extras of `ragas-examples`:
 
-- **`ragas_examples.agent_evals`** - Agent evaluation examples
-- **`ragas_examples.benchmark_llm`** - LLM benchmarking and comparison examples  
-- **`ragas_examples.prompt_evals`** - Prompt evaluation examples
-- **`ragas_examples.rag_eval`** - RAG system evaluation examples
-- **`ragas_examples.workflow_eval`** - Workflow evaluation examples
+| Extra | For |
+|---|---|
+| `text2sql` | `ragas_examples.text2sql` |
+| `improverag` | `ragas_examples.improve_rag` |
+| `llamaindex` | `ragas_examples.llamaIndex_agent_evals` |
+| `gdrive` | the Google Drive scripts below |
 
-## Usage
+```bash
+uv sync --package ragas-examples --extra text2sql
+# or: pip install -e "./examples[text2sql]"
+```
 
-### Set Environment Variables
+## Starting a project from a template
 
-Most examples require API keys to be set:
+To copy an example into a new project instead of running it in place:
+
+```bash
+ragas quickstart                          # list the templates
+ragas quickstart rag_eval -o ./my-project # copy one
+```
+
+## Available examples
+
+| Module | Template | What it evaluates |
+|---|---|---|
+| `ragas_examples.rag_eval` | `rag_eval` | A RAG system, with custom metrics |
+| `ragas_examples.improve_rag` | `improve_rag` | Naive vs. agentic RAG, with BM25 retrieval |
+| `ragas_examples.agent_evals` | `agent_evals` | An agent solving math problems |
+| `ragas_examples.llamaIndex_agent_evals` | `llamaIndex_agent_evals` | LlamaIndex agents' tool calls |
+| `ragas_examples.text2sql` | `text2sql` | Text-to-SQL, by query execution |
+| `ragas_examples.workflow_eval` | `workflow_eval` | A multi-step workflow |
+| `ragas_examples.prompt_evals` | `prompt_evals` | Prompt variants |
+| `ragas_examples.judge_alignment` | `judge_alignment` | How well an LLM judge agrees with human labels |
+| `ragas_examples.benchmark_llm` | `benchmark_llm` | Several LLMs on the same task |
+| `ragas_examples.ag_ui_agent_experiments` | | An AG-UI agent server (see the [AG-UI guide](../docs/howtos/integrations/ag_ui.md)) |
+
+Standalone scripts in this folder:
+
+- `iterate_prompt/`: the [prompt iteration guide](../docs/howtos/applications/iterate_prompt.md) example.
+- `gdrive_backend_example.py`, `gdrive_append_example.py`: datasets stored in Google Sheets. See [Storage backends](../docs/howtos/customizations/storage_backends.md#google-drive).
+- `oci_genai_example.py`: Oracle Cloud Infrastructure Generative AI models with `evaluate()`. See the [OCI guide](../docs/howtos/integrations/oci_genai.md).
+
+## Running an example
+
+Most examples call OpenAI, so set your key first. The `llamaIndex_agent_evals` example uses Gemini (`GOOGLE_API_KEY`). The [quickstart guide](../docs/getstarted/quickstart.md) shows how to point the `rag_eval` template at other providers.
 
 ```bash
 export OPENAI_API_KEY=your_key_here
 ```
 
-For Google Drive examples, also install the gdrive extra:
-```bash
-pip install "ragas[examples,gdrive]"
-```
-
-### Running Examples as Modules
-
-After installation, you can run examples directly:
+Run an example as a module, or with its console script:
 
 ```bash
-# Run benchmark LLM prompt example
-python -m ragas_examples.benchmark_llm.prompt
-
-# Run benchmark LLM evaluation
-python -m ragas_examples.benchmark_llm.evals
-
-# Run other examples
 python -m ragas_examples.rag_eval.evals
-python -m ragas_examples.agent_evals.evals
-python -m ragas_examples.prompt_evals.evals
-python -m ragas_examples.workflow_eval.evals
+# or
+ragas-rag-evals
 ```
 
-## Release process
+| Module | Console script |
+|---|---|
+| `agent_evals.evals` | `ragas-agent-evals` |
+| `benchmark_llm.evals` | `ragas-benchmark-llm` |
+| `prompt_evals.evals` | `ragas-prompt-evals` |
+| `rag_eval.evals` | `ragas-rag-evals` |
+| `workflow_eval.evals` | `ragas-workflow-evals` |
+| `improve_rag.evals` | `ragas-improve-rag` |
+| `text2sql.evals` | `ragas-text2sql-evals` |
+| `llamaIndex_agent_evals.evals` | `ragas-llamaindex-agent-evals` |
+| `judge_alignment.evals` | `ragas-judge-alignment` |
 
-- The examples package is versioned independently using Git tags with prefix `examples-v` (e.g., `examples-v0.1.0`).
-- Publishing is handled by the GitHub Actions workflow `publish-examples.yml`, which builds from `examples/` and publishes to PyPI when such a tag is pushed.
+## Versioning
 
-### Release Commands
-
-To create and push a new release:
-
-```bash
-# Create and push a new tag (replace X.Y.Z with actual version)
-git tag examples-vX.Y.Z
-git push origin examples-vX.Y.Z
-
-# Example:
-git tag examples-v0.1.0
-git push origin examples-v0.1.0
-```
-
-## Local Development & Testing
-
-
-## Local Development & Testing
-
-### Verify Installation
-```bash
-
-# Test module execution
-python -m ragas_examples.benchmark_llm.prompt --help
-```
+The package version comes from the repository's git tags through `setuptools_scm`. These are the same tags as the `ragas` package, so the two versions stay in step. The `publish-examples.yml` workflow builds and publishes the package when a GitHub release is published. This fork doesn't publish to PyPI.

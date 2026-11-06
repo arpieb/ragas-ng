@@ -30,6 +30,7 @@ Changes so far:
 - **Provider-neutral by default.** `openai` is no longer a declared dependency. `llm_factory()` and `embedding_factory()` work without a client and route through [LiteLLM](https://github.com/BerriAI/litellm), so any provider LiteLLM supports works out of the box.
 - **Native tracing.** The LangChain callback system has been replaced by a native run tree plus the OpenTelemetry API. Spans cost nothing until you configure an OpenTelemetry SDK.
 - **Collections metrics everywhere.** Metrics have been ported to `ragas.metrics.collections`, including the non-LLM context metrics, AspectCritic, SimpleCriteriaScore and FaithfulnesswithHHEM, and `evaluate()` accepts them directly. The legacy metric singletons in `ragas.metrics` still work, but they are deprecated.
+- **Upstream bugs fixed, with migration notes.** Fixes that change behavior or scores are listed in [Behavior changes](docs/howtos/migrations/behavior_changes.md) and [Score changes](docs/howtos/migrations/score_changes.md), so you can see what differs from upstream before upgrading.
 - **Modern toolchain.** Requires Python 3.11+. Uses uv with a committed lockfile, and the docs build in CI with `mkdocs --strict`.
 
 The Python package and import name are still `ragas`, so existing code keeps importing the same way.
@@ -62,8 +63,8 @@ import asyncio
 from ragas.llms import llm_factory
 from ragas.metrics import DiscreteMetric
 
-# Any LiteLLM model string works: "gpt-4o-mini", "anthropic/claude-sonnet-4-5",
-# "gemini/gemini-2.0-flash", "ollama/llama3.1", ...
+# Any LiteLLM model string works: "gpt-4o-mini", "anthropic/claude-sonnet-5-5",
+# "gemini/gemini-3.8-flash", "ollama/qwen3.8:27b", ...
 llm = llm_factory("gpt-4o-mini")
 
 metric = DiscreteMetric(
