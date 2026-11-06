@@ -144,6 +144,15 @@ class TokenUsageCollector:
         self.token_usage_parser = token_usage_parser or get_token_usage_for_openai
         self.usage_data: t.List[TokenUsage] = []
 
+    def _warn_no_usage(self) -> None:
+        # Used to be an IndexError (#79). Zero is the honest total, but say why
+        # it may be wrong: the LLM may not report usage to the collector.
+        logger.warning(
+            "No token usage was recorded. Either no LLM calls were made, or the "
+            "LLM does not report usage (only LLMs from llm_factory() do); "
+            "reporting 0."
+        )
+
     def record(self, raw_completion: t.Any) -> None:
         """Record usage for one completion. Never raises."""
         try:
@@ -165,6 +174,10 @@ class TokenUsageCollector:
             raise ValueError(
                 "No cost table or cost per token provided. Please provide a cost table if using multiple models or cost per token if using a single model"
             )
+
+        if not self.usage_data:
+            self._warn_no_usage()
+            return 0.0
 
         # sum up everything
         first_usage = self.usage_data[0]
@@ -205,6 +218,9 @@ class TokenUsageCollector:
         """
         Return the sum of tokens used by the callback handler
         """
+        if not self.usage_data:
+            self._warn_no_usage()
+            return TokenUsage(input_tokens=0, output_tokens=0)
         first_usage = self.usage_data[0]
         total_table: t.Dict[str, TokenUsage] = {first_usage.model: first_usage}
         for usage in self.usage_data[1:]:
