@@ -4,11 +4,15 @@ import typing as t
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
-import numpy as np
 from pydantic import BaseModel
 
 from ragas.llms.base import BaseRagasLLM
 from ragas.prompt.pydantic_prompt import PydanticPrompt
+from ragas.prompt.utils import (
+    check_example_count,
+    get_examples_from_store,
+    nearest_indices,
+)
 
 if t.TYPE_CHECKING:
     from ragas.callbacks import Callbacks
@@ -23,8 +27,12 @@ OutputModel = t.TypeVar("OutputModel", bound=BaseModel)
 class ExampleStore(ABC):
     @abstractmethod
     def get_examples(
-        self, data: BaseModel, top_k: int = 5
+        self, data: BaseModel, top_k: int = 5, threshold: float = 0.7
     ) -> t.Sequence[t.Tuple[BaseModel, BaseModel]]:
+        """Get up to ``top_k`` examples with similarity at least ``threshold``.
+
+        ``top_k=0`` returns none.
+        """
         pass
 
     @abstractmethod
@@ -51,6 +59,8 @@ class InMemoryExampleStore(ExampleStore):
     def get_examples(
         self, data: BaseModel, top_k: int = 5, threshold: float = 0.7
     ) -> t.Sequence[t.Tuple[BaseModel, BaseModel]]:
+        if check_example_count(top_k) == 0 or not self._examples_list:
+            return []
         data_embedding = self.embeddings.embed_query(data.model_dump_json())
         return [
             self._examples_list[i]
@@ -66,27 +76,7 @@ class InMemoryExampleStore(ExampleStore):
         top_k: int = 3,
         threshold: float = 0.7,
     ) -> t.List[int]:
-        # Convert to numpy arrays for efficient computation
-        query = np.array(query_embedding)
-        embed_matrix = np.array(embeddings)
-
-        # Calculate cosine similarity
-        similarities = np.dot(embed_matrix, query) / (
-            np.linalg.norm(embed_matrix, axis=1) * np.linalg.norm(query) + 1e-8
-        )
-
-        # Get indices of similarities above threshold
-        valid_indices = np.where(similarities >= threshold)[0]
-
-        # Sort by similarity and get top-k
-        top_indices = valid_indices[np.argsort(similarities[valid_indices])[-top_k:]]
-
-        # Ensure the result is a proper List[int]
-        result = []
-        for idx in top_indices:
-            result.append(int(idx))  # Explicitly convert each element to int
-
-        return result
+        return nearest_indices(query_embedding, embeddings, top_k, threshold)
 
     def __repr__(self):
         return f"InMemoryExampleStore(n_examples={len(self._examples_list)})"
@@ -114,8 +104,14 @@ class FewShotPydanticPrompt(PydanticPrompt, t.Generic[InputModel, OutputModel]):
         callbacks: t.Optional[Callbacks] = None,
         retries_left: int = 3,
     ) -> t.List[OutputModel]:
-        # Ensure get_examples returns a sequence of tuples (InputModel, OutputModel)
-        self.examples = self.example_store.get_examples(data, self.top_k_for_examples)  # type: ignore
+        # forward the threshold too; it was dropped, so the store's default
+        # (0.7) applied whatever DemonstrationConfig.threshold said (#93)
+        self.examples = get_examples_from_store(  # type: ignore[assignment]
+            self.example_store,
+            data,
+            self.top_k_for_examples,
+            self.threshold_for_examples,
+        )
 
         return await super().generate_multiple(
             llm, data, n, temperature, stop, callbacks, retries_left

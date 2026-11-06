@@ -267,24 +267,26 @@ class MetricWithLLM(Metric, PromptMixin):
             # convert annotations into examples
             input_examples, output_examples = [], []
             for i, prompt_annotation in enumerate(prompt_annotation_list):
+                # Validate both sides before keeping either: appending the input
+                # first left it behind when only the output was invalid, and the
+                # zip below then paired every later input with the wrong output.
                 try:
-                    input_examples.append(
-                        input_model.model_validate(prompt_annotation.prompt_input)
+                    example_input = input_model.model_validate(
+                        prompt_annotation.prompt_input
                     )
                     # use the edited output if it is provided
-                    if prompt_annotation.edited_output is not None:
-                        output_examples.append(
-                            output_model.model_validate(prompt_annotation.edited_output)
-                        )
-                    else:
-                        output_examples.append(
-                            output_model.model_validate(prompt_annotation.prompt_output)
-                        )
+                    example_output = output_model.model_validate(
+                        prompt_annotation.edited_output
+                        if prompt_annotation.edited_output is not None
+                        else prompt_annotation.prompt_output
+                    )
                 except ValidationError as e:
                     logger.warning(
                         f"Skipping prompt '{prompt_name}' example {i} because of validation error: {e}"
                     )
                     continue
+                input_examples.append(example_input)
+                output_examples.append(example_output)
             embedding_model = demonstration_config.embedding
             few_shot_prompt = FewShotPydanticPrompt.from_pydantic_prompt(
                 pydantic_prompt=pydantic_prompt,

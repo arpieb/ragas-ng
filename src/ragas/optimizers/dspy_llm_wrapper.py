@@ -109,4 +109,8 @@ class RagasDSPyLM:
         List[Dict[str, Any]]
             Recent call history.
         """
+        from ragas.prompt.utils import check_example_count
+
+        if check_example_count(n, "n") == 0:
+            return []  # [-0:] would return the whole history (#92)
         return self.history[-n:]
