@@ -343,3 +343,25 @@ French, English and Spanish queries.
   instruction and examples. It doesn't promise the language of the metric's
   output (reasons, extracted statements), and scores are unaffected.
 - Prompts in English, and prompts never adapted, render exactly as before.
+
+## Experiment backends by name ([#165](https://github.com/arpieb/ragas-ng/issues/165))
+
+`@experiment(backend=...)` and `arun(..., backend=...)` accepted a backend name
+such as `"local/jsonl"`, but created it with no constructor arguments, so it
+raised `TypeError` for the missing `root_dir`. Only `"inmemory"` worked by
+name. Both now take `backend_kwargs`:
+
+```python
+@experiment(Result, backend="local/jsonl", backend_kwargs={"root_dir": "./data"})
+async def run(row): ...
+
+
+await run.arun(dataset, backend="local/csv", backend_kwargs={"root_dir": "./data"})
+```
+
+- `backend_kwargs` given to `arun` replaces the decorator's.
+- `backend_kwargs` with a backend instance, or with no backend, raises
+  `ValueError`. Before, there was no such parameter, so this breaks nothing.
+- `backend_kwargs` is keyword-only and reserved, like `name` and `backend`. An
+  experiment function with a parameter of that name can't receive it through
+  `arun`.

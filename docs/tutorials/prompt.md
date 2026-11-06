@@ -99,12 +99,11 @@ async def run_experiment(row, model):
     return experiment_view
 
 
-# Run with specific parameters
-run_experiment.arun(dataset, "gpt-4")
+# Pass the function's arguments by keyword
+await run_experiment.arun(dataset, model="gpt-4o")
+```
 
-# Or use keyword arguments
-run_experiment.arun(dataset, model="gpt-4o")
-``` 
+`name`, `backend` and `backend_kwargs` are `arun`'s own parameters, so pass your function's arguments by keyword. A positional `arun(dataset, "gpt-4o")` sets the experiment's *name* to `"gpt-4o"`, and `model` is never passed. 
 
 
 ## Running the example end to end
