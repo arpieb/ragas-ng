@@ -294,3 +294,27 @@ load with.
     - `system` and `developer` messages are skipped instead of raising
       `ValueError`.
     - An unknown or missing role still raises.
+
+## Langfuse helper retired ([#97](https://github.com/arpieb/ragas-ng/issues/97))
+
+`ragas.integrations.tracing.langfuse` is deprecated, and importing it warns.
+It never worked in ragas-ng: `sync_trace()` returned a placeholder trace with
+no observations, and `LangfuseTrace.filter()` always returned `[]`. It is
+retired rather than ported to the Langfuse SDK, because Langfuse's own SDK and
+OpenTelemetry already cover both of its jobs without vendor-specific code in
+ragas.
+
+| Before | Now |
+|---|---|
+| `from ragas.integrations.tracing.langfuse import observe` | `from langfuse import observe`. The old import still works, with a warning. |
+| `await sync_trace(trace_id)` / `LangfuseTrace(...)` | `NotImplementedError` pointing to the replacement: `get_client().api.trace.get(trace_id)` and its `observations` |
+| `trace.filter("span_name")` | `[o for o in trace.observations if o.name == "span_name"]` on the Langfuse SDK's trace |
+| `pip install "ragas[tracing]"` installed `langfuse` | it installs only `mlflow`; `pip install langfuse` if you use it |
+
+To see ragas runs in Langfuse, export ragas' OpenTelemetry spans to it. The
+Langfuse SDK's default export filter drops spans from unknown
+instrumentations, `ragas` among them, so allow the `ragas` scope with
+`should_export_span`. The [Langfuse guide](../integrations/_langfuse.md) shows
+both set-ups and how to score your app's traces with ragas.
+
+The MLflow helper, `ragas.integrations.tracing.mlflow`, is unchanged.

@@ -138,6 +138,7 @@ nav:
           - Observability:
               - Overview: howtos/observability.md
               - Arize: howtos/integrations/_arize.md
+              - Langfuse: howtos/integrations/_langfuse.md
           - LLM Providers:
               - Amazon Bedrock: howtos/integrations/amazon_bedrock.md
               - Google Gemini: howtos/integrations/gemini.md
@@ -192,12 +193,11 @@ not_in_nav: |
   extra/components/choose_generator_llm.md
   howtos/customizations/metrics/_cost.md
 
-  # Both document shipped integrations -- ragas.integrations.helicone (which
-  # evaluate() reads) and ragas.integrations.tracing.langfuse -- but neither is
-  # in the sidebar. Their imports resolve; what they still use is the legacy
-  # metric-injection pattern, so they want modernising before promotion.
+  # Documents a shipped integration -- ragas.integrations.helicone (which
+  # evaluate() reads) -- but isn't in the sidebar. Its imports resolve; what it
+  # still uses is the legacy metric-injection pattern, so it wants modernising
+  # before promotion.
   howtos/integrations/_helicone.md
-  howtos/integrations/_langfuse.md
 
   # Stubs and internal notes, not user-facing documentation.
   community/pdf_export.md

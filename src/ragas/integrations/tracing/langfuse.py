@@ -1,159 +1,85 @@
-"""Utils to help to interact with langfuse traces"""
+"""Deprecated: Langfuse helpers (#97).
+
+This module never fetched real traces in ragas-ng: ``sync_trace()`` returned a
+placeholder trace and ``LangfuseTrace.filter()`` always returned ``[]``. It is
+retired rather than ported to the Langfuse SDK, because both of its jobs are
+covered without ragas-specific vendor code:
+
+- **Send ragas runs to Langfuse:** ragas emits OpenTelemetry spans; export
+  them to Langfuse's OTLP endpoint (or let the Langfuse SDK export them).
+- **Score your app's traces:** fetch them with Langfuse's own SDK
+  (``get_client().api.trace.get(trace_id)``), score with ragas metrics, and
+  write the scores back with ``score_current_trace`` / ``create_score``.
+
+See ``docs/howtos/integrations/_langfuse.md``. This module will be removed in a
+future release.
+"""
+
+from __future__ import annotations
 
 __all__ = ["observe", "logger", "LangfuseTrace", "sync_trace", "add_query_param"]
 
-import asyncio
 import logging
 import typing as t
-from datetime import datetime
+import warnings
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
-if t.TYPE_CHECKING:
-    from langfuse import Langfuse, observe
-    from langfuse.api import Observation, TraceWithFullDetails
-else:
-    try:
-        from langfuse import Langfuse, observe  # type: ignore
-        from langfuse.api import Observation, TraceWithFullDetails  # type: ignore
-
-        LANGFUSE_AVAILABLE = True
-    except ImportError:
-        LANGFUSE_AVAILABLE = False
-
-        # Define stub classes for type checking when imports fail
-        class Observation:  # type: ignore
-            name: str = ""
-
-        class TraceWithFullDetails:  # type: ignore
-            def __init__(
-                self,
-                id: str = "",
-                timestamp: t.Optional[datetime] = None,
-                htmlPath: str = "",
-                latency: int = 0,
-                totalCost: float = 0.0,
-                observations: t.Optional[t.List[t.Any]] = None,
-                scores: t.Optional[t.List[t.Any]] = None,
-                tags: t.Optional[t.List[str]] = None,
-                public: bool = False,
-                environment: str = "",
-            ):  # type: ignore
-                self.id = id
-                self.timestamp = timestamp or datetime.now()
-                self.htmlPath = htmlPath
-                self.latency = latency
-                self.totalCost = totalCost
-                self.observations = observations or []
-                self.scores = scores or []
-                self.tags = tags or []
-                self.public = public
-                self.environment = environment
-
-        class Langfuse:  # type: ignore
-            def get_current_trace_id(self) -> t.Optional[str]:  # type: ignore
-                return None
-
-            def get_trace_url(self) -> t.Optional[str]:  # type: ignore
-                return None
-
-            def get_dataset(self, *args, **kwargs):  # type: ignore
-                return None
-
-        def observe(*args, **kwargs):  # type: ignore
-            def decorator(func):
-                return func
-
-            return decorator
-
-
-# ensure observe is defined in global namespace
-# This is needed because observe might be imported conditionally
-if "observe" not in globals():
-
-    def observe(*args, **kwargs):  # type: ignore
-        def decorator(func):
-            return func
-
-        return decorator
-
+warnings.warn(
+    "ragas.integrations.tracing.langfuse is deprecated and will be removed. "
+    "Use the Langfuse SDK directly (`from langfuse import observe, "
+    "get_client`); ragas runs reach Langfuse as OpenTelemetry spans. See the "
+    "Langfuse integration guide.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 logger = logging.getLogger(__name__)
 
+_RETIRED = (
+    "{name} has been retired: in ragas-ng it never fetched real traces (it "
+    "returned a placeholder). Fetch traces with the Langfuse SDK instead, e.g. "
+    "`from langfuse import get_client; "
+    "get_client().api.trace.get(trace_id)`, and read `trace.observations`. "
+    "See the Langfuse integration guide in the ragas docs."
+)
+
+
+def observe(*args: t.Any, **kwargs: t.Any) -> t.Any:
+    """Deprecated re-export of ``langfuse.observe``; import it from langfuse.
+
+    Without langfuse installed it is a no-op decorator, as before.
+    """
+    try:
+        from langfuse import (
+            observe as langfuse_observe,  # type: ignore[import-not-found]
+        )
+    except ImportError:
+        if len(args) == 1 and callable(args[0]) and not kwargs:
+            return args[0]
+
+        def decorator(func: t.Any) -> t.Any:
+            return func
+
+        return decorator
+    return langfuse_observe(*args, **kwargs)
+
 
 class LangfuseTrace:
-    def __init__(self, trace: "TraceWithFullDetails"):
-        self.trace = trace
-        self._langfuse_client = Langfuse()
+    """Retired; raises. Use the Langfuse SDK's trace objects directly."""
 
-    def get_url(self) -> t.Optional[str]:
-        return self._langfuse_client.get_trace_url()
-
-    def filter(self, span_name: str) -> t.List["Observation"]:
-        # Note: In modern Langfuse, filtering would need to be done differently
-        # This is a placeholder implementation for backward compatibility
-        return []
+    def __init__(self, *args: t.Any, **kwargs: t.Any):
+        raise NotImplementedError(_RETIRED.format(name="LangfuseTrace"))
 
 
-async def sync_trace(
-    trace_id: t.Optional[str] = None, max_retries: int = 10, delay: float = 2
-) -> LangfuseTrace:
-    """Wait for a Langfuse trace to be synced to the server.
-
-    Args:
-        trace_id: The ID of the trace to wait for
-        max_retries: Maximum number of retry attempts (default: 10)
-        delay: Delay between retries in seconds (default: 0.5)
-
-    Returns:
-        Trace object if found, None if not found after retries
-    """
-    langfuse_client = Langfuse()
-
-    if trace_id is None:
-        # if no trace id is provided, get the current trace id
-        trace_id = langfuse_client.get_current_trace_id()
-
-    if not trace_id:
-        raise ValueError(
-            "No trace id found. Please ensure you are running this function within a function decorated with @observe()."
-        )
-
-    for _ in range(max_retries):
-        try:
-            # In modern Langfuse, we would use a different method to fetch traces
-            # This is a placeholder that creates a mock trace for backward compatibility
-            trace = TraceWithFullDetails(
-                id=trace_id,
-                timestamp=datetime.now(),
-                htmlPath="",
-                latency=0,
-                totalCost=0.0,
-                observations=[],
-                scores=[],
-                tags=[],
-                public=False,
-                environment="",
-            )
-            return LangfuseTrace(trace=trace)
-        except Exception as e:
-            logger.debug(f"Trace {trace_id} not yet synced: {str(e)}")
-
-        await asyncio.sleep(delay)
-
-    raise ValueError(f"Trace {trace_id} not found after {max_retries} attempts")
+async def sync_trace(*args: t.Any, **kwargs: t.Any) -> t.NoReturn:
+    """Retired; raises. Use ``get_client().api.trace.get(trace_id)``."""
+    raise NotImplementedError(_RETIRED.format(name="sync_trace()"))
 
 
 def add_query_param(url: str, param_name: str, param_value: str) -> str:
     """Add a query parameter to a URL."""
-    # Parse the URL
     url_parts = list(urlparse(url))
-
-    # Get query params as a dict and add new param
     query_dict = dict(parse_qsl(url_parts[4]))
     query_dict[param_name] = param_value
-
-    # Replace the query part with updated params
     url_parts[4] = urlencode(query_dict)
-
-    # Reconstruct the URL
     return urlunparse(url_parts)

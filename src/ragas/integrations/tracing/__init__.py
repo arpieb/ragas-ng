@@ -1,30 +1,17 @@
 """
 Tracing integrations for Ragas evaluation framework.
 
-This module provides integrations with popular tracing and observability platforms
-to track and monitor Ragas evaluation runs.
+ragas emits OpenTelemetry spans (OpenInference conventions), so any
+OTel-compatible backend -- Langfuse, Phoenix/Arize, Opik, MLflow, Jaeger,
+Datadog -- receives ragas runs with no ragas-specific integration code.
 
-Supported Platforms:
-- Langfuse: Open-source LLM engineering platform
-- MLflow: Machine learning lifecycle management platform
+Modules here:
+- ``mlflow``: ``sync_trace()`` / ``MLflowTrace`` read back the last MLflow
+  trace (requires the ``tracing`` extra).
+- ``langfuse``: **deprecated** (#97). Use the Langfuse SDK directly; see the
+  Langfuse integration guide.
 
-Example:
-    Basic usage with Langfuse:
-    ```python
-    from ragas.integrations.tracing.langfuse import observe, sync_trace
-    from ragas import evaluate
-
-    @observe()
-    def run_evaluation():
-        result = evaluate(dataset, metrics)
-        return result
-
-    # Get trace after evaluation
-    trace = await sync_trace()
-    print(trace.get_url())
-    ```
-
-    Basic usage with MLflow:
+Example (MLflow):
     ```python
     from ragas.integrations.tracing.mlflow import sync_trace
     from ragas import evaluate
