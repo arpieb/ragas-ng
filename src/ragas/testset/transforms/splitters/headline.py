@@ -88,9 +88,16 @@ class HeadlineSplitter(Splitter):
             # already a chunk and nothing to split: no change to the graph
             return [], []
 
-        # create the nodes
+        # create the nodes; each chunk carries its document's metadata so a
+        # generated sample can name its source (#91)
+        metadata = node.get_property("document_metadata")
         nodes = [
-            Node(type=NodeType.CHUNK, properties={"page_content": chunk})
+            Node(
+                type=NodeType.CHUNK,
+                properties={"page_content": chunk}
+                if metadata is None
+                else {"page_content": chunk, "document_metadata": dict(metadata)},
+            )
             for chunk in chunks
         ]
 

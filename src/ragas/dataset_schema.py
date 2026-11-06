@@ -82,6 +82,11 @@ class SingleTurnSample(BaseSample):
         Style of the generated query (e.g., formal, casual).
     query_length : Optional[str]
         Length category of the query (e.g., short, medium, long).
+    reference_contexts_metadata : Optional[List[Dict[str, Any]]]
+        Metadata of the source document for each entry in
+        ``reference_contexts``, in the same order, e.g. ``{"source": "a.pdf"}``.
+        Set by testset generation. Values are stored JSON-safe: dates become
+        ISO strings, and other non-JSON values become strings.
     """
 
     user_input: t.Optional[str] = None
@@ -96,6 +101,35 @@ class SingleTurnSample(BaseSample):
     persona_name: t.Optional[str] = None
     query_style: t.Optional[str] = None
     query_length: t.Optional[str] = None
+    reference_contexts_metadata: t.Optional[t.List[t.Dict[str, t.Any]]] = None
+
+    @field_validator("reference_contexts_metadata", mode="before")
+    @classmethod
+    def _json_safe_metadata(cls, value: t.Any) -> t.Any:
+        if value is None:
+            return None
+        return [_json_safe(item) for item in value]
+
+
+def _json_safe(value: t.Any) -> t.Any:
+    """Convert ``value`` to something ``json.dumps`` accepts.
+
+    Document loaders put dates, paths and other objects in metadata. Kept
+    as-is, they break JSONL export and the knowledge graph's JSON file.
+    """
+    import datetime as _dt
+
+    if value is None or isinstance(value, (str, bool, int, float)):
+        return value
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, (_dt.date, _dt.datetime, _dt.time)):
+        return value.isoformat()
+    if isinstance(value, np.generic):
+        return _json_safe(value.item())
+    return str(value)
 
 
 class MultiTurnSample(BaseSample):
