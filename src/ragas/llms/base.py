@@ -387,7 +387,10 @@ def _get_instructor_client(
     Pydantic types including Dict.
     See: https://github.com/vibrantlabsai/ragas/issues/2490
 
-    Other provider factories (Anthropic, Google, Mistral, Perplexity) keep
+    Anthropic defaults to ``Mode.ANTHROPIC_JSON``: instructor's own default,
+    ``ANTHROPIC_TOOLS``, forces a tool call, which ``claude-sonnet-5-5``
+    rejects ("tool_choice: type "tool" and "any" are not supported for this
+    model", #184). Other provider factories (Google, Mistral, Perplexity) keep
     their own default unless ``mode`` is given.
 
     For Google/Gemini, supports both SDKs:
@@ -400,7 +403,9 @@ def _get_instructor_client(
     if provider_lower == "openai":
         return instructor.from_openai(client, mode=json_by_default)
     elif provider_lower == "anthropic":
-        return instructor.from_anthropic(client, **_mode_kwargs(mode))
+        return instructor.from_anthropic(
+            client, mode=instructor.Mode.ANTHROPIC_JSON if mode is None else mode
+        )
     elif provider_lower in ("google", "gemini"):
         if _is_new_google_genai_client(client):
             return instructor.from_genai(client, **_mode_kwargs(mode))
@@ -550,6 +555,11 @@ def llm_factory(
         # "provider/model" form. "openai" needs no prefix.
         if provider.lower() not in ("openai", "litellm") and "/" not in model:
             model = f"{provider.lower()}/{model}"
+
+        # Claude: JSON rather than instructor's default TOOLS mode, which
+        # forces a tool call that claude-sonnet-5-5 rejects (#184).
+        if mode is None and _is_anthropic_model("", model):
+            mode = _instructor.Mode.JSON
 
         # Async primary, because every collections metric is async: a sync
         # client here made the default path fail with "Cannot use agenerate()
