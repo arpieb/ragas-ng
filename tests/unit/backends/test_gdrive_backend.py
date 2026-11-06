@@ -195,9 +195,11 @@ class TestGDriveBackendOperations:
 
         assert len(result) == 2
         assert result[0]["name"] == "Item 1"
-        assert result[0]["value"] == 10  # Should be converted to int
+        # cells stay text, as in the CSV backend; a data_model types them
+        # (numbers used to be guessed, turning "007" into 7)
+        assert result[0]["value"] == "10"
         assert result[1]["name"] == "Item 2"
-        assert result[1]["value"] == 20
+        assert result[1]["value"] == "20"
 
     def test_load_empty_dataset(self):
         """Test loading an empty dataset."""

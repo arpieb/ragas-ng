@@ -240,3 +240,33 @@ This applies to `LocalCSVBackend` (`"local/csv"`) and
 - `Dataset.save()` writes model rows with `model_dump(mode="json")`, so
   values such as UUIDs, enums and paths are saved as strings, and the model
   parses them back. Before, they could fail to save to JSONL.
+
+## Backends load what was stored ([#101](https://github.com/arpieb/ragas-ng/issues/101), [#102](https://github.com/arpieb/ragas-ng/issues/102))
+
+Backends no longer guess types on load. Types come from the `data_model` you
+load with.
+
+- **⚠ silent: JSONL keeps strings as strings.** `LocalJSONLBackend`
+  (`"local/jsonl"`) turned any string that looked like an ISO date, such as
+  `"2024-01-02"`, into a `date` or `datetime` on load. That changed your
+  text, and a model's `str` field then rejected it. Now:
+    - Loading with a `data_model`: `date` / `datetime` fields parse their ISO
+      strings and `str` fields keep their text, so typed datasets round-trip
+      exactly.
+    - Loading without one: dates you saved come back as ISO strings, such as
+      `"2024-01-15T10:30:00"`. Use `datetime.fromisoformat(...)`, or load with
+      a model.
+- **A malformed JSONL line raises `ValueError`** naming the line and file.
+  It used to be skipped with a `print()`, so rows disappeared silently. Blank
+  lines are still skipped.
+- **⚠ silent: Google Drive cells stay text.** `GDriveBackend` turned
+  numeric-looking cells into numbers on load, so `"007"` became `7`. Cells
+  are now strings unless a `data_model` types them, as with CSV. Also:
+    - `None` is saved as an empty cell instead of the text `"None"`.
+    - Lists and dicts are saved as JSON text.
+    - Loads read every column. Only columns A to Z were read before, so wider
+      datasets silently lost columns.
+- **Dataset files are UTF-8.** `to_csv()`, `to_jsonl()`, `from_jsonl()`,
+  `MetricAnnotation.from_json()` and `SingleMetricAnnotation.from_json()` read
+  and write UTF-8 and close their files. They used the platform encoding,
+  which breaks non-ASCII text on Windows. `from_jsonl()` ignores blank lines.

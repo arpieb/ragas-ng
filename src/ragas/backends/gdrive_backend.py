@@ -1,6 +1,5 @@
 """Google Drive backend for storing datasets and experiments in Google Sheets."""
 
-import json
 import logging
 import os
 import typing as t
@@ -31,6 +30,11 @@ except ImportError:
 
 
 from .base import BaseBackend
+from .flat import encode_flat_value
+
+# Every column a sheet can have (ZZZ is the last). "A:Z" dropped every column
+# after the 26th on load, and left them behind on clear.
+_ALL_COLUMNS = "A:ZZZ"
 
 logger = logging.getLogger(__name__)
 
@@ -261,7 +265,7 @@ class GDriveBackend(BaseBackend):
             result = (
                 self.sheets_service.spreadsheets()
                 .values()
-                .get(spreadsheetId=spreadsheet_id, range="A:Z")
+                .get(spreadsheetId=spreadsheet_id, range=_ALL_COLUMNS)
                 .execute()
             )
 
@@ -283,20 +287,10 @@ class GDriveBackend(BaseBackend):
                 if all(cell.strip() == "" for cell in padded_row):
                     continue
 
+                # Cells stay text, as in the CSV backend: a data_model types
+                # them on load (ragas.backends.flat). Guessing numbers turned
+                # text such as "007" into 7, which a str field rejects.
                 row_dict: t.Dict[str, t.Any] = dict(zip(headers, padded_row))
-
-                # Try to convert numeric strings back to numbers
-                for key, value in row_dict.items():
-                    if isinstance(value, str) and value.strip():
-                        # Try int first, then float
-                        try:
-                            if "." not in value:
-                                row_dict[key] = int(value)
-                            else:
-                                row_dict[key] = float(value)
-                        except ValueError:
-                            # Keep as string if conversion fails
-                            pass
 
                 data.append(row_dict)
 
@@ -324,7 +318,7 @@ class GDriveBackend(BaseBackend):
         if not data:
             # Clear the spreadsheet for empty data
             self.sheets_service.spreadsheets().values().clear(
-                spreadsheetId=spreadsheet_id, range="A:Z"
+                spreadsheetId=spreadsheet_id, range=_ALL_COLUMNS
             ).execute()
             logger.debug(f"Cleared spreadsheet for empty {data_type} '{name}'")
             return
@@ -335,24 +329,21 @@ class GDriveBackend(BaseBackend):
             all_keys.update(item.keys())
         headers = sorted(list(all_keys))
 
-        # Prepare data for the sheet
+        # Prepare data for the sheet, with the CSV backend's cell encoding:
+        # None is an empty cell (it was the text "None"), lists and dicts JSON
         sheet_data = [headers]  # First row is headers
 
         for item in data:
             row = []
             for header in headers:
-                value = item.get(header, "")
-                # Convert to string for Google Sheets
-                if isinstance(value, (list, dict)):
-                    row.append(json.dumps(value))
-                else:
-                    row.append(str(value))
+                value = encode_flat_value(item.get(header))
+                row.append(value if isinstance(value, str) else str(value))
             sheet_data.append(row)
 
         try:
             # Clear existing data
             self.sheets_service.spreadsheets().values().clear(
-                spreadsheetId=spreadsheet_id, range="A:Z"
+                spreadsheetId=spreadsheet_id, range=_ALL_COLUMNS
             ).execute()
 
             # Write new data

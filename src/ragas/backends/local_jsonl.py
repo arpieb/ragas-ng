@@ -14,8 +14,8 @@ class LocalJSONLBackend(BaseBackend):
     """File-based backend using JSONL format for local storage.
 
     Stores datasets and experiments as JSONL files (one JSON object per line).
-    Preserves data types and supports complex nested structures including
-    datetime objects, lists, and nested dictionaries.
+    Preserves JSON types (str, int, float, bool, None, lists, dicts), so
+    nested structures round-trip without a model.
 
     Directory Structure:
         root_dir/
@@ -30,16 +30,17 @@ class LocalJSONLBackend(BaseBackend):
         root_dir: Directory path for storing JSONL files
 
     Features:
-        - Preserves Python data types (int, float, bool, None)
-        - Automatic datetime/date serialization to ISO format
-        - Supports nested dictionaries and lists
-        - Handles malformed JSON lines gracefully (skips with warning)
+        - Preserves JSON data types (int, float, bool, None, lists, dicts)
+        - Saves datetime/date values as ISO strings. They load back as
+          strings; a ``data_model`` with date/datetime fields parses them.
+          Strings are never guessed into dates on load.
+        - Raises ValueError, naming the line, on a malformed JSON line
         - UTF-8 encoding for international text
         - Compact JSON formatting (no extra whitespace)
 
     Best For:
         - Complex data structures with nesting
-        - Mixed data types and datetime objects
+        - Mixed data types
         - When data type preservation is important
         - Large datasets (streaming line-by-line processing)
     """
@@ -71,28 +72,6 @@ class LocalJSONLBackend(BaseBackend):
         else:
             return obj
 
-    def _deserialize_datetime(self, obj: t.Any) -> t.Any:
-        """Attempt to deserialize ISO format strings back to datetime objects."""
-        if isinstance(obj, str):
-            # Try to parse as datetime
-            try:
-                if "T" in obj and (":" in obj or "." in obj):
-                    # Looks like datetime ISO format
-                    return datetime.fromisoformat(obj.replace("Z", "+00:00"))
-                elif "-" in obj and len(obj) == 10:
-                    # Looks like date ISO format (YYYY-MM-DD)
-                    return datetime.fromisoformat(obj + "T00:00:00").date()
-            except (ValueError, TypeError):
-                # Not a valid datetime string, return as-is
-                pass
-            return obj
-        elif isinstance(obj, dict):
-            return {k: self._deserialize_datetime(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
-            return [self._deserialize_datetime(item) for item in obj]
-        else:
-            return obj
-
     def _load(self, data_type: str, name: str) -> t.List[t.Dict[str, t.Any]]:
         """Load data from JSONL file, raising FileNotFoundError if file doesn't exist."""
         file_path = self._get_file_path(data_type, name)
@@ -109,16 +88,18 @@ class LocalJSONLBackend(BaseBackend):
                 if not line:  # Skip empty lines
                     continue
 
+                # Values load as stored. Strings are not guessed into dates
+                # (#101): that changed user text such as "2024-01-02" and broke
+                # str fields. A data_model's date/datetime fields parse the
+                # ISO strings themselves.
                 try:
-                    # Parse JSON line
-                    json_obj = json.loads(line)
-                    # Deserialize datetime objects
-                    json_obj = self._deserialize_datetime(json_obj)
-                    data.append(json_obj)
+                    data.append(json.loads(line))
                 except json.JSONDecodeError as e:
-                    # Handle malformed JSON gracefully
-                    print(f"Warning: Skipping malformed JSON on line {line_num}: {e}")
-                    continue
+                    # A bad line used to be skipped with a print(), silently
+                    # dropping rows.
+                    raise ValueError(
+                        f"Malformed JSON on line {line_num} of {file_path}: {e}"
+                    ) from e
 
         return data
 

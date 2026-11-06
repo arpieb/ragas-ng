@@ -319,22 +319,22 @@ class RagasDataset(ABC, t.Generic[Sample]):
         # JSON text rather than Python repr (#100).
         fieldnames, rows = encode_flat_rows(data)
 
-        with open(path, "w", newline="") as csvfile:
+        with open(path, "w", newline="", encoding="utf-8") as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(rows)
 
     def to_jsonl(self, path: t.Union[str, Path]):
         """Converts the dataset to a JSONL file."""
-        with open(path, "w") as jsonlfile:
+        with open(path, "w", encoding="utf-8") as jsonlfile:
             for sample in self.to_list():
                 jsonlfile.write(json.dumps(sample, ensure_ascii=False) + "\n")
 
     @classmethod
     def from_jsonl(cls: t.Type[T], path: t.Union[str, Path]) -> T:
         """Creates an EvaluationDataset from a JSONL file."""
-        with open(path, "r") as jsonlfile:
-            data = [json.loads(line) for line in jsonlfile]
+        with open(path, "r", encoding="utf-8") as jsonlfile:
+            data = [json.loads(line) for line in jsonlfile if line.strip()]
         return cls.from_list(data)
 
     def __iter__(self) -> t.Iterator[Sample]:  # type: ignore
@@ -727,7 +727,8 @@ class MetricAnnotation(BaseModel):
     @classmethod
     def from_json(cls, path: str, metric_name: t.Optional[str]) -> "MetricAnnotation":
         """Load annotations from a JSON file"""
-        dataset = json.load(open(path))
+        with open(path, encoding="utf-8") as f:  # closed, utf-8 (#102)
+            dataset = json.load(f)
         return cls._process_dataset(dataset, metric_name)
 
     def __len__(self):
@@ -759,7 +760,8 @@ class SingleMetricAnnotation(BaseModel):
 
     @classmethod
     def from_json(cls, path) -> "SingleMetricAnnotation":
-        dataset = json.load(open(path))
+        with open(path, encoding="utf-8") as f:  # closed, utf-8 (#102)
+            dataset = json.load(f)
 
         return cls(
             name=dataset["name"],
