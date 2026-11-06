@@ -64,7 +64,9 @@ The same dataset through an instance, here JSONL:
 from ragas.backends import LocalJSONLBackend
 
 backend = LocalJSONLBackend(root_dir="./data")
-Dataset(name="qa", backend=backend, data=[{"question": "q", "score": 0.5, "tags": ["a"]}]).save()
+Dataset(
+    name="qa", backend=backend, data=[{"question": "q", "score": 0.5, "tags": ["a"]}]
+).save()
 
 print(Dataset.load(name="qa", backend=backend)[0])
 print(backend.list_datasets())
@@ -217,10 +219,14 @@ class DictBackend(BaseBackend):
         self.store[f"experiments/{name}"] = list(data)
 
     def list_datasets(self):
-        return sorted(k.split("/", 1)[1] for k in self.store if k.startswith("datasets/"))
+        return sorted(
+            k.split("/", 1)[1] for k in self.store if k.startswith("datasets/")
+        )
 
     def list_experiments(self):
-        return sorted(k.split("/", 1)[1] for k in self.store if k.startswith("experiments/"))
+        return sorted(
+            k.split("/", 1)[1] for k in self.store if k.startswith("experiments/")
+        )
 
 
 register_backend("dict", DictBackend, aliases=["my-dict"])
