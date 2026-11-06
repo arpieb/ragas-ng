@@ -254,9 +254,12 @@ a value you set yourself is always sent:
   token cap is sent unless you set `max_tokens`, which is sent as
   `max_completion_tokens`. The cap counts the model's hidden reasoning tokens
   too, so set it generously.
-- **Anthropic** (Claude on any provider): the default `top_p` is never sent,
-  since current Claude models reject `temperature` and `top_p` together. If you
-  set `top_p` yourself, the default `temperature` is dropped instead.
+- **Anthropic** (Claude on any provider): neither default is sent, because
+  current Claude models reject `temperature` (other than 1) and `top_p`, and
+  anthropic SDK 2.6 removed both from `messages.create()`. Per-call sampling
+  (`strictness`, `n > 1`) doesn't send a temperature either; those calls use
+  Claude's default sampling. A `temperature` or `top_p` you set yourself is sent
+  (#177).
 
 Reasoning models are detected from the model name. For an Azure deployment (or
 proxy alias) whose name doesn't say what it serves, tell ragas:

@@ -154,7 +154,10 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
 
         OpenAI reasoning models reject any temperature but 1 and ``top_p``, so
         both are left out for them, including the per-call temperature that
-        ``strictness`` sampling sets (#67). LiteLLM maps ``max_tokens`` itself.
+        ``strictness`` sampling sets (#67). For other models a per-call
+        temperature ragas chose is sent with ``drop_params``, so LiteLLM drops
+        it where the model rejects it (#177). LiteLLM maps ``max_tokens``
+        itself.
         """
         args = self._with_sampling(self.model_args, temperature)
         reasoning = (
@@ -162,6 +165,11 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
         )
         if reasoning:
             args = {k: v for k, v in args.items() if k not in ("temperature", "top_p")}
+        elif temperature is not None and "temperature" not in self.model_args:
+            # ragas chose this temperature, not the caller. Let LiteLLM drop
+            # it for models that reject it (current Claude accepts only 1,
+            # #177) rather than failing the call.
+            args["drop_params"] = True
         return args
 
     def _call_sync(

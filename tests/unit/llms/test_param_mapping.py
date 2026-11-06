@@ -128,12 +128,15 @@ def test_non_reasoning_openai_model_is_unchanged():
     assert args == {"temperature": 0.01, "top_p": 0.1, "max_tokens": 1024}
 
 
-# --- Anthropic (#69) -------------------------------------------------------------
+# --- Anthropic (#69, #177) ------------------------------------------------------
+# Current Claude models reject temperature (other than 1) and top_p, and
+# anthropic SDK 2.6 removed both from messages.create(): ragas' defaults made
+# every call fail with TypeError (#177).
 
 
-def test_anthropic_never_gets_the_default_top_p():
-    args = make("claude-sonnet-4-5", "anthropic")._map_provider_params()
-    assert args == {"temperature": 0.01, "max_tokens": 1024}
+def test_anthropic_gets_no_default_sampling_params():
+    args = make("claude-sonnet-5-5", "anthropic")._map_provider_params()
+    assert args == {"max_tokens": 1024}
 
 
 def test_claude_behind_another_provider_never_gets_the_default_top_p():
@@ -153,10 +156,33 @@ def test_anthropic_explicit_top_p_and_temperature_are_both_sent():
     assert args == {"top_p": 0.9, "temperature": 0.2, "max_tokens": 1024}
 
 
-def test_anthropic_sampled_call_sends_temperature_only():
-    llm = make("claude-sonnet-4-5", "anthropic")
-    args = llm._map_provider_params(llm._with_sampling(llm.model_args, 0.3))
-    assert args == {"temperature": 0.3, "max_tokens": 1024}
+def test_anthropic_explicit_temperature_is_sent():
+    args = make(
+        "claude-sonnet-5-5", "anthropic", temperature=1.0
+    )._map_provider_params()
+    assert args == {"temperature": 1.0, "max_tokens": 1024}
+
+
+def test_anthropic_sampled_call_sends_no_temperature_and_says_so_once(caplog):
+    llm = make("claude-sonnet-5-5", "anthropic")
+    with caplog.at_level("WARNING", logger="ragas.llms.base"):
+        for _ in range(3):
+            args = llm._map_provider_params(
+                llm._with_sampling(llm.model_args, 0.3), sampled=True
+            )
+    assert args == {"max_tokens": 1024}
+    warnings = [r for r in caplog.records if "sampling temperature" in r.getMessage()]
+    assert len(warnings) == 1
+
+
+def test_anthropic_sampled_call_overrides_an_explicit_temperature():
+    # the sampled temperature replaces the caller's; it is ragas' choice, so
+    # it is not sent either
+    llm = make("claude-sonnet-5-5", "anthropic", temperature=1.0)
+    args = llm._map_provider_params(
+        llm._with_sampling(llm.model_args, 0.3), sampled=True
+    )
+    assert "temperature" not in args
 
 
 def test_anthropic_args_reach_the_request():
@@ -172,9 +198,12 @@ def test_anthropic_args_reach_the_request():
 
     client = type("C", (), {})()
     client.chat = type("Chat", (), {"completions": Completions()})()
-    llm = InstructorLLM(client=client, model="claude-sonnet-4-5", provider="anthropic")
+    llm = InstructorLLM(client=client, model="claude-sonnet-5-5", provider="anthropic")
     llm.generate("p", Answer)
-    assert "top_p" not in seen and seen["temperature"] == 0.01
+    assert "top_p" not in seen and "temperature" not in seen
+    seen.clear()
+    llm.generate("p", Answer, temperature=0.3)  # strictness sampling
+    assert "top_p" not in seen and "temperature" not in seen
 
 
 # --- the LiteLLM path ----------------------------------------------------------
@@ -198,13 +227,32 @@ def test_litellm_reasoning_keeps_other_args():
 
 def test_litellm_reasoning_override():
     assert litellm("my-proxy-alias", reasoning=True)._request_args(0.3) == {}
-    assert litellm("gpt-5", reasoning=False)._request_args(0.3) == {"temperature": 0.3}
-
-
-def test_litellm_non_reasoning_model_keeps_sampling_temperature():
-    assert litellm("anthropic/claude-sonnet-4-5")._request_args(0.3) == {
-        "temperature": 0.3
+    assert litellm("gpt-5", reasoning=False)._request_args(0.3) == {
+        "temperature": 0.3,
+        "drop_params": True,
     }
+
+
+def test_litellm_sampling_temperature_is_droppable_by_litellm():
+    # ragas chose 0.3 (strictness); LiteLLM drops it for models that reject
+    # it, e.g. current Claude, which accepts only temperature=1 (#177)
+    assert litellm("anthropic/claude-sonnet-5-5")._request_args(0.3) == {
+        "temperature": 0.3,
+        "drop_params": True,
+    }
+
+
+def test_litellm_callers_temperature_is_never_dropped():
+    assert litellm("anthropic/claude-sonnet-5-5", temperature=0.2)._request_args(
+        None
+    ) == {"temperature": 0.2}
+    assert "drop_params" not in litellm(
+        "anthropic/claude-sonnet-5-5", temperature=0.2
+    )._request_args(0.3)
+
+
+def test_litellm_unsampled_call_sends_nothing_extra():
+    assert litellm("anthropic/claude-sonnet-5-5")._request_args(None) == {}
 
 
 def test_llm_factory_passes_reasoning_through(monkeypatch):

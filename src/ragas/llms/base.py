@@ -641,9 +641,10 @@ def _is_anthropic_model(provider: str, model: str) -> bool:
 class InstructorModelArgs(BaseModel):
     """Simple model arguments configuration for instructor LLMs
 
-    These are defaults: where a provider rejects one (``top_p`` on Anthropic,
-    ``max_tokens``/``temperature``/``top_p`` on OpenAI reasoning models) it is
-    dropped or mapped, while a value the caller sets explicitly is sent.
+    These are defaults: where a provider rejects one (``temperature`` and
+    ``top_p`` on Anthropic, ``max_tokens``/``temperature``/``top_p`` on OpenAI
+    reasoning models) it is dropped or mapped, while a value the caller sets
+    explicitly is sent.
     """
 
     temperature: float = 0.01
@@ -789,12 +790,13 @@ class InstructorLLM(InstructorBaseRagasLLM):
             )(self.agenerate)  # type: ignore
 
     def _map_provider_params(
-        self, args: t.Optional[t.Dict[str, t.Any]] = None
+        self, args: t.Optional[t.Dict[str, t.Any]] = None, sampled: bool = False
     ) -> t.Dict[str, t.Any]:
         """Route to provider-specific parameter mapping.
 
         ``args`` defaults to ``self.model_args``; pass a per-call variant (e.g.
-        from ``_with_sampling``) to map that instead.
+        from ``_with_sampling``) to map that instead, with ``sampled=True`` when
+        it carries a per-call temperature ragas chose.
 
         - Google: Wraps parameters in generation_config and renames max_tokens
         - OpenAI reasoning models (any provider, e.g. OpenAI, Azure, Bedrock):
@@ -808,22 +810,33 @@ class InstructorLLM(InstructorBaseRagasLLM):
         if self.provider.lower() == "google":
             return self._map_google_params(args)
         if _is_anthropic_model(self.provider, self.model):
-            return self._map_anthropic_params(args)
+            return self._map_anthropic_params(args, sampled=sampled)
         return self._map_openai_params(args)
 
     def _map_anthropic_params(
-        self, args: t.Optional[t.Dict[str, t.Any]] = None
+        self, args: t.Optional[t.Dict[str, t.Any]] = None, sampled: bool = False
     ) -> t.Dict[str, t.Any]:
-        """Current Claude models reject ``temperature`` and ``top_p`` together (#69).
+        """Claude gets no sampling parameters unless the caller set them (#177).
 
-        The default ``top_p`` is never sent. A caller who sets ``top_p``
-        themselves gets it, and the *default* temperature is dropped instead.
+        Current Claude models reject ``temperature`` (other than 1) and
+        ``top_p``, and anthropic SDK 2.6 removed both from
+        ``messages.create()``, so sending ragas' defaults failed every call.
+        The defaults are never sent, and neither is a per-call temperature
+        ragas chose for sampling (``strictness``, ``n > 1``): those calls use
+        the provider's default sampling. A value the caller set is sent as
+        given, so a provider that rejects it says so.
         """
         mapped = dict(self.model_args if args is None else args)
-        if "top_p" not in self._explicit_args:
-            mapped.pop("top_p", None)
-        elif "temperature" not in self._explicit_args:
-            mapped.pop("temperature", None)
+        for param in ("temperature", "top_p"):
+            if sampled or param not in self._explicit_args:
+                mapped.pop(param, None)
+        if sampled and not getattr(self, "_warned_claude_sampling", False):
+            self._warned_claude_sampling = True
+            logger.warning(
+                "%s doesn't accept a sampling temperature; sampled calls "
+                "(strictness, n > 1) use the provider's default sampling.",
+                self.model,
+            )
         return mapped
 
     def _map_openai_params(
@@ -991,7 +1004,8 @@ class InstructorLLM(InstructorBaseRagasLLM):
     ) -> InstructorTypeVar:
         """One blocking structured-output call on a sync instructor client."""
         provider_kwargs = self._map_provider_params(
-            self._with_sampling(self.model_args, temperature)
+            self._with_sampling(self.model_args, temperature),
+            sampled=temperature is not None,
         )
         target = self._target(client)
         collector = self._active_usage_collector()
@@ -1053,7 +1067,8 @@ class InstructorLLM(InstructorBaseRagasLLM):
         temperature: t.Optional[float],
     ) -> InstructorTypeVar:
         provider_kwargs = self._map_provider_params(
-            self._with_sampling(self.model_args, temperature)
+            self._with_sampling(self.model_args, temperature),
+            sampled=temperature is not None,
         )
         target = self._target(self.client)
         collector = self._active_usage_collector()
