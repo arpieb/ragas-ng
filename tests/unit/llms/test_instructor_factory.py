@@ -156,8 +156,13 @@ async def test_async_llm_agenerate(mock_async_client, monkeypatch):
     assert result.response == "Instructor response"
 
 
-def test_sync_client_agenerate_error(mock_sync_client, monkeypatch):
-    """Test that using agenerate with sync client raises TypeError."""
+@pytest.mark.asyncio
+async def test_sync_client_agenerate_runs_on_a_thread(mock_sync_client, monkeypatch):
+    """agenerate() with a sync client runs it on a worker thread (#68).
+
+    It used to raise "Cannot use agenerate() with a synchronous client", so no
+    collections metric (all async) worked with OpenAI(), Anthropic(), etc.
+    """
 
     def mock_from_openai(client, mode=None):
         return MockInstructor(client)
@@ -166,12 +171,8 @@ def test_sync_client_agenerate_error(mock_sync_client, monkeypatch):
 
     llm = llm_factory("gpt-4", provider="openai", client=mock_sync_client)
 
-    with pytest.raises(
-        TypeError, match="Cannot use agenerate\\(\\) with a synchronous client"
-    ):
-        import asyncio
-
-        asyncio.run(llm.agenerate("Test prompt", LLMResponseModel))
+    result = await llm.agenerate("Test prompt", LLMResponseModel)
+    assert result.response == "Instructor response"
 
 
 def test_provider_support(monkeypatch):

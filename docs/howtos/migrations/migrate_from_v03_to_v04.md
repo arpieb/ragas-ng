@@ -192,7 +192,7 @@ llm = llm_factory("gpt-4o-mini", client=client)
 | **Provider detection** | Manual via provider string | Automatic from model name |
 | **Return type** | `BaseRagasLLM` (various) | `InstructorBaseRagasLLM` |
 | **Constraint handling** | Manual configuration | Automatic for GPT-5/o-series |
-| **Async client required** | Yes | Yes |
+| **Async client required** | Yes | No: a sync client runs on a worker thread (an async client gives more concurrency) |
 
 ### Migration Steps
 

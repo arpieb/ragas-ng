@@ -1,7 +1,11 @@
 import typing as t
 
 from ragas.llms.adapters.base import StructuredOutputAdapter
-from ragas.llms.base import InstructorLLM, InstructorModelArgs, _get_instructor_client
+from ragas.llms.base import (
+    InstructorLLM,
+    InstructorModelArgs,
+    _get_instructor_clients,
+)
 
 
 class InstructorAdapter(StructuredOutputAdapter):
@@ -37,7 +41,9 @@ class InstructorAdapter(StructuredOutputAdapter):
         mode = kwargs.pop("mode", None)
 
         try:
-            patched_client = _get_instructor_client(client, provider, mode=mode)
+            patched_client, sync_client = _get_instructor_clients(
+                client, provider, mode=mode
+            )
         except Exception as e:
             raise ValueError(f"Failed to patch {provider} client with Instructor: {e}")
 
@@ -47,5 +53,6 @@ class InstructorAdapter(StructuredOutputAdapter):
             provider=provider,
             model_args=InstructorModelArgs(),
             cache=cache,
+            sync_client=sync_client,
             **kwargs,
         )
