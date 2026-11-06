@@ -19,11 +19,11 @@ Ragas supports Google Gemini models with automatic adapter selection. The framew
 Install required dependencies:
 
 ```bash
-# Recommended: New Google GenAI SDK
+# Google GenAI SDK
 pip install ragas google-genai
 
-# Legacy (deprecated, support ends Aug 2025)
-pip install ragas google-generativeai
+# Or no Google SDK at all: ragas routes through LiteLLM (see Option 2)
+pip install ragas
 ```
 
 ## Configuration
@@ -44,24 +44,22 @@ client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
 llm = llm_factory("gemini-2.0-flash", provider="google", client=client)
 ```
 
-### Option 2: Using Legacy SDK (Deprecated)
+### Option 2: No Client (LiteLLM)
 
-The old `google-generativeai` SDK still works but is deprecated (support ends Aug 2025):
+Without a client, `llm_factory` routes through LiteLLM and reads `GEMINI_API_KEY`
+from the environment:
 
 ```python
-import os
-import google.generativeai as genai
 from ragas.llms import llm_factory
 
-# Configure with your API key
-genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
-
-# Create client
-client = genai.GenerativeModel("gemini-2.0-flash")
-
-# Create LLM
-llm = llm_factory("gemini-2.0-flash", provider="google", client=client)
+llm = llm_factory("gemini/gemini-2.0-flash")
 ```
+
+!!! note "Legacy `google-generativeai` SDK"
+    A `google.generativeai.GenerativeModel` client is not supported: it never
+    worked with the collections metrics, and `llm_factory` now rejects it with
+    a pointer to the options above. The SDK itself reached end of support in
+    August 2025.
 
 ### Option 3: Using LiteLLM Proxy (Advanced)
 
@@ -400,7 +398,7 @@ llm = llm_factory("gemini-2.0-flash", provider="google", client=client)
 ### From Legacy google-generativeai SDK
 
 ```python
-# Before: Legacy SDK (deprecated)
+# Before: Legacy SDK (no longer supported)
 import google.generativeai as genai
 
 genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))

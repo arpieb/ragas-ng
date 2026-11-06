@@ -28,12 +28,9 @@ llm = llm_factory("gpt-4o-mini", client=client)
 
 ```python
 from ragas.llms import llm_factory
-import google.generativeai as genai
 
-# For Gemini - automatically uses LiteLLM adapter
-genai.configure(api_key="...")
-client = genai.GenerativeModel("gemini-2.0-flash")
-llm = llm_factory("gemini-2.0-flash", provider="google", client=client)
+# No client - routed through LiteLLM, reads GEMINI_API_KEY
+llm = llm_factory("gemini/gemini-2.0-flash")
 ```
 
 ### Explicit Adapter Selection
@@ -54,9 +51,15 @@ llm = llm_factory("gemini-2.0-flash", client=client, adapter="litellm")
 
 When `adapter="auto"` (default), Ragas uses this logic:
 
-1. **Check client type**: If client is from `litellm` module → use LiteLLM adapter
-2. **Check provider**: If provider is `google` or `gemini` → use LiteLLM adapter
-3. **Default**: Use Instructor adapter for all other cases
+1. **No client**: always the LiteLLM adapter, which reads credentials from the environment
+2. **Check client type**: If client is from `litellm` module → use LiteLLM adapter
+3. **Check provider**: If provider is `google` or `gemini` and the client is not a
+   `google-genai` `Client` → use LiteLLM adapter
+4. **Default**: Use Instructor adapter for all other cases
+
+The LiteLLM adapter accepts an OpenAI-compatible client (such as one pointed at a
+LiteLLM proxy), a `litellm.Router`, or an instructor-patched client. Other clients
+are rejected with a pointer to the no-client form.
 
 ```python
 from ragas.llms.adapters import auto_detect_adapter
@@ -93,16 +96,18 @@ llm = llm_factory("claude-3-sonnet", provider="anthropic", client=client)
 # Uses Instructor adapter automatically
 ```
 
-### Google Gemini (with google-generativeai - Recommended)
+### Google Gemini
 
 ```python
-import google.generativeai as genai
+from google import genai
 from ragas.llms import llm_factory
 
-genai.configure(api_key="your-key")
-client = genai.GenerativeModel("gemini-2.0-flash")
+client = genai.Client(api_key="your-key")
 llm = llm_factory("gemini-2.0-flash", provider="google", client=client)
-# Uses LiteLLM adapter automatically for google provider
+# Uses the Instructor adapter (instructor.from_genai)
+
+# Or with no client, through LiteLLM (reads GEMINI_API_KEY)
+llm = llm_factory("gemini/gemini-2.0-flash")
 ```
 
 ### Google Gemini (with LiteLLM Proxy - Advanced)
@@ -273,6 +278,10 @@ llm = llm_factory(
     "custom-model", provider="openai", client=client, mode=instructor.Mode.MD_JSON
 )
 ```
+
+`mode` reaches every provider (OpenAI, Anthropic, Google, Mistral, Perplexity,
+LiteLLM). Without it, OpenAI-style clients use `Mode.JSON` and other providers keep
+instructor's default for that provider.
 
 Available instructor modes:
 - `Mode.JSON` (default) - Uses OpenAI's response_format parameter
