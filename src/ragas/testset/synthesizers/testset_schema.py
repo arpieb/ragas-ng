@@ -16,6 +16,9 @@ from ragas.dataset_schema import (
     SingleTurnSample,
 )
 
+if t.TYPE_CHECKING:
+    from ragas.testset.persona import Persona
+
 
 class TestsetSample(BaseSample):
     """
@@ -52,11 +55,19 @@ class Testset(RagasDataset[TestsetSample]):
     ----------
     samples : List[TestsetSample]
         A list of TestsetSample objects representing the samples in the test set.
+    personas : Optional[List[Persona]]
+        The personas the samples were generated from, set by
+        ``TestsetGenerator.generate()``. Pass them as
+        ``TestsetGenerator(persona_list=...)`` to reuse them in another run.
+        Kept in memory only; not written by ``to_list()`` or the file exports.
     """
 
     samples: t.List[TestsetSample]
     run_id: str = field(default_factory=lambda: str(uuid4()), repr=False, compare=False)
     cost_cb: t.Optional[CostCallbackHandler] = field(default=None, repr=False)
+    personas: t.Optional[t.List["Persona"]] = field(
+        default=None, repr=False, compare=False
+    )
 
     def to_evaluation_dataset(self) -> EvaluationDataset:
         """

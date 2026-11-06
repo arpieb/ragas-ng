@@ -539,17 +539,17 @@ class TestsetGenerator:
             patch_logger("ragas.testset.graph", logging.DEBUG)
             patch_logger("ragas.testset.transforms", logging.DEBUG)
 
-        # Personas for this run only: neither store generated personas on self
-        # nor shuffle the caller's list in place (the #76 pattern).
+        # Personas generated on the first call are kept on the generator, so
+        # later calls reuse them: consistent runs, no repeat LLM calls. Shuffle
+        # a copy, never the stored list (it may be the caller's own list).
         if self.persona_list is None:
-            personas = generate_personas_from_kg(
+            self.persona_list = generate_personas_from_kg(
                 llm=self.llm,
                 kg=self.knowledge_graph,
                 num_personas=num_personas,
                 callbacks=callbacks,
             )
-        else:
-            personas = random.sample(self.persona_list, len(self.persona_list))
+        personas = random.sample(self.persona_list, len(self.persona_list))
         personas = personas[:num_personas]
 
         # testset_size is a ceiling: the shares sum to exactly testset_size,
@@ -660,7 +660,7 @@ class TestsetGenerator:
         _warn_on_shortfall(
             testset_size, len(testsets), failed_synthesizers, failed_samples
         )
-        testset = Testset(samples=testsets, cost_cb=cost_cb)
+        testset = Testset(samples=testsets, cost_cb=cost_cb, personas=personas)
         testset_generation_rm.on_chain_end({"testset": testset})
 
         return testset

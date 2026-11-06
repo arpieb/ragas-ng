@@ -208,7 +208,7 @@ def test_user_persona_list_is_not_shuffled_in_place():
     assert personas == before
 
 
-def test_generated_personas_are_not_stored_on_the_generator(monkeypatch):
+def test_generated_personas_are_kept_and_reused(monkeypatch):
     import ragas.testset.synthesizers.generate as generate_module
 
     calls = []
@@ -220,10 +220,45 @@ def test_generated_personas_are_not_stored_on_the_generator(monkeypatch):
     monkeypatch.setattr(generate_module, "generate_personas_from_kg", fake_personas)
     gen = _generator()
 
-    _generate(gen, 2, [(_synth("s"), 1.0)], num_personas=2)
+    first = _generate(gen, 2, [(_synth("s"), 1.0)], num_personas=3)
+    second = _generate(gen, 2, [(_synth("s"), 1.0)], num_personas=3)
 
-    assert gen.persona_list is None
-    assert calls == [2]
+    # generated once, kept on the generator, reused by the second call
+    assert calls == [3]
+    assert gen.persona_list == PERSONAS
+    assert sorted(p.name for p in first.personas) == sorted(p.name for p in PERSONAS)
+    assert sorted(p.name for p in second.personas) == sorted(
+        p.name for p in first.personas
+    )
+
+
+def test_testset_reports_the_personas_synthesizers_saw():
+    seen: t.List[t.List[str]] = []
+
+    @dataclass
+    class Recording(FakeSynthesizer):
+        async def _generate_scenarios(self, n, knowledge_graph, persona_list, cb):
+            seen.append([p.name for p in persona_list])
+            return [_scenario(i) for i in range(n)]
+
+    gen = _generator(persona_list=list(PERSONAS))
+    testset = _generate(
+        gen,
+        1,
+        [(Recording(name="r", llm=t.cast(t.Any, object())), 1.0)],
+        num_personas=2,
+    )
+
+    assert [p.name for p in testset.personas] == seen[0]
+    # the personas make a new generator reproduce the same pool
+    assert (
+        TestsetGenerator(
+            llm=t.cast(t.Any, object()),
+            embedding_model=t.cast(t.Any, object()),
+            persona_list=testset.personas,
+        ).persona_list
+        == testset.personas
+    )
 
 
 def test_num_personas_limits_what_synthesizers_see():
