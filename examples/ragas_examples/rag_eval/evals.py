@@ -12,9 +12,18 @@ from ragas.metrics import DiscreteMetric
 sys.path.insert(0, str(Path(__file__).parent))
 from rag import default_rag_client
 
-openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-rag_client = default_rag_client(llm_client=openai_client, logdir="evals/logs")
-llm = llm_factory("gpt-4o", client=openai_client)
+# The RAG app under test. It calls an OpenAI-compatible chat API, so it works
+# with OpenAI or with any provider's OpenAI-compatible endpoint (Ollama,
+# Anthropic, Gemini, ...): change the client's base_url/api_key and the model.
+app_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+APP_MODEL = "gpt-4o"
+rag_client = default_rag_client(
+    llm_client=app_client, model=APP_MODEL, logdir="evals/logs"
+)
+
+# The judge LLM that scores the app's answers. Any llm_factory() provider works
+# here, independently of the app above.
+llm = llm_factory("gpt-4o", client=app_client)
 
 
 def load_dataset():
@@ -59,7 +68,7 @@ my_metric = DiscreteMetric(
 async def run_experiment(row):
     response = rag_client.query(row["question"])
 
-    score = my_metric.score(
+    score = await my_metric.ascore(
         llm=llm,
         response=response.get("answer", " "),
         grading_notes=row["grading_notes"],

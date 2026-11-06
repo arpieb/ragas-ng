@@ -39,7 +39,12 @@ pip install -e .
 
 ## Step 3: Set Your API Key
 
-By default, the quickstart example uses OpenAI. Set your API key and you're ready to go. You can also use some other provider with a minor change:
+By default, the quickstart example uses OpenAI. Set your API key and you're ready to go.
+
+`evals.py` sets up two separate things, and each tab below shows what to change in each:
+
+- **The app under test** (`app_client`, `APP_MODEL`): the example RAG app in `rag.py`. It calls an OpenAI-compatible chat API, so it runs on any provider that offers an OpenAI-compatible endpoint.
+- **The judge** (`llm`): the LLM that scores the app's answers. Any [`llm_factory()`](../howtos/llm-adapters.md) provider works here, independently of the app.
 
 === "OpenAI (Default)"
     ```sh
@@ -49,72 +54,105 @@ By default, the quickstart example uses OpenAI. Set your API key and you're read
     The quickstart project is already configured to use OpenAI. You're all set!
 
 === "Anthropic Claude"
-    Set your Anthropic API key:
-
     ```sh
     export ANTHROPIC_API_KEY="your-anthropic-key"
     ```
 
-    Then update the LLM initialization in `evals.py`:
+    Then update both parts in `evals.py`:
 
     ```python
     from anthropic import Anthropic
+    from openai import OpenAI
     from ragas.llms import llm_factory
 
-    client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-    llm = llm_factory("claude-3-5-sonnet-20241022", provider="anthropic", client=client)
+    # The app: Anthropic's OpenAI-compatible endpoint
+    app_client = OpenAI(
+        api_key=os.environ.get("ANTHROPIC_API_KEY"),
+        base_url="https://api.anthropic.com/v1/",
+    )
+    APP_MODEL = "claude-sonnet-5-5"
+    rag_client = default_rag_client(
+        llm_client=app_client, model=APP_MODEL, logdir="evals/logs"
+    )
+
+    # The judge: Anthropic's native client
+    llm = llm_factory(
+        "claude-sonnet-5-5",
+        provider="anthropic",
+        client=Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY")),
+    )
     ```
 
-=== "Google Gemini"
-    Set up your Google credentials:
+    See Anthropic's [OpenAI SDK compatibility](https://platform.claude.com/docs/en/api/openai-sdk) notes for what the endpoint supports.
 
+=== "Google Gemini"
     ```sh
     export GOOGLE_API_KEY="your-google-api-key"
     ```
 
-    Then update the LLM initialization in `evals.py`:
-
-    **Option 1: Using Google's Official Library (Recommended)**
+    Then update both parts in `evals.py`:
 
     ```python
-    import google.generativeai as genai
+    from google import genai
+    from openai import OpenAI
     from ragas.llms import llm_factory
 
-    genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
-    client = genai.GenerativeModel("gemini-2.0-flash")
-    llm = llm_factory("gemini-2.0-flash", provider="google", client=client)
-    # Adapter is auto-detected as "litellm" for google provider
+    # The app: Gemini's OpenAI-compatible endpoint
+    app_client = OpenAI(
+        api_key=os.environ.get("GOOGLE_API_KEY"),
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+    )
+    APP_MODEL = "gemini-3.8-flash"
+    rag_client = default_rag_client(
+        llm_client=app_client, model=APP_MODEL, logdir="evals/logs"
+    )
+
+    # The judge: the google-genai SDK
+    llm = llm_factory(
+        "gemini-3.8-flash",
+        provider="google",
+        client=genai.Client(api_key=os.environ.get("GOOGLE_API_KEY")),
+    )
     ```
 
-    For more Gemini options and detailed setup, see the [Google Gemini Integration Guide](../howtos/integrations/gemini.md).
+    Install the SDK with `pip install google-genai`. For more Gemini options, see the [Google Gemini Integration Guide](../howtos/integrations/gemini.md) and Google's [OpenAI compatibility](https://aistudio.google.com/docs/openai) notes.
 
 === "Local Models (Ollama)"
-    Install and run Ollama locally, then update the LLM initialization in `evals.py`:
+    Install and run Ollama locally. Ollama serves an OpenAI-compatible API, so one client serves both the app and the judge:
 
     ```python
     from openai import OpenAI
     from ragas.llms import llm_factory
 
-    # Create an OpenAI-compatible client for Ollama
-    client = OpenAI(
+    app_client = OpenAI(
         api_key="ollama",  # Ollama doesn't require a real key
         base_url="http://localhost:11434/v1",
     )
-    llm = llm_factory("mistral", provider="openai", client=client)
+    APP_MODEL = "mistral"
+    rag_client = default_rag_client(
+        llm_client=app_client, model=APP_MODEL, logdir="evals/logs"
+    )
+
+    llm = llm_factory("mistral", provider="openai", client=app_client)
     ```
 
 === "Custom / Other Providers"
-    For any LLM with OpenAI-compatible API:
+    For any LLM with an OpenAI-compatible API, point one client at it and set the model for both parts:
 
     ```python
     from openai import OpenAI
     from ragas.llms import llm_factory
 
-    client = OpenAI(api_key="your-api-key", base_url="https://your-api-endpoint")
-    llm = llm_factory("model-name", provider="openai", client=client)
+    app_client = OpenAI(api_key="your-api-key", base_url="https://your-api-endpoint")
+    APP_MODEL = "model-name"
+    rag_client = default_rag_client(
+        llm_client=app_client, model=APP_MODEL, logdir="evals/logs"
+    )
+
+    llm = llm_factory("model-name", provider="openai", client=app_client)
     ```
 
-    For more details, learn about [LLM integrations](../concepts/metrics/index.md).
+    To use a different provider for the judge only, see [LLM adapters](../howtos/llm-adapters.md).
 
 ## Project Structure
 

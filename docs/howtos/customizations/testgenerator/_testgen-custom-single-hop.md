@@ -131,6 +131,10 @@ Inherit from `SingleHopQuerySynthesizer` and modify the function that generates 
     - Samples the required number of queries from the combinations
 
 
+--8<--
+running_async.md
+--8<--
+
 ```python
 from ragas.testset.synthesizers.single_hop import (
     SingleHopQuerySynthesizer,

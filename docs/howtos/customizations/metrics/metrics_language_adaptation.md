@@ -19,6 +19,10 @@ metric = Faithfulness(llm=llm)
 
 Collections metrics have prompts as direct attributes. Use the `adapt()` method to translate the few-shot examples:
 
+--8<--
+running_async.md
+--8<--
+
 ```python
 # Check original language
 print(metric.statement_generator_prompt.language)
