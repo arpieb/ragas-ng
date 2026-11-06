@@ -1,3 +1,4 @@
+import asyncio
 import typing as t
 
 from ragas.cache import CacheInterface
@@ -46,9 +47,9 @@ class OpenAIEmbeddings(BaseRagasEmbedding):
     async def aembed_text(self, text: str, **kwargs: t.Any) -> t.List[float]:
         """Asynchronously embed a single text using OpenAI."""
         if not self.is_async:
-            raise TypeError(
-                "Cannot use aembed_text() with a synchronous client. Use embed_text() instead."
-            )
+            # A sync client runs on a worker thread, so the async collections
+            # metrics work with OpenAI() too (#68).
+            return await asyncio.to_thread(self.embed_text, text, **kwargs)
 
         response = await self.client.embeddings.create(
             input=text, model=self.model, **kwargs
@@ -83,9 +84,9 @@ class OpenAIEmbeddings(BaseRagasEmbedding):
             return []
 
         if not self.is_async:
-            raise TypeError(
-                "Cannot use aembed_texts() with a synchronous client. Use embed_texts() instead."
-            )
+            # A sync client runs on a worker thread, so the async collections
+            # metrics work with OpenAI() too (#68).
+            return await asyncio.to_thread(self.embed_texts, texts, **kwargs)
 
         response = await self.client.embeddings.create(
             input=texts, model=self.model, **kwargs

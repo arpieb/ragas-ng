@@ -321,6 +321,25 @@ def _is_new_google_genai_client(client: t.Any) -> bool:
     return False
 
 
+def _get_instructor_clients(
+    client: t.Any, provider: str, mode: t.Optional[instructor.Mode] = None
+) -> t.Tuple[t.Any, t.Optional[t.Any]]:
+    """Instructor client(s) for ``client``: ``(primary, sync_twin)``.
+
+    A google-genai ``Client`` serves both sync and async calls, but instructor
+    wraps it one way only. The primary is async, so collections metrics
+    (which are all async) work; the sync twin serves ``generate()`` (#68).
+    Other SDKs come as separate sync/async classes, so the caller's choice
+    stands and there is no twin.
+    """
+    if provider.lower() in ("google", "gemini") and _is_new_google_genai_client(client):
+        return (
+            instructor.from_genai(client, use_async=True),
+            instructor.from_genai(client),
+        )
+    return _get_instructor_client(client, provider, mode=mode), None
+
+
 def _get_instructor_client(
     client: t.Any, provider: str, mode: t.Optional[instructor.Mode] = None
 ) -> t.Any:
@@ -493,7 +512,11 @@ def llm_factory(
         if provider.lower() not in ("openai", "litellm") and "/" not in model:
             model = f"{provider.lower()}/{model}"
 
-        client = _instructor.from_litellm(_litellm.completion)
+        # Async primary, because every collections metric is async: a sync
+        # client here made the default path fail with "Cannot use agenerate()
+        # with a synchronous client" (#68). generate() uses the sync twin.
+        client = _instructor.from_litellm(_litellm.acompletion)
+        kwargs["sync_client"] = _instructor.from_litellm(_litellm.completion)
         provider = "litellm"
         adapter = "litellm"
 
@@ -612,9 +635,15 @@ class InstructorLLM(InstructorBaseRagasLLM):
         provider: str,
         model_args: t.Optional[InstructorModelArgs] = None,
         cache: t.Optional[CacheInterface] = None,
+        sync_client: t.Optional[t.Any] = None,
         **kwargs,
     ):
         self.client = client
+        # Sync counterpart of an async ``client`` over the same credentials,
+        # for providers whose SDK object serves both (LiteLLM, google-genai).
+        # generate() then calls it directly rather than hopping onto a
+        # thread with a fresh event loop.
+        self.sync_client = sync_client
         self.model = model
         self.provider = provider
 
@@ -903,6 +932,47 @@ class InstructorLLM(InstructorBaseRagasLLM):
                 loop.close()
                 asyncio.set_event_loop(None)
 
+    def _messages(self, prompt: str) -> t.List[t.Dict[str, str]]:
+        messages = []
+        if self.system_prompt:
+            messages.append({"role": "system", "content": self.system_prompt})
+        messages.append({"role": "user", "content": prompt})
+        return messages
+
+    def _target(self, client: t.Any) -> t.Any:
+        return client if self.provider.lower() == "google" else client.chat.completions
+
+    def _call_sync(
+        self,
+        client: t.Any,
+        prompt: str,
+        response_model: t.Type[InstructorTypeVar],
+        temperature: t.Optional[float],
+    ) -> InstructorTypeVar:
+        """One blocking structured-output call on a sync instructor client."""
+        provider_kwargs = self._map_provider_params(
+            self._with_sampling(self.model_args, temperature)
+        )
+        target = self._target(client)
+        if self.usage_collector is not None:
+            # create_with_completion also returns the provider's raw response,
+            # which is the only place token counts are available. Gated so the
+            # default path is byte-identical to before.
+            result, raw = target.create_with_completion(
+                model=self.model,
+                messages=self._messages(prompt),
+                response_model=response_model,
+                **provider_kwargs,
+            )
+            self.usage_collector.record(raw)
+            return result
+        return target.create(
+            model=self.model,
+            messages=self._messages(prompt),
+            response_model=response_model,
+            **provider_kwargs,
+        )
+
     def generate(
         self,
         prompt: str,
@@ -915,47 +985,41 @@ class InstructorLLM(InstructorBaseRagasLLM):
         For async clients, this will run the async method in the appropriate event loop.
         See ``InstructorBaseRagasLLM.generate`` for ``temperature``/``sample_index``.
         """
-        messages = []
-        if self.system_prompt:
-            messages.append({"role": "system", "content": self.system_prompt})
-        messages.append({"role": "user", "content": prompt})
-
-        # If client is async, use the appropriate method to run it
+        if self.sync_client is not None:
+            return self._call_sync(
+                self.sync_client, prompt, response_model, temperature
+            )
         if self.is_async:
-            result = self._run_async_in_current_loop(
-                self.agenerate(prompt, response_model, temperature, sample_index)
+            return self._run_async_in_current_loop(
+                self._call_async(prompt, response_model, temperature)
             )
-        else:
-            # Map parameters based on provider requirements
-            provider_kwargs = self._map_provider_params(
-                self._with_sampling(self.model_args, temperature)
-            )
+        return self._call_sync(self.client, prompt, response_model, temperature)
 
-            target = (
-                self.client
-                if self.provider.lower() == "google"
-                else self.client.chat.completions
+    async def _call_async(
+        self,
+        prompt: str,
+        response_model: t.Type[InstructorTypeVar],
+        temperature: t.Optional[float],
+    ) -> InstructorTypeVar:
+        provider_kwargs = self._map_provider_params(
+            self._with_sampling(self.model_args, temperature)
+        )
+        target = self._target(self.client)
+        if self.usage_collector is not None:
+            result, raw = await target.create_with_completion(
+                model=self.model,
+                messages=self._messages(prompt),
+                response_model=response_model,
+                **provider_kwargs,
             )
-            if self.usage_collector is not None:
-                # create_with_completion also returns the provider's raw response,
-                # which is the only place token counts are available. Gated so the
-                # default path is byte-identical to before.
-                result, raw = target.create_with_completion(
-                    model=self.model,
-                    messages=messages,
-                    response_model=response_model,
-                    **provider_kwargs,
-                )
-                self.usage_collector.record(raw)
-            else:
-                result = target.create(
-                    model=self.model,
-                    messages=messages,
-                    response_model=response_model,
-                    **provider_kwargs,
-                )
-
-        return result
+            self.usage_collector.record(raw)
+            return result
+        return await target.create(
+            model=self.model,
+            messages=self._messages(prompt),
+            response_model=response_model,
+            **provider_kwargs,
+        )
 
     async def agenerate(
         self,
@@ -966,46 +1030,16 @@ class InstructorLLM(InstructorBaseRagasLLM):
     ) -> InstructorTypeVar:
         """Asynchronously generate a response using the configured LLM.
 
+        A synchronous client is run on a worker thread, so every collections
+        metric (all of which are async) works with ``OpenAI()``,
+        ``Anthropic()`` and other sync clients (#68).
         See ``InstructorBaseRagasLLM.generate`` for ``temperature``/``sample_index``.
         """
-        messages = []
-        if self.system_prompt:
-            messages.append({"role": "system", "content": self.system_prompt})
-        messages.append({"role": "user", "content": prompt})
-
-        # If client is not async, raise a helpful error
         if not self.is_async:
-            raise TypeError(
-                "Cannot use agenerate() with a synchronous client. Use generate() instead."
+            return await asyncio.to_thread(
+                self._call_sync, self.client, prompt, response_model, temperature
             )
-
-        # Map parameters based on provider requirements
-        provider_kwargs = self._map_provider_params(
-            self._with_sampling(self.model_args, temperature)
-        )
-
-        target = (
-            self.client
-            if self.provider.lower() == "google"
-            else self.client.chat.completions
-        )
-        if self.usage_collector is not None:
-            result, raw = await target.create_with_completion(
-                model=self.model,
-                messages=messages,
-                response_model=response_model,
-                **provider_kwargs,
-            )
-            self.usage_collector.record(raw)
-        else:
-            result = await target.create(
-                model=self.model,
-                messages=messages,
-                response_model=response_model,
-                **provider_kwargs,
-            )
-
-        return result
+        return await self._call_async(prompt, response_model, temperature)
 
     def _get_client_info(self) -> str:
         """Get client type and async status information."""

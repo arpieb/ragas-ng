@@ -27,6 +27,7 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
         provider: str,
         cache: t.Optional[CacheInterface] = None,
         system_prompt: t.Optional[str] = None,
+        sync_client: t.Optional[t.Any] = None,
         **kwargs,
     ):
         """
@@ -38,9 +39,13 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
             provider: Provider name
             cache: Optional cache backend for caching LLM responses
             system_prompt: Optional system prompt to prepend to all messages
+            sync_client: Optional sync counterpart of an async ``client``;
+                ``generate()`` calls it directly instead of running the async
+                client on a worker thread with its own event loop.
             **kwargs: Additional model arguments (temperature, max_tokens, etc.)
         """
         self.client = client
+        self.sync_client = sync_client
         self.model = model
         self.provider = provider
         self.system_prompt = system_prompt
@@ -175,6 +180,27 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
                 loop.close()
                 asyncio.set_event_loop(None)
 
+    def _messages(self, prompt: str) -> t.List[t.Dict[str, str]]:
+        messages = []
+        if self.system_prompt:
+            messages.append({"role": "system", "content": self.system_prompt})
+        messages.append({"role": "user", "content": prompt})
+        return messages
+
+    def _call_sync(
+        self,
+        client: t.Any,
+        prompt: str,
+        response_model: t.Type[InstructorTypeVar],
+        temperature: t.Optional[float],
+    ) -> InstructorTypeVar:
+        return client.chat.completions.create(
+            model=self.model,
+            messages=self._messages(prompt),
+            response_model=response_model,
+            **self._with_sampling(self.model_args, temperature),
+        )
+
     def generate(
         self,
         prompt: str,
@@ -184,7 +210,8 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
     ) -> InstructorTypeVar:
         """Generate a response using the configured LLM.
 
-        For async clients, this will run the async method in the appropriate event loop.
+        Uses the sync twin when there is one; otherwise an async client is run
+        in the appropriate event loop.
 
         Args:
             prompt: Input prompt
@@ -195,26 +222,28 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
         Returns:
             Instance of response_model with generated data
         """
-        messages = []
-        if self.system_prompt:
-            messages.append({"role": "system", "content": self.system_prompt})
-        messages.append({"role": "user", "content": prompt})
-
-        # If client is async, use the appropriate method to run it
+        if self.sync_client is not None:
+            return self._call_sync(
+                self.sync_client, prompt, response_model, temperature
+            )
         if self.is_async:
-            result = self._run_async_in_current_loop(
-                self.agenerate(prompt, response_model, temperature, sample_index)
+            return self._run_async_in_current_loop(
+                self._call_async(prompt, response_model, temperature)
             )
-        else:
-            # Call LiteLLM with structured output
-            result = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                response_model=response_model,
-                **self._with_sampling(self.model_args, temperature),
-            )
+        return self._call_sync(self.client, prompt, response_model, temperature)
 
-        return result
+    async def _call_async(
+        self,
+        prompt: str,
+        response_model: t.Type[InstructorTypeVar],
+        temperature: t.Optional[float],
+    ) -> InstructorTypeVar:
+        return await self.client.chat.completions.create(
+            model=self.model,
+            messages=self._messages(prompt),
+            response_model=response_model,
+            **self._with_sampling(self.model_args, temperature),
+        )
 
     async def agenerate(
         self,
@@ -225,6 +254,8 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
     ) -> InstructorTypeVar:
         """Asynchronously generate a response using the configured LLM.
 
+        A synchronous client is run on a worker thread (#68).
+
         Args:
             prompt: Input prompt
             response_model: Pydantic model for structured output
@@ -234,26 +265,11 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
         Returns:
             Instance of response_model with generated data
         """
-        messages = []
-        if self.system_prompt:
-            messages.append({"role": "system", "content": self.system_prompt})
-        messages.append({"role": "user", "content": prompt})
-
-        # If client is not async, raise a helpful error
         if not self.is_async:
-            raise TypeError(
-                "Cannot use agenerate() with a synchronous client. Use generate() instead."
+            return await asyncio.to_thread(
+                self._call_sync, self.client, prompt, response_model, temperature
             )
-
-        # Call LiteLLM async with structured output
-        result = await self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            response_model=response_model,
-            **self._with_sampling(self.model_args, temperature),
-        )
-
-        return result
+        return await self._call_async(prompt, response_model, temperature)
 
     def __repr__(self) -> str:
         return (
