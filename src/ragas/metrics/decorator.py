@@ -116,6 +116,10 @@ def create_metric_decorator():
                 allowed_values = ["pass", "fail"]
             validator_class = get_validator_for_allowed_values(allowed_values)
 
+            # The validation model depends only on func, so it is built once
+            # and shared; per-call inputs are never stored on the metric.
+            validation_state: t.Dict[str, t.Any] = {}
+
             # TODO: Move to dataclass type implementation
             @dataclass(repr=False)
             class CustomMetric(SimpleBaseMetric, validator_class):
@@ -209,26 +213,44 @@ def create_metric_decorator():
 
                     return msg
 
-                def _validate_inputs(self, args: tuple, kwargs: dict):
-                    """Validate all inputs using Pydantic with helpful error messages."""
+                def _validation_model(self) -> t.Optional[t.Any]:
+                    """The cached validation model, or None if it can't be built."""
+                    if "model" not in validation_state:
+                        try:
+                            validation_state["model"] = self._create_pydantic_model()
+                        except Exception as e:
+                            validation_state["model"] = None
+                            self._warn_unvalidated(e)
+                    return validation_state["model"]
+
+                def _warn_unvalidated(self, error: Exception) -> None:
+                    if validation_state.get("warned"):
+                        return
+                    validation_state["warned"] = True
+                    warnings.warn(
+                        f"{self.name}: could not validate inputs ({error}); "
+                        "calling the function with the arguments as given.",
+                        UserWarning,
+                        stacklevel=4,
+                    )
+
+                def _validate_inputs(self, args: tuple, kwargs: dict) -> dict:
+                    """Validate inputs and return the kwargs to call ``func`` with.
+
+                    Returns the validated values themselves, not
+                    ``model_dump()``: that turned pydantic-model arguments into
+                    dicts. Nothing is stored on the metric, so concurrent calls
+                    can't see each other's inputs, and if validation can't run,
+                    the caller's arguments are still passed through (#95).
+                    """
                     # Check for positional arguments (keep custom helpful error)
                     if args:
                         raise TypeError(self._create_positional_error(args, kwargs))
 
-                    # Create dynamic Pydantic model from function signature
-                    try:
-                        pydantic_model = self._create_pydantic_model()
-                    except Exception as e:
-                        # Fallback if model creation fails
-                        warnings.warn(
-                            f"Could not create validation model: {e}", UserWarning
-                        )
-                        return
-
-                    # Warn about unknown arguments (but continue processing)
-                    valid_params = set(pydantic_model.model_fields.keys())
+                    valid_params = set(sig.parameters)
                     unknown = set(kwargs.keys()) - valid_params
 
+                    # Warn about unknown arguments (but continue processing)
                     if unknown:
                         warnings.warn(
                             f"⚠️  {self.name} received unknown arguments: {', '.join(sorted(unknown))}\n"
@@ -241,13 +263,26 @@ def create_metric_decorator():
                         k: v for k, v in kwargs.items() if k in valid_params
                     }
 
+                    pydantic_model = self._validation_model()
+                    if pydantic_model is None:
+                        return valid_kwargs
+
                     try:
                         # Pydantic handles missing required fields and type validation
-                        validated_data = pydantic_model(**valid_kwargs)
-                        # Store the validated data for use in execution
-                        self._validated_data = validated_data.model_dump()
+                        validated = pydantic_model(**valid_kwargs)
                     except ValidationError as e:
                         raise TypeError(self._format_pydantic_errors(e))
+                    except Exception as e:
+                        # the model was built but can't be used, e.g. a hint
+                        # pydantic can't resolve (PydanticUserError)
+                        validation_state["model"] = None
+                        self._warn_unvalidated(e)
+                        return valid_kwargs
+
+                    return {
+                        name: getattr(validated, name)
+                        for name in pydantic_model.model_fields
+                    }
 
                 def score(self, *args, **kwargs):
                     """Synchronous scoring method that wraps ascore()."""
@@ -259,12 +294,9 @@ def create_metric_decorator():
                 async def ascore(self, *args, **kwargs):
                     """Asynchronous scoring method."""
                     # Validate inputs before execution
-                    self._validate_inputs(args, kwargs)
+                    func_kwargs = self._validate_inputs(args, kwargs)
 
                     try:
-                        # Use validated data from Pydantic if available
-                        func_kwargs = getattr(self, "_validated_data", {})
-
                         # Execute the function based on its type
                         if is_async:
                             # For async functions, await the result

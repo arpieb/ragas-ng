@@ -164,3 +164,27 @@ customised prompts.
     For example, testset persona generation asks for 1.0, so generated
     personas vary more between runs.
   - See [Metric score changes](score_changes.md#legacy-prompts-with-llm_factory-llms-n-and-temperature-apply-94).
+
+## `@metric` function arguments ([#95](https://github.com/arpieb/ragas-ng/issues/95))
+
+This applies to metrics created with `@discrete_metric`, `@numeric_metric`,
+`@ranking_metric` or `create_metric_decorator()`.
+
+- **⚠ silent: arguments arrive as the objects you passed.** The decorator
+  validates inputs with pydantic and then called your function with
+  `model_dump()`, which turned pydantic-model arguments, such as a
+  `SingleTurnSample` or your own `BaseModel`, into plain dicts. Your function
+  now receives the objects themselves. Coercion still applies, so `"2.5"`
+  becomes `2.5` for a `float` parameter. If your function worked around this
+  by indexing a dict (`sample["user_input"]`), switch to attribute access
+  (`sample.user_input`).
+- **⚠ silent: concurrent calls no longer share inputs.** The validated inputs
+  were stored on the metric object between validation and the call. Two calls
+  on one metric from different event loops, such as `aevaluate()` on your loop
+  alongside `score()`, could run with each other's inputs and return the wrong
+  score. Each call now keeps its own inputs.
+- If the inputs can't be validated, for example because of a type hint
+  pydantic can't resolve, the function is called with your arguments and a
+  warning is issued once. Before, it either crashed `score()` or called the
+  function with no arguments, and the error was returned as
+  `MetricResult(value=None)`.
