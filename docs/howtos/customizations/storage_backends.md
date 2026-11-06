@@ -108,15 +108,28 @@ results = await run.arun(loaded, name="baseline")  # data/experiments/baseline.c
 running_async.md
 --8<--
 
-To save results somewhere else, pass a backend **instance**, either to `arun(..., backend=...)` or to `@experiment(Result, backend=...)`:
+To save results somewhere else, pass `backend` to `arun(...)` or to `@experiment(...)`. Give a backend by name with its constructor arguments in `backend_kwargs`, or pass an instance:
 
 ```python
 results = await run.arun(
-    loaded, name="baseline", backend=LocalJSONLBackend(root_dir="./data")
+    loaded,
+    name="baseline",
+    backend="local/jsonl",
+    backend_kwargs={"root_dir": "./data"},
 )  # data/experiments/baseline.jsonl
+
+# the same, with an instance
+results = await run.arun(
+    loaded, name="baseline", backend=LocalJSONLBackend(root_dir="./data")
+)
+
+
+# or as the default for every run of this experiment
+@experiment(Result, backend="local/jsonl", backend_kwargs={"root_dir": "./results"})
+async def run_to_jsonl(row): ...
 ```
 
-A backend *name* there gets no constructor arguments, so `backend="local/jsonl"` raises `TypeError: ... missing 1 required positional argument: 'root_dir'`. Only `"inmemory"` works by name.
+`backend_kwargs` is separate because `arun`'s other keyword arguments go to your experiment function. A `backend_kwargs` passed to `arun` replaces the decorator's.
 
 ## What each backend keeps
 
