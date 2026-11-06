@@ -191,6 +191,7 @@ not_in_nav: |
   # Snippet partials -- included into other pages via `--8<--`, never standalone.
   extra/components/choose_evaluator_llm.md
   extra/components/choose_generator_llm.md
+  extra/components/running_async.md
   howtos/customizations/metrics/_cost.md
 
   # Documents a shipped integration -- ragas.integrations.helicone (which

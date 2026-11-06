@@ -86,17 +86,22 @@ class ExampleRAG:
         retriever: Optional[BaseRetriever] = None,
         system_prompt: Optional[str] = None,
         logdir: str = "logs",
+        model: str = "gpt-4o",
     ):
         """
         Initialize RAG system
 
         Args:
-            llm_client: LLM client with a generate() method
+            llm_client: An OpenAI-compatible client (``chat.completions.create``):
+                OpenAI, or any provider's OpenAI-compatible endpoint, e.g.
+                Ollama, Anthropic or Gemini via ``OpenAI(base_url=...)``
             retriever: Document retriever (defaults to SimpleKeywordRetriever)
             system_prompt: System prompt template for generation
             logdir: Directory for trace log files
+            model: Model name sent to ``llm_client`` (was hard-coded to gpt-4o)
         """
         self.llm_client = llm_client
+        self.model = model
         self.retriever = retriever or SimpleKeywordRetriever()
         self.system_prompt = (
             system_prompt
@@ -289,7 +294,7 @@ class ExampleRAG:
                 component="openai_api",
                 data={
                     "operation": "generate_response",
-                    "model": "gpt-4o",
+                    "model": self.model,
                     "query": query,
                     "prompt_length": len(prompt),
                     "context_length": len(context),
@@ -300,7 +305,7 @@ class ExampleRAG:
 
         try:
             response = self.llm_client.chat.completions.create(
-                model="gpt-4o",
+                model=self.model,
                 messages=[
                     {"role": "system", "content": self.system_prompt},
                     {"role": "user", "content": prompt},
@@ -319,7 +324,7 @@ class ExampleRAG:
                         "usage": (
                             response.usage.model_dump() if response.usage else None
                         ),
-                        "model": "gpt-4o",
+                        "model": self.model,
                     },
                 )
             )
@@ -439,18 +444,23 @@ class ExampleRAG:
         return log_filepath
 
 
-def default_rag_client(llm_client, logdir: str = "logs") -> ExampleRAG:
+def default_rag_client(
+    llm_client, logdir: str = "logs", model: str = "gpt-4o"
+) -> ExampleRAG:
     """
-    Create a default RAG client with OpenAI LLM and optional retriever.
+    Create a default RAG client over the bundled documents.
 
     Args:
-        retriever: Optional retriever instance (defaults to SimpleKeywordRetriever)
+        llm_client: An OpenAI-compatible client (see ExampleRAG)
         logdir: Directory for trace logs
+        model: Model name the client should use
     Returns:
         ExampleRAG instance
     """
     retriever = SimpleKeywordRetriever()
-    client = ExampleRAG(llm_client=llm_client, retriever=retriever, logdir=logdir)
+    client = ExampleRAG(
+        llm_client=llm_client, retriever=retriever, logdir=logdir, model=model
+    )
     client.add_documents(DOCUMENTS)  # Add default documents
     return client
 

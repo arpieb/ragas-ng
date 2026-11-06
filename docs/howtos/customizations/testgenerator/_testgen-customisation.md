@@ -141,6 +141,10 @@ Inherit from `MultiHopQuerySynthesizer` and modify the function that generates s
 
 
 
+--8<--
+running_async.md
+--8<--
+
 ```python
 from dataclasses import dataclass
 import typing as t

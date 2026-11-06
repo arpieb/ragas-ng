@@ -62,6 +62,10 @@ FactualCorrectness uses two prompts internally:
 
 You can customize either or both:
 
+--8<--
+running_async.md
+--8<--
+
 ```python
 from ragas.metrics.collections import FactualCorrectness
 from ragas.metrics.collections.factual_correctness.util import (
