@@ -28,6 +28,21 @@ T = t.TypeVar("T", bound=BaseModel)
 DataTableType = t.TypeVar("DataTableType", bound="DataTable")
 
 
+def _validate_rows(
+    rows: t.Sequence[t.Dict[str, t.Any]], data_model: t.Type[T]
+) -> t.List[T]:
+    """Validate loaded rows as ``data_model``.
+
+    Flat backends (CSV, Google Sheets) return every value as text; their
+    cells are decoded using the model's field types first, so lists, dicts,
+    nested models and empty cells load back (#100). Rows from typed backends
+    pass through unchanged.
+    """
+    from ragas.backends.flat import decode_flat_row
+
+    return [data_model(**decode_flat_row(row, data_model)) for row in rows]
+
+
 class DataTable(t.Generic[T]):
     """A list-like interface for managing datatable entries with backend save and load.
 
@@ -192,7 +207,7 @@ class DataTable(t.Generic[T]):
 
         if data_model:
             # Validated mode - convert dicts to Pydantic models
-            validated_data = [data_model(**d) for d in dict_data]
+            validated_data = _validate_rows(dict_data, data_model)
             return cls(name, resolved_backend, data_model, validated_data)
         else:
             # Unvalidated mode - keep as dicts but wrapped in Dataset API
@@ -257,7 +272,9 @@ class DataTable(t.Generic[T]):
 
         for item in self._data:
             if isinstance(item, BaseModel):
-                dict_data.append(item.model_dump())
+                # JSON-safe values (ISO dates, str UUIDs/paths/enums): every
+                # backend can store them, and the model parses them back
+                dict_data.append(item.model_dump(mode="json"))
             elif isinstance(item, dict):
                 dict_data.append(item)
             else:
@@ -282,7 +299,7 @@ class DataTable(t.Generic[T]):
 
         if self.data_model:
             # Validated mode - convert dicts to Pydantic models
-            self._data = [self.data_model(**d) for d in dict_data]
+            self._data = list(_validate_rows(dict_data, self.data_model))  # type: ignore[assignment]
         else:
             # Unvalidated mode - keep as dicts but wrapped in Dataset API
             self._data = dict_data  # type: ignore
@@ -303,7 +320,7 @@ class DataTable(t.Generic[T]):
                 raise TypeError("Can only validate datasets containing dictionaries")
 
         # Validate each row
-        validated_data = [data_model(**d) for d in dict_data]
+        validated_data = _validate_rows(dict_data, data_model)
 
         # Return new validated dataset with same type as self
         return type(self)(

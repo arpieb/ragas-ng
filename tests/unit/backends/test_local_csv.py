@@ -187,7 +187,10 @@ class TestBasicFunctionality:
 class TestDataTypeEdgeCases:
     """Test complex data types that reveal CSV serialization issues."""
 
-    @pytest.mark.skip(reason="CSV backend doesn't support nested dictionaries")
+    @pytest.mark.skip(
+        reason="Untyped CSV loads return strings; load with a data_model to "
+        "restore types (see test_flat_roundtrip.py)"
+    )
     def test_nested_dictionaries(self, backend):
         """Test nested dictionary serialization - THIS SHOULD FAIL."""
         data = [
@@ -212,7 +215,10 @@ class TestDataTypeEdgeCases:
         print(f"Loaded: {loaded_data[0]['metadata']}")
         print(f"Type: {type(loaded_data[0]['metadata'])}")
 
-    @pytest.mark.skip(reason="CSV backend doesn't support lists of objects")
+    @pytest.mark.skip(
+        reason="Untyped CSV loads return strings; load with a data_model to "
+        "restore types (see test_flat_roundtrip.py)"
+    )
     def test_lists_of_objects(self, backend):
         """Test lists of objects serialization - THIS SHOULD FAIL."""
         data = [
@@ -236,7 +242,10 @@ class TestDataTypeEdgeCases:
         print(f"Loaded: {loaded_data[0]['results']}")
         print(f"Type: {type(loaded_data[0]['results'])}")
 
-    @pytest.mark.skip(reason="CSV backend doesn't preserve data types")
+    @pytest.mark.skip(
+        reason="Untyped CSV loads return strings; load with a data_model to "
+        "restore types (see test_flat_roundtrip.py)"
+    )
     def test_mixed_types(self, backend):
         """Test mixed data types - THIS WILL PARTIALLY FAIL."""
         data = [
@@ -262,7 +271,10 @@ class TestDataTypeEdgeCases:
             loaded_data[0]["bool_field"] is True
         )  # This will fail - it's "True" not True
 
-    @pytest.mark.skip(reason="CSV backend doesn't support datetime objects")
+    @pytest.mark.skip(
+        reason="Untyped CSV loads return strings; load with a data_model to "
+        "restore types (see test_flat_roundtrip.py)"
+    )
     def test_datetime_objects(self, backend):
         """Test datetime serialization - THIS SHOULD FAIL."""
         data = [
@@ -283,7 +295,10 @@ class TestDataTypeEdgeCases:
         assert isinstance(original_dt, datetime)
         assert isinstance(loaded_dt, datetime)  # This will fail - it's a string now!
 
-    @pytest.mark.skip(reason="CSV backend doesn't support complex nested structures")
+    @pytest.mark.skip(
+        reason="Untyped CSV loads return strings; load with a data_model to "
+        "restore types (see test_flat_roundtrip.py)"
+    )
     def test_complex_nested_structure(self, backend):
         """Test deeply nested structures - THIS SHOULD FAIL BADLY."""
         data = [
@@ -333,7 +348,6 @@ class TestBaseModelIntegration:
                 f"Loaded data types: {[(k, type(v)) for k, v in loaded_data[0].items()]}"
             )
 
-    @pytest.mark.skip(reason="CSV backend doesn't support complex BaseModel validation")
     def test_complex_basemodel_roundtrip(self, backend, complex_data):
         """Test BaseModel with complex data - THIS SHOULD FAIL."""
         # Save raw data

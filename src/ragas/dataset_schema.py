@@ -308,17 +308,21 @@ class RagasDataset(ABC, t.Generic[Sample]):
         """Converts the dataset to a CSV file."""
         import csv
 
+        from ragas.backends.flat import encode_flat_rows
+
         data = self.to_list()
         if not data:
             return
 
-        fieldnames = data[0].keys()
+        # Every sample's fields make the header (samples may differ, e.g.
+        # only some carry reference_contexts_metadata), and lists/dicts are
+        # JSON text rather than Python repr (#100).
+        fieldnames, rows = encode_flat_rows(data)
 
         with open(path, "w", newline="") as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
-            for row in data:
-                writer.writerow(row)
+            writer.writerows(rows)
 
     def to_jsonl(self, path: t.Union[str, Path]):
         """Converts the dataset to a JSONL file."""
