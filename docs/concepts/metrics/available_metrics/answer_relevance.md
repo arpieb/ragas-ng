@@ -1,5 +1,8 @@
 ## Answer Relevancy
 
+!!! note "Formerly Response Relevancy"
+    This metric was also called **Response Relevancy**. The legacy class `ResponseRelevancy` is the same metric, and its score column is `answer_relevancy` too. Use `AnswerRelevancy` in new code.
+
 The **Answer Relevancy** metric measures how relevant a response is to the user input. It ranges from 0 to 1, with higher scores indicating better alignment with the user input.
 
 An answer is considered relevant if it directly and appropriately addresses the original question. This metric focuses on how well the answer matches the intent of the question, without evaluating factual accuracy. It penalizes answers that are incomplete or include unnecessary details.
@@ -98,7 +101,7 @@ The following examples use the legacy metrics API pattern. For new projects, we 
 
 ```python
 from ragas import SingleTurnSample
-from ragas.metrics import ResponseRelevancy
+from ragas.metrics import AnswerRelevancy
 
 sample = SingleTurnSample(
     user_input="When was the first super bowl?",
@@ -108,7 +111,7 @@ sample = SingleTurnSample(
     ],
 )
 
-scorer = ResponseRelevancy(llm=evaluator_llm, embeddings=evaluator_embeddings)
+scorer = AnswerRelevancy(llm=evaluator_llm, embeddings=evaluator_embeddings)
 await scorer.single_turn_ascore(sample)
 ```
 
