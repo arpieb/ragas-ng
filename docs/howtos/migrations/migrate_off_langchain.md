@@ -157,7 +157,10 @@ setup — it comes from an in-process run tree, not from spans.
 went too, because its tracer subclassed LangChain's.
 
 For Opik, Langfuse and Phoenix, use their **OpenTelemetry** ingestion instead —
-which no longer requires anything ragas-specific.
+which no longer requires anything ragas-specific. The
+[Langfuse guide](../integrations/_langfuse.md) shows both the plain OTLP
+exporter and the Langfuse SDK set-up (which needs ragas spans allowed through
+its export filter).
 
 ## Cost and token accounting
 
