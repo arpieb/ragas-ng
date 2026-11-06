@@ -183,8 +183,8 @@ class MetricWithLLM(Metric, PromptMixin):
             raise ValueError(
                 f"Metric '{self.name}' has no valid LLM provided (self.llm is None). Please instantiate the metric with an LLM to run."
             )
-        # Only BaseRagasLLM has set_run_config method, not InstructorBaseRagasLLM
-        if isinstance(self.llm, BaseRagasLLM):
+        # Both BaseRagasLLM and InstructorBaseRagasLLM take retry settings (#73).
+        if hasattr(self.llm, "set_run_config"):
             self.llm.set_run_config(run_config)
 
     def _optimize_instruction(

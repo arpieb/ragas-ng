@@ -5,6 +5,7 @@ import threading
 import typing as t
 
 from ragas.cache import CacheInterface, cache_identity, cacher
+from ragas.llms._retry import acall_with_retry, call_with_retry
 from ragas.llms.base import (
     InstructorBaseRagasLLM,
     InstructorTypeVar,
@@ -245,15 +246,25 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
         Returns:
             Instance of response_model with generated data
         """
+        rc = self.run_config
         if self.sync_client is not None:
-            return self._call_sync(
-                self.sync_client, prompt, response_model, temperature
+            return call_with_retry(
+                rc,
+                self._call_sync,
+                self.sync_client,
+                prompt,
+                response_model,
+                temperature,
             )
         if self.is_async:
             return self._run_async_in_current_loop(
-                self._call_async(prompt, response_model, temperature)
+                acall_with_retry(
+                    rc, self._call_async, prompt, response_model, temperature
+                )
             )
-        return self._call_sync(self.client, prompt, response_model, temperature)
+        return call_with_retry(
+            rc, self._call_sync, self.client, prompt, response_model, temperature
+        )
 
     async def _call_async(
         self,
@@ -288,11 +299,20 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
         Returns:
             Instance of response_model with generated data
         """
+        rc = self.run_config
         if not self.is_async:
             return await asyncio.to_thread(
-                self._call_sync, self.client, prompt, response_model, temperature
+                call_with_retry,
+                rc,
+                self._call_sync,
+                self.client,
+                prompt,
+                response_model,
+                temperature,
             )
-        return await self._call_async(prompt, response_model, temperature)
+        return await acall_with_retry(
+            rc, self._call_async, prompt, response_model, temperature
+        )
 
     def __repr__(self) -> str:
         return (

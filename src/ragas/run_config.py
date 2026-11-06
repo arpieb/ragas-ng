@@ -18,22 +18,28 @@ from tenacity.after import after_nothing
 @dataclass
 class RunConfig:
     """
-    Configuration for a timeouts, retries and seed for Ragas operations.
+    Configuration for timeouts, retries, concurrency and seed for Ragas operations.
 
     Parameters
     ----------
     timeout : int, optional
-        Maximum time (in seconds) to wait for a single operation, by default 180.
+        Wall-clock limit (in seconds) on one job -- one metric scoring one
+        sample in ``evaluate()``, or one testset-generation step -- covering
+        all of its LLM calls, retries and backoff waits included. Not a
+        per-request timeout; set that on the provider client. By default 180.
     max_retries : int, optional
-        Maximum number of retry attempts, by default 10.
+        Maximum number of attempts per LLM call, by default 10.
     max_wait : int, optional
-        Maximum wait time (in seconds) between retries, by default 60.
+        Maximum wait time (in seconds) between attempts, by default 60.
     max_workers : int, optional
         Maximum number of concurrent workers, by default 16.
     exception_types : Union[Type[BaseException], Tuple[Type[BaseException], ...]], optional
-        Exception types to catch and retry on, by default (Exception,).
+        Exception types to retry on, by default (Exception,). For the
+        ``llm_factory`` LLMs the default means *transient* errors only (rate
+        limits, timeouts, 5xx; never a 400); any other value retries exactly
+        those types.
     log_tenacity : bool, optional
-        Whether to log retry attempts using tenacity, by default False.
+        Whether to log retry attempts, by default False.
     seed : int, optional
         Random seed for reproducibility, by default 42.
 

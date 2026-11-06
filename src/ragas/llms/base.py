@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from ragas.cache import CacheInterface, cache_identity, cacher
 from ragas.exceptions import LLMDidNotFinishException
+from ragas.llms._retry import acall_with_retry, call_with_retry
 from ragas.llms.output import Generation, LLMResult
 from ragas.run_config import RunConfig, add_async_retry
 
@@ -647,7 +648,29 @@ class InstructorModelArgs(BaseModel):
 
 
 class InstructorBaseRagasLLM(ABC):
-    """Base class for LLMs using the Instructor library pattern."""
+    """Base class for LLMs using the Instructor library pattern.
+
+    Provider calls are retried with exponential backoff on transient errors
+    (rate limits, timeouts, 5xx) per ``run_config``: ``RunConfig()``
+    defaults until ``set_run_config`` is called, which ``evaluate()`` and
+    ``TestsetGenerator`` do with theirs (#73).
+    """
+
+    _run_config: t.Optional[RunConfig] = None
+
+    @property
+    def run_config(self) -> RunConfig:
+        if self._run_config is None:
+            self._run_config = RunConfig()
+        return self._run_config
+
+    @run_config.setter
+    def run_config(self, run_config: RunConfig) -> None:
+        self._run_config = run_config
+
+    def set_run_config(self, run_config: RunConfig) -> None:
+        """Retry/backoff settings for this LLM's provider calls."""
+        self._run_config = run_config
 
     @abstractmethod
     def generate(
@@ -1038,15 +1061,25 @@ class InstructorLLM(InstructorBaseRagasLLM):
         For async clients, this will run the async method in the appropriate event loop.
         See ``InstructorBaseRagasLLM.generate`` for ``temperature``/``sample_index``.
         """
+        rc = self.run_config
         if self.sync_client is not None:
-            return self._call_sync(
-                self.sync_client, prompt, response_model, temperature
+            return call_with_retry(
+                rc,
+                self._call_sync,
+                self.sync_client,
+                prompt,
+                response_model,
+                temperature,
             )
         if self.is_async:
             return self._run_async_in_current_loop(
-                self._call_async(prompt, response_model, temperature)
+                acall_with_retry(
+                    rc, self._call_async, prompt, response_model, temperature
+                )
             )
-        return self._call_sync(self.client, prompt, response_model, temperature)
+        return call_with_retry(
+            rc, self._call_sync, self.client, prompt, response_model, temperature
+        )
 
     async def _call_async(
         self,
@@ -1088,11 +1121,20 @@ class InstructorLLM(InstructorBaseRagasLLM):
         ``Anthropic()`` and other sync clients (#68).
         See ``InstructorBaseRagasLLM.generate`` for ``temperature``/``sample_index``.
         """
+        rc = self.run_config
         if not self.is_async:
             return await asyncio.to_thread(
-                self._call_sync, self.client, prompt, response_model, temperature
+                call_with_retry,
+                rc,
+                self._call_sync,
+                self.client,
+                prompt,
+                response_model,
+                temperature,
             )
-        return await self._call_async(prompt, response_model, temperature)
+        return await acall_with_retry(
+            rc, self._call_async, prompt, response_model, temperature
+        )
 
     def _get_client_info(self) -> str:
         """Get client type and async status information."""
