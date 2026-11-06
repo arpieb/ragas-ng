@@ -6,10 +6,10 @@ This guide assumes you already have an AG-UI compatible agent running (for examp
 
 ## Install the integration
 
-The AG-UI helpers live behind an optional extra. Install it together with the dependencies required by your evaluator LLM. When running inside Jupyter or IPython, include `nest_asyncio` so you can reuse the notebook's event loop.
+The AG-UI helpers live behind an optional extra. Install it together with the dependencies required by your evaluator LLM.
 
 ```bash
-pip install "ragas[ag-ui]" python-dotenv nest_asyncio
+pip install "ragas[ag-ui]" python-dotenv
 ```
 
 Configure your evaluator LLM credentials. For example, if you are using OpenAI models:
@@ -23,12 +23,8 @@ Load the environment variables inside Python before running the examples:
 
 ```python
 from dotenv import load_dotenv
-import nest_asyncio
 
 load_dotenv()
-
-# If you're inside Jupyter/IPython, patch the running event loop once.
-nest_asyncio.apply()
 ```
 
 ## Build an experiment dataset
@@ -174,7 +170,7 @@ The AG-UI integration provides `run_ag_ui_row()` to call your endpoint and enric
 
 ### Basic single-turn evaluation
 
-In Jupyter or IPython, use top-level `await` (after `nest_asyncio.apply()`) instead of `asyncio.run` to avoid the "event loop is already running" error. For scripts you can keep `asyncio.run`.
+In Jupyter or IPython, use top-level `await` instead of `asyncio.run` to avoid the "event loop is already running" error. For scripts you can keep `asyncio.run`.
 
 ```python
 from ragas import experiment
@@ -197,7 +193,7 @@ async def factual_experiment(row):
 
 
 # Run the experiment against the dataset
-# In Jupyter/IPython (after calling nest_asyncio.apply())
+# In Jupyter/IPython
 factual_result = await factual_experiment.arun(
     scientist_questions, name="scientist_qa_eval"
 )

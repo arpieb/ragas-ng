@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from tqdm.auto import tqdm
 
-from ragas.async_utils import apply_nest_asyncio, as_completed, process_futures, run
+from ragas.async_utils import as_completed, process_futures, run_sync
 from ragas.run_config import RunConfig
 from ragas.utils import ProgressBarManager, batched
 
@@ -36,8 +36,6 @@ class Executor:
         Whether to batch (large) lists of tasks
     run_config : RunConfig
         Configuration for the run
-    _nest_asyncio_applied : bool
-        Whether nest_asyncio has been applied
     _cancel_event : threading.Event
         Event to signal cancellation
     """
@@ -208,11 +206,7 @@ class Executor:
         This is the main sync entry point for executing async jobs.
         """
 
-        async def _async_wrapper():
-            return await self.aresults()
-
-        apply_nest_asyncio()
-        return run(_async_wrapper)
+        return run_sync(self.aresults())
 
 
 def run_async_batch(

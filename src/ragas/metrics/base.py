@@ -11,7 +11,7 @@ from enum import Enum
 from pydantic import ValidationError
 from tqdm import tqdm
 
-from ragas.async_utils import apply_nest_asyncio, run
+from ragas.async_utils import run
 from ragas.callbacks import ChainType, new_group
 from ragas.dataset_schema import MetricAnnotation, MultiTurnSample, SingleTurnSample
 from ragas.llms import BaseRagasLLM
@@ -416,7 +416,7 @@ class SingleTurnMetric(Metric):
         """
         Synchronously score a single-turn sample.
 
-        May raise ImportError if nest_asyncio is not installed in a Jupyter-like environment.
+        Works with or without a running event loop (e.g. Jupyter).
         """
         callbacks = callbacks or []
         # only get the required columns
@@ -442,7 +442,6 @@ class SingleTurnMetric(Metric):
                     rm.on_chain_end({"output": result})
                 return result
 
-        apply_nest_asyncio()
         score = run(_async_wrapper)
 
         return score
@@ -523,7 +522,7 @@ class MultiTurnMetric(Metric):
         """
         Score a multi-turn conversation sample synchronously.
 
-        May raise ImportError if nest_asyncio is not installed in Jupyter-like environments.
+        Works with or without a running event loop (e.g. Jupyter).
         """
         callbacks = callbacks or []
         sample = self._only_required_columns_multi_turn(sample)
@@ -548,7 +547,6 @@ class MultiTurnMetric(Metric):
                     rm.on_chain_end({"output": result})
                 return result
 
-        apply_nest_asyncio()
         score = run(_async_wrapper)
 
         return score

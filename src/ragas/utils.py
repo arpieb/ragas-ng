@@ -661,23 +661,13 @@ def create_nano_id(size: int = 12) -> str:
 
 def async_to_sync(async_func):
     """Convert an async function to a sync function"""
-    import asyncio
     import functools
 
     @functools.wraps(async_func)
     def sync_wrapper(*args, **kwargs):
-        try:
-            # Check if we're already in an event loop
-            asyncio.get_running_loop()
-            # If we get here, we're in a running loop
-            import concurrent.futures
+        from ragas.async_utils import run_sync
 
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(asyncio.run, async_func(*args, **kwargs))
-                return future.result()
-        except RuntimeError:
-            # No event loop running, safe to use asyncio.run
-            return asyncio.run(async_func(*args, **kwargs))
+        return run_sync(async_func(*args, **kwargs))
 
     return sync_wrapper
 

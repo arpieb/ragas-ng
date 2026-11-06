@@ -43,14 +43,15 @@ class RagasDSPyLM:
         List[str]
             List of completions.
         """
-        import asyncio
 
         if prompt is not None:
             messages = [{"role": "user", "content": prompt}]
         elif messages is None:
             raise ValueError("Either prompt or messages must be provided")
 
-        result = asyncio.run(self._generate(messages, **kwargs))
+        from ragas.async_utils import run_sync
+
+        result = run_sync(self._generate(messages, **kwargs))
         return [result]
 
     async def _generate(

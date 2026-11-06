@@ -258,15 +258,6 @@ for row in amnesty_qa:
 
 
 ```python
-# if your running this in a notebook - please run this cell
-# to manage asyncio event loops
-import nest_asyncio
-
-nest_asyncio.apply()
-```
-
-
-```python
 from langfuse.decorators import observe, langfuse_context
 from asyncio import run
 

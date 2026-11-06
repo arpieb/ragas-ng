@@ -8,7 +8,6 @@ __all__ = [
     "RankingMetricProtocol",
 ]
 
-import asyncio
 import inspect
 import typing as t
 import warnings
@@ -253,21 +252,9 @@ def create_metric_decorator():
                 def score(self, *args, **kwargs):
                     """Synchronous scoring method that wraps ascore()."""
 
-                    # Use asyncio.run to execute the async method
-                    async def _async_wrapper():
-                        return await self.ascore(*args, **kwargs)
+                    from ragas.async_utils import run_sync
 
-                    # Check if we're already in an event loop
-                    try:
-                        # If we're in a running event loop, we need nest_asyncio for compatibility
-                        _ = asyncio.get_running_loop()
-                        # Import nest_asyncio style runner from ragas
-                        from ragas.async_utils import run
-
-                        return run(_async_wrapper())
-                    except RuntimeError:
-                        # No running event loop, safe to use asyncio.run
-                        return asyncio.run(_async_wrapper())
+                    return run_sync(self.ascore(*args, **kwargs))
 
                 async def ascore(self, *args, **kwargs):
                     """Asynchronous scoring method."""

@@ -1,4 +1,4 @@
-"""Test uvloop compatibility with nest_asyncio."""
+"""ragas works under uvloop: nothing patches the loop any more (#80)."""
 
 import asyncio
 import sys
@@ -10,8 +10,9 @@ class TestUvloopCompatibility:
     """Test that ragas works with uvloop event loops."""
 
     @pytest.mark.skipif(sys.version_info < (3, 8), reason="uvloop requires Python 3.8+")
+    @pytest.mark.filterwarnings("ignore::DeprecationWarning")
     def test_apply_nest_asyncio_with_uvloop_returns_false(self):
-        """Test that apply_nest_asyncio returns False with uvloop."""
+        """apply_nest_asyncio is a deprecated no-op: always False."""
         uvloop = pytest.importorskip("uvloop")
 
         from ragas.async_utils import apply_nest_asyncio
@@ -29,7 +30,7 @@ class TestUvloopCompatibility:
 
     @pytest.mark.skipif(sys.version_info < (3, 8), reason="uvloop requires Python 3.8+")
     def test_run_with_uvloop_and_running_loop(self):
-        """Test that run() raises clear error with uvloop in running event loop (Jupyter scenario)."""
+        """run() works inside a running uvloop loop (it used to raise: nest_asyncio can't patch uvloop)."""
         uvloop = pytest.importorskip("uvloop")
 
         from ragas.async_utils import run
@@ -38,12 +39,11 @@ class TestUvloopCompatibility:
             return "success"
 
         async def outer_task():
-            with pytest.raises(RuntimeError, match="Cannot execute nested async code"):
-                run(inner_task)
+            return run(inner_task)
 
         uvloop.install()
         try:
-            asyncio.run(outer_task())
+            assert asyncio.run(outer_task()) == "success"
         finally:
             asyncio.set_event_loop_policy(None)
 
@@ -66,8 +66,9 @@ class TestUvloopCompatibility:
         finally:
             asyncio.set_event_loop_policy(None)
 
-    def test_apply_nest_asyncio_without_uvloop_returns_true(self):
-        """Test that apply_nest_asyncio returns True with standard asyncio."""
+    @pytest.mark.filterwarnings("ignore::DeprecationWarning")
+    def test_apply_nest_asyncio_without_uvloop_is_a_no_op(self):
+        """apply_nest_asyncio no longer patches anything, even with standard asyncio."""
         from ragas.async_utils import apply_nest_asyncio
 
         async def test_func():
@@ -75,7 +76,7 @@ class TestUvloopCompatibility:
             return result
 
         result = asyncio.run(test_func())
-        assert result is True
+        assert result is False
 
     def test_run_with_standard_asyncio_and_running_loop(self):
         """Test that run() works with standard asyncio in a running loop."""

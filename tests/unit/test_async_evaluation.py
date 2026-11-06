@@ -6,49 +6,44 @@ import pytest
 
 
 class TestAsyncUtilsControl:
-    """Test nest_asyncio application control."""
+    """run() runs on the shared loop; nest_asyncio is gone (#80)."""
 
-    def test_run_with_nest_asyncio_default(self):
-        """Test run function applies nest_asyncio by default."""
+    def test_run_returns_the_result(self):
         from ragas.async_utils import run
 
         async def test_func():
             return "test"
 
-        with patch("ragas.async_utils.apply_nest_asyncio") as mock_apply:
-            result = run(test_func)
+        assert run(test_func) == "test"
 
-        mock_apply.assert_called_once()
-        assert result == "test"
-
-    def test_run_without_nest_asyncio(self):
-        """Test run function can skip nest_asyncio."""
+    def test_run_allow_nest_asyncio_is_deprecated_and_ignored(self):
         from ragas.async_utils import run
 
         async def test_func():
             return "test"
 
-        with patch("ragas.async_utils.apply_nest_asyncio") as mock_apply:
-            result = run(test_func, allow_nest_asyncio=False)
+        with pytest.warns(DeprecationWarning, match="nest_asyncio"):
+            assert run(test_func, allow_nest_asyncio=False) == "test"
 
-        mock_apply.assert_not_called()
-        assert result == "test"
+    def test_apply_nest_asyncio_is_a_deprecated_no_op(self):
+        from ragas.async_utils import apply_nest_asyncio
+
+        with pytest.warns(DeprecationWarning):
+            assert apply_nest_asyncio() is False
 
 
 class TestEvaluateAsyncControl:
-    """Test the sync evaluate function with async options."""
+    """The sync evaluate() runs aevaluate() on the shared background loop."""
 
-    def test_evaluate_with_nest_asyncio_default(self):
-        """Test evaluate with default nest_asyncio behavior."""
+    def _evaluate(self, **kwargs):
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
                 category=RuntimeWarning,
                 message=".*coroutine.*was never awaited",
             )
-
-            with patch("ragas.async_utils.run") as mock_run:
-                mock_run.return_value = MagicMock()
+            with patch("ragas.async_utils.run_sync") as mock_run_sync:
+                mock_run_sync.return_value = MagicMock()
 
                 from ragas import evaluate
 
@@ -56,61 +51,18 @@ class TestEvaluateAsyncControl:
                     dataset=MagicMock(),
                     metrics=[MagicMock()],
                     show_progress=False,
+                    **kwargs,
                 )
+        return mock_run_sync
 
-        # Should call run() which applies nest_asyncio by default
-        mock_run.assert_called_once()
+    def test_evaluate_uses_run_sync(self):
+        self._evaluate().assert_called_once()
 
-    def test_evaluate_allow_nest_asyncio_true(self):
-        """Test evaluate with allow_nest_asyncio=True explicitly."""
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                category=RuntimeWarning,
-                message=".*coroutine.*was never awaited",
-            )
-
-            with patch("ragas.async_utils.run") as mock_run:
-                mock_run.return_value = MagicMock()
-
-                from ragas import evaluate
-
-                evaluate(
-                    dataset=MagicMock(),
-                    metrics=[MagicMock()],
-                    show_progress=False,
-                    allow_nest_asyncio=True,
-                )
-
-        # Should use run() which applies nest_asyncio
-        mock_run.assert_called_once()
-
-    def test_evaluate_allow_nest_asyncio_false(self):
-        """Test evaluate with allow_nest_asyncio=False."""
-        with warnings.catch_warnings():
-            # Suppress RuntimeWarning about unawaited coroutines in tests
-            warnings.filterwarnings(
-                "ignore",
-                category=RuntimeWarning,
-                message=".*coroutine.*was never awaited",
-            )
-
-            with patch("asyncio.run") as mock_asyncio_run:
-                with patch("ragas.async_utils.run") as mock_run:
-                    mock_asyncio_run.return_value = MagicMock()
-
-                    from ragas import evaluate
-
-                    evaluate(
-                        dataset=MagicMock(),
-                        metrics=[MagicMock()],
-                        show_progress=False,
-                        allow_nest_asyncio=False,
-                    )
-
-        # Should use asyncio.run, not ragas.async_utils.run
-        mock_asyncio_run.assert_called_once()
-        mock_run.assert_not_called()
+    @pytest.mark.parametrize("value", [True, False])
+    def test_evaluate_allow_nest_asyncio_is_deprecated_and_ignored(self, value):
+        with pytest.warns(DeprecationWarning, match="allow_nest_asyncio"):
+            mock_run_sync = self._evaluate(allow_nest_asyncio=value)
+        mock_run_sync.assert_called_once()
 
 
 class TestAevaluateImport:
@@ -130,8 +82,9 @@ class TestAevaluateImport:
         from ragas import evaluate
 
         sig = inspect.signature(evaluate)
+        # kept for compatibility; deprecated and ignored
         assert "allow_nest_asyncio" in sig.parameters
-        assert sig.parameters["allow_nest_asyncio"].default is True
+        assert sig.parameters["allow_nest_asyncio"].default is None
 
 
 class TestNestAsyncioNotAppliedInAevaluate:

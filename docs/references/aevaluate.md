@@ -26,33 +26,20 @@ async def evaluate_app():
 result = await evaluate_app()
 ```
 
-### Using evaluate() with Async Control
+### Using evaluate() from Sync Code
 
-For backward compatibility and Jupyter notebook usage, `evaluate()` provides optional control over `nest_asyncio`:
+`evaluate()` runs `aevaluate()` on a shared background event loop, so the same
+call works in scripts, in Jupyter, and from sync code inside async
+applications. It does not patch your event loop. Earlier versions used
+`nest_asyncio`; ragas no longer depends on it, and `allow_nest_asyncio=` is
+deprecated and ignored.
 
 ```python
-# Default behavior (Jupyter-compatible)
-result = evaluate(dataset, metrics)  # allow_nest_asyncio=True
-
-# Production-safe (avoids event loop patching)
-result = evaluate(dataset, metrics, allow_nest_asyncio=False)
-```
-
-### Migration from nest_asyncio Issues
-
-If you're experiencing issues with `nest_asyncio` in production:
-
-**Before (problematic):**
-```python
-# This may cause event loop conflicts
 result = evaluate(dataset, metrics)
 ```
 
-**After (fixed):**
-```python
-# Option 1: Use async API
-result = await aevaluate(dataset, metrics)
-
-# Option 2: Disable nest_asyncio
-result = evaluate(dataset, metrics, allow_nest_asyncio=False)
-```
+!!! note "Async clients in async code"
+    If your evaluator LLM wraps an async client (such as `AsyncOpenAI`) that your
+    own async code also awaits, call `await aevaluate(...)` (or the metrics'
+    `ascore()`) instead. Otherwise the client is used from two event loops, which
+    can fail with "bound to a different event loop".
