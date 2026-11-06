@@ -33,7 +33,7 @@ from ragas.exceptions import ExceptionInRunner
 from ragas.executor import Executor
 from ragas.integrations.helicone import helicone_config
 from ragas.llms import default_llm
-from ragas.llms.base import BaseRagasLLM, InstructorBaseRagasLLM
+from ragas.llms.base import DEFAULT_LLM_MODEL, BaseRagasLLM, InstructorBaseRagasLLM
 from ragas.metrics._collections_bridge import adapt_collections_metric
 from ragas.metrics.base import (
     Metric,
@@ -555,7 +555,7 @@ def _check_models(llm: t.Any, embeddings: t.Any) -> None:
             f"llm must be a ragas LLM, got {type(llm).__module__}."
             f"{type(llm).__name__}. Wrap your client or model name with "
             "llm_factory: from ragas.llms import llm_factory; "
-            "llm = llm_factory('gpt-6-luna', client=client)"
+            f"llm = llm_factory('{DEFAULT_LLM_MODEL}', client=client)"
         )
     if embeddings is not None and not isinstance(
         embeddings, (BaseRagasEmbeddings, BaseRagasEmbedding)

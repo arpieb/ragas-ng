@@ -36,7 +36,7 @@ class ContextEntityRecall(BaseMetric):
         >>>
         >>> # Setup dependencies
         >>> client = openai.AsyncOpenAI()
-        >>> llm = llm_factory("gpt-6-luna", client=client)
+        >>> llm = llm_factory("<model>", client=client)
         >>>
         >>> # Create metric instance
         >>> metric = ContextEntityRecall(llm=llm)

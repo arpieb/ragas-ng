@@ -29,6 +29,7 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -333,8 +334,8 @@ async def main():
     parser.add_argument(
         "--evaluator-model",
         type=str,
-        default="gpt-6-luna",
-        help="OpenAI model to use for experiments (default: gpt-6-luna)",
+        default=os.getenv("RAGAS_EXAMPLE_JUDGE_MODEL", "gpt-6-luna"),
+        help="OpenAI model that judges the agent (default: $RAGAS_EXAMPLE_JUDGE_MODEL or gpt-6-luna)",
     )
     parser.add_argument(
         "--skip-factual",

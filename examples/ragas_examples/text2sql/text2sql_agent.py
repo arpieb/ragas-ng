@@ -17,6 +17,9 @@ dotenv.load_dotenv(".env")
 # Configure logger
 logger = logging.getLogger(__name__)
 
+# The model the app under test calls. Override with RAGAS_EXAMPLE_APP_MODEL.
+DEFAULT_MODEL = os.getenv("RAGAS_EXAMPLE_APP_MODEL", "gpt-5.6-terra")
+
 
 class Text2SQLAgent:
     """
@@ -30,7 +33,7 @@ class Text2SQLAgent:
     def __init__(
         self,
         client,
-        model_name: str = "gpt-5.6-terra",
+        model_name: str = DEFAULT_MODEL,
         prompt_file: Optional[str] = None,
     ):
         """
@@ -119,7 +122,7 @@ async def main():
     # Create agent
     logger.info("Creating Text-to-SQL agent...")
     openai_client = AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"])
-    agent = Text2SQLAgent(client=openai_client, model_name="gpt-5.6-terra")
+    agent = Text2SQLAgent(client=openai_client, model_name=DEFAULT_MODEL)
     
     # Generate SQL
     logger.info(f"Query: {test_query}")

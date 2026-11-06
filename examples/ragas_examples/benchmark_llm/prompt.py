@@ -6,7 +6,8 @@ from openai import AsyncOpenAI
 # Load environment variables
 load_dotenv(".env")
 
-DEFAULT_MODEL = "gpt-5.6-luna"
+# The model to benchmark by default. Override with RAGAS_EXAMPLE_APP_MODEL or --model.
+DEFAULT_MODEL = os.getenv("RAGAS_EXAMPLE_APP_MODEL", "gpt-5.6-luna")
 
 
 def get_client() -> AsyncOpenAI:

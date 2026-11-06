@@ -53,7 +53,7 @@ class TopicAdherence(BaseMetric):
         >>> from ragas.messages import HumanMessage, AIMessage
         >>>
         >>> client = AsyncOpenAI()
-        >>> llm = llm_factory("gpt-6-luna", client=client)
+        >>> llm = llm_factory("<model>", client=client)
         >>>
         >>> metric = TopicAdherence(llm=llm, mode="precision")
         >>>

@@ -46,6 +46,8 @@ By default, the quickstart example uses OpenAI. Set your API key and you're read
 - **The app under test** (`app_client`, `APP_MODEL`): the example RAG app in `rag.py`. It calls an OpenAI-compatible chat API, so it runs on any provider that offers an OpenAI-compatible endpoint.
 - **The judge** (`llm`): the LLM that scores the app's answers. Any [`llm_factory()`](../howtos/llm-adapters.md) provider works here, independently of the app.
 
+To change only the model names, without editing code, set `RAGAS_EXAMPLE_APP_MODEL` and `RAGAS_EXAMPLE_JUDGE_MODEL`. Every template reads them.
+
 === "OpenAI (Default)"
     ```sh
     export OPENAI_API_KEY="your-openai-key"

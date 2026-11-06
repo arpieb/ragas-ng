@@ -20,13 +20,15 @@ from llama_index.core.workflow import Context, JsonSerializer
 sys.path.insert(0, str(Path(__file__).parent))
 from llamaindex_agent import add_item, list_items, llm, remove_item
 
+# The model that judges the results. Override with RAGAS_EXAMPLE_JUDGE_MODEL.
+JUDGE_MODEL = os.getenv("RAGAS_EXAMPLE_JUDGE_MODEL", "gemini-3.6-flash")
 evaluator_llm = InstructorLLM(
     client=instructor.from_provider(
-        "google/gemini-3.6-flash",
+        f"google/{JUDGE_MODEL}",
         async_client=True,
         api_key=os.environ["GOOGLE_API_KEY"],
     ),
-    model="gemini-3.6-flash",
+    model=JUDGE_MODEL,
     provider="google",
 )
 

@@ -10,7 +10,10 @@ from .workflow import default_workflow_client
 
 openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 workflow_client = default_workflow_client()
-llm = llm_factory("gpt-6-luna", client=openai_client)
+
+# The model that judges the results. Override with RAGAS_EXAMPLE_JUDGE_MODEL.
+JUDGE_MODEL = os.getenv("RAGAS_EXAMPLE_JUDGE_MODEL", "gpt-6-luna")
+llm = llm_factory(JUDGE_MODEL, client=openai_client)
 
 
 def load_dataset():

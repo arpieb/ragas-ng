@@ -9,6 +9,9 @@ from typing import Any, Dict, Literal, Optional
 
 from openai import OpenAI
 
+# The model the app under test calls. Override with RAGAS_EXAMPLE_APP_MODEL.
+MODEL = os.getenv("RAGAS_EXAMPLE_APP_MODEL", "gpt-5.6-terra")
+
 
 @dataclass
 class TraceEvent:
@@ -165,7 +168,7 @@ class LLMExtractor(BaseExtractor):
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-5.6-terra",
+                model=MODEL,
                 messages=[{"role": "user", "content": prompt}],
                 # a reasoning model: no temperature, and no hidden reasoning
                 # tokens eating the short output budget
@@ -326,7 +329,7 @@ class ConfigurableSupportTriageAgent:
                 component="openai_api",
                 data={
                     "operation": "classification",
-                    "model": "gpt-5.6-terra",
+                    "model": MODEL,
                     "prompt_length": len(prompt),
                     "email_length": len(email_content),
                 },
@@ -335,7 +338,7 @@ class ConfigurableSupportTriageAgent:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-5.6-terra",
+                model=MODEL,
                 messages=[{"role": "user", "content": prompt}],
                 # a reasoning model: no temperature, and no hidden reasoning
                 # tokens eating the short output budget
@@ -457,7 +460,7 @@ class ConfigurableSupportTriageAgent:
                 component="openai_api",
                 data={
                     "operation": "response_generation",
-                    "model": "gpt-5.6-terra",
+                    "model": MODEL,
                     "category": category,
                     "extracted_fields": list(extracted_info.keys()),
                 },
@@ -466,7 +469,7 @@ class ConfigurableSupportTriageAgent:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-5.6-terra",
+                model=MODEL,
                 messages=[{"role": "user", "content": prompt}],
                 # a reasoning model: no temperature, and no hidden reasoning
                 # tokens eating the short output budget

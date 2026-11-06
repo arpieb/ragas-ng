@@ -36,7 +36,7 @@ class InstanceSpecificRubrics(BaseMetric):
         >>> from ragas.metrics.collections import InstanceSpecificRubrics
         >>>
         >>> client = AsyncOpenAI()
-        >>> llm = llm_factory("gpt-6-luna", client=client)
+        >>> llm = llm_factory("<model>", client=client)
         >>>
         >>> metric = InstanceSpecificRubrics(llm=llm)
         >>>

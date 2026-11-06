@@ -6,6 +6,9 @@ from typing import Any, Dict, List, Optional
 
 from openai import OpenAI
 
+# The model the app under test calls. Override with RAGAS_EXAMPLE_APP_MODEL.
+DEFAULT_MODEL = os.getenv("RAGAS_EXAMPLE_APP_MODEL", "gpt-6-luna")
+
 DOCUMENTS = [
     "Ragas are melodic frameworks in Indian classical music.",
     "There are many types of ragas, each with its own mood and time of day.",
@@ -86,7 +89,7 @@ class ExampleRAG:
         retriever: Optional[BaseRetriever] = None,
         system_prompt: Optional[str] = None,
         logdir: str = "logs",
-        model: str = "gpt-6-luna",
+        model: str = DEFAULT_MODEL,
     ):
         """
         Initialize RAG system
@@ -445,7 +448,7 @@ class ExampleRAG:
 
 
 def default_rag_client(
-    llm_client, logdir: str = "logs", model: str = "gpt-6-luna"
+    llm_client, logdir: str = "logs", model: str = DEFAULT_MODEL
 ) -> ExampleRAG:
     """
     Create a default RAG client over the bundled documents.
