@@ -213,14 +213,21 @@ def test_default_run_config_is_per_instance():
     assert a.run_config is not b.run_config
 
 
-def test_evaluate_run_config_reaches_a_collections_metric_llm():
+def test_a_runs_config_applies_inside_the_run_only():
+    # evaluate() passes its RunConfig through a run scope (#76). It used to
+    # set it on the (possibly shared) LLM, where it stuck after the run.
     from ragas.metrics._collections_bridge import adapt_collections_metric
     from ragas.metrics.collections import ContextEntityRecall
+    from ragas.run_config import run_scope
 
     llm = InstructorLLM(client=Flaky().client(), model="m", provider="openai")
+    own = RunConfig(max_retries=7)
+    llm.set_run_config(own)
     rc = RunConfig(max_retries=2)
-    adapt_collections_metric(ContextEntityRecall(llm=llm)).init(rc)
-    assert llm.run_config is rc
+    with run_scope(run_config=rc):
+        adapt_collections_metric(ContextEntityRecall(llm=llm)).init(rc)
+        assert llm.run_config is rc
+    assert llm.run_config is own
 
 
 def test_litellm_rate_limit_end_to_end(monkeypatch):

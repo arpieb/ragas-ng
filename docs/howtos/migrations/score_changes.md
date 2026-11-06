@@ -206,3 +206,27 @@ The judge used to split the reference into statements itself, and recall was the
 The reference is now split into sentences in code: on `. ! ?` before a capitalised word or digit, and after `。！？`, but not after common abbreviations like "Dr." or "e.g.". The judge gets that list and must return one classification per sentence, under the same matching, retry and NaN rule as Faithfulness above.
 
 **Who sees a difference:** scores move where the judge used to split differently, for example breaking one long sentence into several statements, or where it dropped sentences. Recall is now always out of the reference's sentence count.
+
+## evaluate() with no metrics: the collections defaults ([#76](https://github.com/arpieb/ragas-ng/issues/76))
+
+`ragas.evaluate`
+
+`evaluate(dataset)` with no `metrics=` runs AnswerRelevancy, ContextPrecision,
+Faithfulness and ContextRecall. It used to run the plain legacy objects from
+the private modules, so it skipped the hand-off that
+`from ragas.metrics import faithfulness` gets, and scored with the legacy
+implementations. It now builds the hand-off classes fresh for each call. With an
+LLM from `llm_factory()` (the default), they score through
+`ragas.metrics.collections`, so every collections fix in this list applies.
+**Who sees a difference:** only callers that leave `metrics=` out; passing
+metrics explicitly is unchanged.
+
+## ContextEntityRecall: a perfect match is 1.0
+
+`ragas.metrics.collections.ContextEntityRecall`
+
+The denominator carried a `1e-8` epsilon, so finding every reference entity
+scored 0.99999999, not 1.0. A reference with no entities scored 0.0. Recall is
+undefined there, and it is now NaN. **Who sees a difference:** every sample
+moves by at most 1e-8, and samples whose reference has no entities now show as
+missing rows in `EvaluationResult.summary()`.

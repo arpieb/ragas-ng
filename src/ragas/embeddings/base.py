@@ -13,7 +13,12 @@ from pydantic_core import CoreSchema, core_schema
 
 from ragas.cache import CacheInterface, cache_identity, cacher
 from ragas.embeddings.utils import run_async_in_current_loop, validate_texts
-from ragas.run_config import RunConfig, add_async_retry, add_retry
+from ragas.run_config import (
+    RunConfig,
+    add_async_retry,
+    add_retry,
+    scoped_run_config,
+)
 
 if t.TYPE_CHECKING:
     from llama_index.core.base.embeddings.base import BaseEmbedding
@@ -263,13 +268,13 @@ class BaseRagasEmbeddings(ABC):
         """
         if is_async:
             aembed_documents_with_retry = add_async_retry(
-                self.aembed_documents, self.run_config
+                self.aembed_documents, scoped_run_config() or self.run_config
             )
             return await aembed_documents_with_retry(texts)
         else:
             loop = asyncio.get_event_loop()
             embed_documents_with_retry = add_retry(
-                self.embed_documents, self.run_config
+                self.embed_documents, scoped_run_config() or self.run_config
             )
             return await loop.run_in_executor(None, embed_documents_with_retry, texts)
 

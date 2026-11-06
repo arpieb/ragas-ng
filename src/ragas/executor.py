@@ -9,7 +9,7 @@ import numpy as np
 from tqdm.auto import tqdm
 
 from ragas.async_utils import as_completed, process_futures, run_sync
-from ragas.run_config import RunConfig
+from ragas.run_config import RunConfig, capture_run_scope
 from ragas.utils import ProgressBarManager, batched
 
 logger = logging.getLogger(__name__)
@@ -97,7 +97,16 @@ class Executor:
         callable_with_index = self.wrap_callable_with_index(
             callable, self._jobs_processed
         )
-        self.jobs.append((callable_with_index, args, kwargs, name))
+        # Jobs keep the run scope they were submitted in (evaluate()'s run
+        # config and usage collector), even when results() runs later, outside
+        # it -- as with evaluate(return_executor=True) (#76).
+        enter_scope = capture_run_scope()
+
+        async def scoped_job(*args, **kwargs):
+            with enter_scope():
+                return await callable_with_index(*args, **kwargs)
+
+        self.jobs.append((scoped_job, args, kwargs, name))
         self._jobs_processed += 1
 
     def clear_jobs(self) -> None:

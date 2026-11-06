@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import logging
 import typing as t
 import warnings
@@ -32,7 +33,6 @@ from ragas.executor import Executor
 from ragas.integrations.helicone import helicone_config
 from ragas.llms import default_llm
 from ragas.llms.base import BaseRagasLLM, InstructorBaseRagasLLM
-from ragas.metrics._answer_correctness import AnswerCorrectness
 from ragas.metrics._collections_bridge import adapt_collections_metric
 from ragas.metrics.base import (
     Metric,
@@ -43,7 +43,7 @@ from ragas.metrics.base import (
     SimpleBaseMetric,
     SingleTurnMetric,
 )
-from ragas.run_config import RunConfig
+from ragas.run_config import RunConfig, run_scope
 from ragas.utils import convert_v1_to_v2_dataset
 from ragas.validation import (
     remap_column_names,
@@ -112,8 +112,55 @@ async def aevaluate(
         stacklevel=2,
     )
 
-    column_map = column_map or {}
-    run_config = run_config or RunConfig()
+    # Token accounting. Not a callback handler: ragas never fired on_llm_end,
+    # so that path only ever worked for LangChain LLMs. The collector is
+    # run-scoped and every LLM called inside the run records into it.
+    cost_cb = None
+    if token_usage_parser is not None:
+        from ragas.cost import TokenUsageCollector
+
+        cost_cb = TokenUsageCollector(token_usage_parser=token_usage_parser)
+
+    # The run's RunConfig and collector live in a run scope, not on the
+    # metrics and LLMs passed in, which may be shared with other threads or
+    # runs (#76). Without an explicit run_config, each LLM keeps its own.
+    with run_scope(run_config=run_config, usage_collector=cost_cb):
+        return await _aevaluate(
+            dataset=dataset,
+            metrics=metrics,
+            llm=llm,
+            embeddings=embeddings,
+            experiment_name=experiment_name,
+            run_config=run_config or RunConfig(),
+            cost_cb=cost_cb,
+            raise_exceptions=raise_exceptions,
+            column_map=column_map or {},
+            show_progress=show_progress,
+            batch_size=batch_size,
+            _run_id=_run_id,
+            _pbar=_pbar,
+            _callbacks=_callbacks,
+            return_executor=return_executor,
+        )
+
+
+async def _aevaluate(
+    dataset: t.Union[Dataset, EvaluationDataset],
+    metrics: t.Optional[t.Sequence[Metric]],
+    llm: t.Optional[BaseRagasLLM | InstructorBaseRagasLLM],
+    embeddings: t.Optional[BaseRagasEmbeddings | BaseRagasEmbedding],
+    experiment_name: t.Optional[str],
+    run_config: RunConfig,
+    cost_cb: t.Optional["TokenUsageCollector"],
+    raise_exceptions: bool,
+    column_map: t.Dict[str, str],
+    show_progress: bool,
+    batch_size: t.Optional[int],
+    _run_id: t.Optional[UUID],
+    _pbar: t.Optional[tqdm],
+    _callbacks: Callbacks,
+    return_executor: bool,
+) -> t.Union[EvaluationResult, Executor]:
 
     if helicone_config.is_enabled:
         import uuid
@@ -150,12 +197,11 @@ async def aevaluate(
 
     # default metrics
     if metrics is None:
-        from ragas.metrics._answer_relevance import answer_relevancy
-        from ragas.metrics._context_precision import context_precision
-        from ragas.metrics._context_recall import context_recall
-        from ragas.metrics._faithfulness import faithfulness
+        metrics = _default_metrics()
 
-        metrics = [answer_relevancy, context_precision, faithfulness, context_recall]
+    # Work on copies: filling in llm/embeddings below must not change the
+    # caller's metric objects, which other threads or runs may be using (#76).
+    metrics = [copy.copy(m) for m in metrics]
 
     if isinstance(dataset, Dataset):
         # remap column names from the dataset
@@ -168,19 +214,13 @@ async def aevaluate(
         validate_required_columns(dataset, metrics)
         validate_supported_metrics(dataset, metrics)
 
-    # init llms and embeddings
-    llm_changed: t.List[int] = []
-    embeddings_changed: t.List[int] = []
-    answer_correctness_is_set = -1
-
-    # loop through the metrics and perform initializations
-    for i, metric in enumerate(metrics):
+    # loop through the (copied) metrics and perform initializations
+    for metric in metrics:
         # set llm and embeddings if not set
         if isinstance(metric, MetricWithLLM) and metric.llm is None:
             if llm is None:
                 llm = default_llm()
             metric.llm = t.cast(t.Optional[BaseRagasLLM], llm)
-            llm_changed.append(i)
         if isinstance(metric, MetricWithEmbeddings) and metric.embeddings is None:
             if embeddings is None:
                 # Reuse the LLM's provider and client where that makes sense, so
@@ -198,10 +238,6 @@ async def aevaluate(
                         client=getattr(llm, "client", None),
                     )
             metric.embeddings = embeddings
-            embeddings_changed.append(i)
-        if isinstance(metric, AnswerCorrectness):
-            if metric.answer_similarity is None:
-                answer_correctness_is_set = i
 
         # init all the models
         metric.init(run_config)
@@ -223,22 +259,6 @@ async def aevaluate(
     # Ragas Tracer which traces the run
     tracer = RagasTracer()
     ragas_callbacks["tracer"] = tracer
-
-    # Token accounting. No longer a callback handler: ragas never fired on_llm_end,
-    # so that path only ever worked for LangChain LLMs. The collector is attached to
-    # each metric's LLM below and records the provider's raw completion directly.
-    cost_cb = None
-    if token_usage_parser is not None:
-        from ragas.cost import TokenUsageCollector
-
-        cost_cb = TokenUsageCollector(token_usage_parser=token_usage_parser)
-        # Attach to every metric's LLM, not just ones we assigned -- a user-supplied
-        # metric.llm must be counted too. LLMs that predate the collector attribute
-        # (Haystack, OCI, LlamaIndex wrappers) are skipped rather than patched.
-        for metric in metrics:
-            metric_llm = getattr(metric, "llm", None)
-            if metric_llm is not None and hasattr(metric_llm, "usage_collector"):
-                metric_llm.usage_collector = cost_cb
 
     # The public `callbacks=` parameter was removed along with LangChain; external
     # observability now goes through OpenTelemetry. `_callbacks` remains as private
@@ -345,24 +365,6 @@ async def aevaluate(
         _warn_on_missing_scores(result)
         if not evaluation_group_cm.ended:
             evaluation_rm.on_chain_end({"scores": result.scores})
-    finally:
-        # detach the usage collector from any LLM it was attached to
-        if cost_cb is not None:
-            for metric in metrics:
-                metric_llm = getattr(metric, "llm", None)
-                if metric_llm is not None and hasattr(metric_llm, "usage_collector"):
-                    metric_llm.usage_collector = None
-
-        # reset llms and embeddings if changed
-        for i in llm_changed:
-            t.cast(MetricWithLLM, metrics[i]).llm = None
-        for i in embeddings_changed:
-            t.cast(MetricWithEmbeddings, metrics[i]).embeddings = None
-        if answer_correctness_is_set != -1:
-            t.cast(
-                AnswerCorrectness, metrics[answer_correctness_is_set]
-            ).answer_similarity = None
-
     return result
 
 
@@ -499,6 +501,28 @@ def evaluate(
     from ragas.async_utils import run_sync
 
     return run_sync(_async_wrapper())
+
+
+def _default_metrics() -> t.List[Metric]:
+    """The metrics ``evaluate(metrics=None)`` runs, built fresh for each call.
+
+    These are the hand-off classes ``from ragas.metrics import ...`` gives,
+    so an LLM from ``llm_factory()`` scores them with the collections
+    implementations (#124). The defaults used to be the plain legacy
+    singletons from the private modules: legacy scoring, and module-level
+    objects shared by every caller.
+    """
+    with warnings.catch_warnings():
+        # The short-import deprecation is aimed at user code, not this default.
+        warnings.simplefilter("ignore", DeprecationWarning)
+        from ragas.metrics import (
+            AnswerRelevancy,
+            ContextPrecision,
+            ContextRecall,
+            Faithfulness,
+        )
+
+        return [AnswerRelevancy(), ContextPrecision(), Faithfulness(), ContextRecall()]
 
 
 def _warn_on_missing_scores(result: EvaluationResult) -> None:
