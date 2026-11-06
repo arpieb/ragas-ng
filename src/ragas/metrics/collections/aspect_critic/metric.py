@@ -31,7 +31,7 @@ class AspectCritic(BaseMetric):
         >>> from ragas.llms import llm_factory
         >>> from ragas.metrics.collections import AspectCritic
         >>>
-        >>> llm = llm_factory("gpt-6-luna", client=AsyncOpenAI())
+        >>> llm = llm_factory("<model>", client=AsyncOpenAI())
         >>>
         >>> metric = AspectCritic(
         ...     llm=llm,

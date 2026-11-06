@@ -15,7 +15,7 @@ from ragas.metrics.result import MetricResult
 import datacompy
 
 from .db_utils import execute_sql
-from .text2sql_agent import Text2SQLAgent
+from .text2sql_agent import DEFAULT_MODEL, Text2SQLAgent
 
 # Load environment variables
 load_dotenv(".env")
@@ -195,7 +195,7 @@ async def main():
     logger.info("=" * 40)
     
     # Configuration
-    model = "gpt-5.6-terra"
+    model = DEFAULT_MODEL
     prompt_file = None
     name = "demo_evaluation"
     limit = 5  # Only evaluate 5 samples for demo

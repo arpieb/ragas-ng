@@ -1,0 +1,455 @@
+# Model IDs ragas' code, docs and examples may name, with their provider
+# shutdown dates and listed replacements (#181).
+#
+# Drives tests/unit/test_retired_models.py, which fails on an ID whose
+# shutdown date has passed and warns 60 days before, and
+# scripts/replace_model_ids.py, which applies the replacements.
+#
+# To record a retirement: add or update the row (shutdown, replacement,
+# source), run `uv run python scripts/replace_model_ids.py --check`, then
+# --apply, fix what it reports, and run the guard test. See scripts/README.md.
+#
+# Checked 2026-11-06 against each `source`. Fields:
+#   shutdown    the provider's shutdown date (fails the guard test once passed)
+#   retired     true for models already gone whose date the provider's current
+#               pages no longer give (Gemini 1.x); treated as past shutdown
+#   replacement the provider's listed replacement, unless `note` says otherwise
+#   note        why a replacement differs from the provider's listing
+
+# --- openai ------------------------------------------------------
+[[model]]
+id = "gpt-3.5-turbo"
+provider = "openai"
+shutdown = 2026-10-23
+replacement = "gpt-5.6-terra"
+source = "https://developers.openai.com/api/docs/deprecations"
+
+[[model]]
+id = "gpt-4"
+provider = "openai"
+shutdown = 2026-10-23
+replacement = "gpt-5.6-sol"
+source = "https://developers.openai.com/api/docs/deprecations"
+
+[[model]]
+id = "gpt-4-turbo"
+provider = "openai"
+shutdown = 2026-10-23
+replacement = "gpt-5.6-sol"
+source = "https://developers.openai.com/api/docs/deprecations"
+
+[[model]]
+id = "gpt-4-vision-preview"
+provider = "openai"
+shutdown = 2024-12-06
+replacement = "gpt-6-luna"
+source = "https://developers.openai.com/api/docs/deprecations"
+
+[[model]]
+id = "gpt-4.1-nano"
+provider = "openai"
+shutdown = 2026-10-23
+replacement = "gpt-5.6-luna"
+source = "https://developers.openai.com/api/docs/deprecations"
+
+[[model]]
+id = "gpt-4.1-nano-2025-04-14"
+provider = "openai"
+shutdown = 2026-10-23
+replacement = "gpt-5.6-luna"
+source = "https://developers.openai.com/api/docs/deprecations"
+
+[[model]]
+id = "o1"
+provider = "openai"
+shutdown = 2026-10-23
+replacement = "gpt-5.6-sol"
+source = "https://developers.openai.com/api/docs/deprecations"
+
+[[model]]
+id = "o1-mini"
+provider = "openai"
+shutdown = 2025-10-27
+replacement = "gpt-5.6-terra"
+source = "https://developers.openai.com/api/docs/deprecations"
+
+[[model]]
+id = "o3-mini"
+provider = "openai"
+shutdown = 2026-10-23
+replacement = "gpt-5.6-sol"
+source = "https://developers.openai.com/api/docs/deprecations"
+
+[[model]]
+id = "o4-mini"
+provider = "openai"
+shutdown = 2026-10-23
+replacement = "gpt-5.6-terra"
+source = "https://developers.openai.com/api/docs/deprecations"
+
+[[model]]
+id = "gpt-5.1-codex"
+provider = "openai"
+shutdown = 2026-07-23
+replacement = "gpt-5.6-sol"
+source = "https://developers.openai.com/api/docs/deprecations"
+
+[[model]]
+id = "gpt-5.2-codex"
+provider = "openai"
+shutdown = 2026-07-23
+replacement = "gpt-5.6-sol"
+source = "https://developers.openai.com/api/docs/deprecations"
+
+[[model]]
+id = "gpt-5"
+provider = "openai"
+shutdown = 2026-12-11
+replacement = "gpt-5.6-sol"
+source = "https://developers.openai.com/api/docs/deprecations"
+
+[[model]]
+id = "gpt-5-mini"
+provider = "openai"
+shutdown = 2026-12-11
+replacement = "gpt-5.6-terra"
+source = "https://developers.openai.com/api/docs/deprecations"
+
+[[model]]
+id = "gpt-5-mini-2025-08-07"
+provider = "openai"
+shutdown = 2026-12-11
+replacement = "gpt-5.6-terra"
+source = "https://developers.openai.com/api/docs/deprecations"
+
+[[model]]
+id = "gpt-5-nano"
+provider = "openai"
+shutdown = 2026-12-11
+replacement = "gpt-5.6-luna"
+source = "https://developers.openai.com/api/docs/deprecations"
+
+[[model]]
+id = "gpt-5-nano-2025-08-07"
+provider = "openai"
+shutdown = 2026-12-11
+replacement = "gpt-5.6-luna"
+source = "https://developers.openai.com/api/docs/deprecations"
+
+[[model]]
+id = "o3"
+provider = "openai"
+shutdown = 2026-12-11
+replacement = "gpt-5.6-sol"
+source = "https://developers.openai.com/api/docs/deprecations"
+
+[[model]]
+id = "gpt-4o"
+provider = "openai"
+shutdown = 2027-01-14
+replacement = "gpt-6-luna"
+source = "https://developers.openai.com/api/docs/deprecations"
+
+[[model]]
+id = "gpt-4o-2024-08-06"
+provider = "openai"
+shutdown = 2027-01-14
+replacement = "gpt-6-luna"
+source = "https://developers.openai.com/api/docs/deprecations"
+
+[[model]]
+id = "gpt-4o-mini"
+provider = "openai"
+shutdown = 2027-01-14
+replacement = "gpt-6-luna"
+source = "https://developers.openai.com/api/docs/deprecations"
+
+[[model]]
+id = "gpt-4o-mini-2024-07-18"
+provider = "openai"
+shutdown = 2027-01-14
+replacement = "gpt-6-luna"
+source = "https://developers.openai.com/api/docs/deprecations"
+
+[[model]]
+id = "gpt-4.1"
+provider = "openai"
+shutdown = 2027-01-14
+replacement = "gpt-6-luna"
+source = "https://developers.openai.com/api/docs/deprecations"
+
+[[model]]
+id = "gpt-4.1-mini"
+provider = "openai"
+shutdown = 2027-01-14
+replacement = "gpt-6-luna"
+source = "https://developers.openai.com/api/docs/deprecations"
+
+[[model]]
+id = "gpt-5.1"
+provider = "openai"
+shutdown = 2027-04-01
+replacement = "gpt-6-sol"
+source = "https://developers.openai.com/api/docs/deprecations"
+
+[[model]]
+id = "gpt-6-luna"
+provider = "openai"
+source = "https://developers.openai.com/api/docs/models"
+
+[[model]]
+id = "gpt-6-sol"
+provider = "openai"
+source = "https://developers.openai.com/api/docs/pricing"
+
+[[model]]
+id = "gpt-6.1-sol"
+provider = "openai"
+source = "https://developers.openai.com/api/docs/models"
+
+[[model]]
+id = "gpt-6.1-terra"
+provider = "openai"
+source = "https://developers.openai.com/api/docs/models"
+
+[[model]]
+id = "gpt-5.6-luna"
+provider = "openai"
+source = "https://developers.openai.com/api/docs/models"
+
+[[model]]
+id = "gpt-5.6-terra"
+provider = "openai"
+source = "https://developers.openai.com/api/docs/models"
+
+[[model]]
+id = "gpt-5.6-sol"
+provider = "openai"
+source = "https://developers.openai.com/api/docs/pricing"
+
+[[model]]
+id = "gpt-5.2"
+provider = "openai"
+source = "https://developers.openai.com/api/docs/pricing"
+
+
+# --- anthropic ---------------------------------------------------
+[[model]]
+id = "claude-3-opus"
+provider = "anthropic"
+shutdown = 2026-01-05
+replacement = "claude-opus-5-5"
+note = "provider lists claude-opus-4-8, itself legacy; current family used"
+source = "https://platform.claude.com/docs/en/about-claude/model-deprecations"
+
+[[model]]
+id = "claude-3-sonnet"
+provider = "anthropic"
+shutdown = 2025-07-21
+replacement = "claude-sonnet-5-5"
+source = "https://platform.claude.com/docs/en/about-claude/model-deprecations"
+
+[[model]]
+id = "claude-3-haiku"
+provider = "anthropic"
+shutdown = 2026-04-20
+replacement = "claude-haiku-5-5"
+note = "provider lists claude-haiku-4-5-20251001, past its guaranteed date; current family used"
+source = "https://platform.claude.com/docs/en/about-claude/model-deprecations"
+
+[[model]]
+id = "claude-3-5-sonnet"
+provider = "anthropic"
+shutdown = 2025-10-28
+replacement = "claude-sonnet-5-5"
+source = "https://platform.claude.com/docs/en/about-claude/model-deprecations"
+
+[[model]]
+id = "claude-3-5-sonnet-20241022"
+provider = "anthropic"
+shutdown = 2025-10-28
+replacement = "claude-sonnet-5-5"
+source = "https://platform.claude.com/docs/en/about-claude/model-deprecations"
+
+[[model]]
+id = "claude-3-5-haiku"
+provider = "anthropic"
+shutdown = 2026-02-19
+replacement = "claude-haiku-5-5"
+source = "https://platform.claude.com/docs/en/about-claude/model-deprecations"
+
+[[model]]
+id = "claude-3-7-sonnet"
+provider = "anthropic"
+shutdown = 2026-02-19
+replacement = "claude-sonnet-5-5"
+source = "https://platform.claude.com/docs/en/about-claude/model-deprecations"
+
+[[model]]
+id = "claude-sonnet-4"
+provider = "anthropic"
+shutdown = 2026-06-15
+replacement = "claude-sonnet-5-5"
+source = "https://platform.claude.com/docs/en/about-claude/model-deprecations"
+
+[[model]]
+id = "claude-opus-4"
+provider = "anthropic"
+shutdown = 2026-06-15
+replacement = "claude-opus-5-5"
+source = "https://platform.claude.com/docs/en/about-claude/model-deprecations"
+
+[[model]]
+id = "claude-opus-4-1"
+provider = "anthropic"
+shutdown = 2026-08-05
+replacement = "claude-opus-5-5"
+source = "https://platform.claude.com/docs/en/about-claude/model-deprecations"
+
+[[model]]
+id = "claude-sonnet-4-5"
+provider = "anthropic"
+shutdown = 2026-11-30
+replacement = "claude-sonnet-5-5"
+source = "https://platform.claude.com/docs/en/about-claude/model-deprecations"
+
+[[model]]
+id = "claude-sonnet-4-5-20250929"
+provider = "anthropic"
+shutdown = 2026-11-30
+replacement = "claude-sonnet-5-5"
+source = "https://platform.claude.com/docs/en/about-claude/model-deprecations"
+
+[[model]]
+id = "claude-fable-5-1"
+provider = "anthropic"
+source = "https://platform.claude.com/docs/en/about-claude/models/overview"
+
+[[model]]
+id = "claude-opus-5-5"
+provider = "anthropic"
+source = "https://platform.claude.com/docs/en/about-claude/models/overview"
+
+[[model]]
+id = "claude-sonnet-5-5"
+provider = "anthropic"
+source = "https://platform.claude.com/docs/en/about-claude/models/overview"
+
+[[model]]
+id = "claude-haiku-5-5"
+provider = "anthropic"
+source = "https://platform.claude.com/docs/en/about-claude/models/overview"
+
+
+# --- google ------------------------------------------------------
+[[model]]
+id = "gemini-1.0-pro"
+provider = "google"
+retired = true  # shut down; no date on the provider's current pages
+replacement = "gemini-3.8-flash"
+source = "https://aistudio.google.com/docs/deprecations"
+
+[[model]]
+id = "gemini-1.5-pro"
+provider = "google"
+retired = true  # shut down; no date on the provider's current pages
+replacement = "gemini-3.8-flash"
+source = "https://aistudio.google.com/docs/deprecations"
+
+[[model]]
+id = "gemini-1.5-pro-002"
+provider = "google"
+retired = true  # shut down; no date on the provider's current pages
+replacement = "gemini-3.8-flash"
+source = "https://aistudio.google.com/docs/deprecations"
+
+[[model]]
+id = "gemini-1.5-flash"
+provider = "google"
+retired = true  # shut down; no date on the provider's current pages
+replacement = "gemini-3.6-flash"
+source = "https://aistudio.google.com/docs/deprecations"
+
+[[model]]
+id = "gemini-pro-vision"
+provider = "google"
+retired = true  # shut down; no date on the provider's current pages
+replacement = "gemini-3.6-flash"
+source = "https://aistudio.google.com/docs/deprecations"
+
+[[model]]
+id = "gemini-2.0-flash"
+provider = "google"
+shutdown = 2026-06-01
+replacement = "gemini-3.6-flash"
+source = "https://aistudio.google.com/docs/deprecations"
+
+[[model]]
+id = "gemini-2.0-flash-001"
+provider = "google"
+shutdown = 2026-06-01
+replacement = "gemini-3.6-flash"
+source = "https://aistudio.google.com/docs/deprecations"
+
+[[model]]
+id = "gemini-2.0-flash-lite"
+provider = "google"
+shutdown = 2026-06-01
+replacement = "gemini-3.5-flash-lite"
+note = "no replacement listed; nearest current Flash-Lite"
+source = "https://aistudio.google.com/docs/deprecations"
+
+[[model]]
+id = "gemini-2.5-pro"
+provider = "google"
+shutdown = 2026-12-01
+replacement = "gemini-3.8-flash"
+source = "https://aistudio.google.com/docs/deprecations"
+
+[[model]]
+id = "gemini-2.5-flash"
+provider = "google"
+shutdown = 2026-12-01
+replacement = "gemini-3.5-flash-lite"
+source = "https://aistudio.google.com/docs/deprecations"
+
+[[model]]
+id = "text-embedding-004"
+provider = "google"
+shutdown = 2026-01-14
+replacement = "gemini-embedding-2"
+source = "https://aistudio.google.com/docs/deprecations"
+
+[[model]]
+id = "gemini-3.8-flash"
+provider = "google"
+source = "https://aistudio.google.com/docs/models"
+
+[[model]]
+id = "gemini-3.6-flash"
+provider = "google"
+source = "https://aistudio.google.com/docs/models"
+
+[[model]]
+id = "gemini-3.5-flash-lite"
+provider = "google"
+source = "https://aistudio.google.com/docs/models"
+
+[[model]]
+id = "gemini-3.1-flash-lite"
+provider = "google"
+shutdown = 2027-05-07
+replacement = "gemini-3.5-flash-lite"
+source = "https://aistudio.google.com/docs/deprecations"
+
+[[model]]
+id = "gemini-embedding-2"
+provider = "google"
+source = "https://aistudio.google.com/docs/deprecations"
+
+[[model]]
+id = "gemini-embedding-001"
+provider = "google"
+shutdown = 2028-05-14
+replacement = "gemini-embedding-2"
+source = "https://aistudio.google.com/docs/deprecations"

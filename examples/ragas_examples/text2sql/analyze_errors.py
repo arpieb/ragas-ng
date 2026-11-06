@@ -17,6 +17,9 @@ import dotenv
 import pandas as pd
 from openai import OpenAI
 
+# The model that analyzes failed rows. Override with RAGAS_EXAMPLE_JUDGE_MODEL.
+ANALYSIS_MODEL = os.getenv("RAGAS_EXAMPLE_JUDGE_MODEL", "gpt-5.6-sol")
+
 dotenv.load_dotenv("../../../.env")
 
 ERROR_TAXONOMY = [
@@ -59,7 +62,7 @@ Respond with JSON containing:
 - error_analysis: brief 1-3 sentence explanation of what went wrong"""
 
     response = client.chat.completions.create(
-        model="gpt-5",
+        model=ANALYSIS_MODEL,
         messages=[{"role": "user", "content": prompt}],
         response_format={"type": "json_object"},
     )

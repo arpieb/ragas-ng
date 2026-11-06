@@ -22,7 +22,10 @@ from ragas.metrics import DiscreteMetric
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
-from rag import RAG, BM25Retriever
+from rag import DEFAULT_MODEL, RAG, BM25Retriever
+
+# The model that judges the results. Override with RAGAS_EXAMPLE_JUDGE_MODEL.
+JUDGE_MODEL = os.getenv("RAGAS_EXAMPLE_JUDGE_MODEL", "gpt-6-luna")
 
 # Load environment variables
 load_dotenv(".env")
@@ -170,7 +173,7 @@ async def evaluate_rag(row: Dict[str, Any], rag: RAG, llm) -> Dict[str, Any]:
     return result
 
 
-async def run_experiment(mode: str = "naive", model: str = "gpt-6-luna", name: Optional[str] = None):
+async def run_experiment(mode: str = "naive", model: str = DEFAULT_MODEL, name: Optional[str] = None):
     """
     Simple function to run RAG evaluation experiment.
     
@@ -209,7 +212,7 @@ async def run_experiment(mode: str = "naive", model: str = "gpt-6-luna", name: O
         dataset, 
         name=name or f"{datetime.now().strftime('%Y%m%d-%H%M%S')}_{'agenticrag' if mode == 'agentic' else 'naiverag'}",
         rag=rag,
-        llm=llm_factory("gpt-6-luna", client=openai_client, temperature=1, top_p=None)
+        llm=llm_factory(JUDGE_MODEL, client=openai_client, temperature=1, top_p=None)
     )
     
     # Print basic results
@@ -235,6 +238,6 @@ if __name__ == "__main__":
     else:
         logger.info("Running in NAIVE mode")
     
-    asyncio.run(run_experiment(mode=mode, model="gpt-6-luna"))
+    asyncio.run(run_experiment(mode=mode))
 
 

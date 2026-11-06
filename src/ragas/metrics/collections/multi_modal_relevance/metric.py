@@ -40,7 +40,7 @@ class MultiModalRelevance(BaseMetric):
         >>>
         >>> # Setup dependencies (use a vision-capable model)
         >>> client = AsyncOpenAI()
-        >>> llm = llm_factory("gpt-6-luna", client=client)  # Vision-capable model
+        >>> llm = llm_factory("<model>", client=client)  # Vision-capable model
         >>>
         >>> # Create metric instance
         >>> metric = MultiModalRelevance(llm=llm)

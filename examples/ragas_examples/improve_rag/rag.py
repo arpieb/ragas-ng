@@ -72,6 +72,9 @@ def split_text(text: str, chunk_size: int = 1000, chunk_overlap: int = 100) -> l
     return overlapped
 
 
+# The model the app under test calls. Override with RAGAS_EXAMPLE_APP_MODEL.
+DEFAULT_MODEL = os.getenv("RAGAS_EXAMPLE_APP_MODEL", "gpt-6-luna")
+
 class BM25Retriever:
     """Simple BM25-based retriever for document search."""
 
@@ -136,7 +139,7 @@ class RAG:
         except (urllib.error.URLError, OSError):
             return False
 
-    def __init__(self, llm_client: AsyncOpenAI, retriever: BM25Retriever, mode="naive", system_prompt=None, model="gpt-6-luna", default_k=3):
+    def __init__(self, llm_client: AsyncOpenAI, retriever: BM25Retriever, mode="naive", system_prompt=None, model=DEFAULT_MODEL, default_k=3):
         # Enable MLflow autolog for OpenAI API calls (optional - only if server is running)
         self._mlflow_enabled = False
         if os.environ.get("MLFLOW_TRACKING_URI") or self._check_mlflow_server():

@@ -49,7 +49,7 @@ class NoiseSensitivity(BaseMetric):
         >>>
         >>> # Setup dependencies
         >>> client = AsyncOpenAI()
-        >>> llm = instructor_llm_factory("openai", client=client, model="gpt-6-luna")
+        >>> llm = llm_factory("<model>", client=client)
         >>>
         >>> # Create metric instance
         >>> metric = NoiseSensitivity(llm=llm)

@@ -31,7 +31,7 @@ We've created a synthetic dataset for our use case. Each row has `id, text, labe
 
 To customize the dataset for your use case, create a `datasets/` directory and add your own CSV file. You can also connect to different backends. Refer to [Core Concepts - Evaluation Dataset](../../concepts/components/eval_dataset.md) for more information.
 
-It is better to sample real data from your application to create the dataset. If that is not available, you can generate synthetic data using an LLM. We recommend using a reasoning model like gpt-5 high-reasoning which can generate more accurate and complex data. Always make sure to manually review and verify the data you use. 
+It is better to sample real data from your application to create the dataset. If that is not available, you can generate synthetic data using an LLM. We recommend using a reasoning model, such as gpt-5.6-sol with high reasoning effort, which can generate more accurate and complex data. Always make sure to manually review and verify the data you use. 
 
 ## Evaluate your prompt on a dataset
 
