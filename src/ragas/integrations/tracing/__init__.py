@@ -8,8 +8,10 @@ Datadog -- receives ragas runs with no ragas-specific integration code.
 Modules here:
 - ``mlflow``: ``sync_trace()`` / ``MLflowTrace`` read back the last MLflow
   trace (requires the ``tracing`` extra).
-- ``langfuse``: **deprecated** (#97). Use the Langfuse SDK directly; see the
-  Langfuse integration guide.
+
+The Langfuse helper (``ragas.integrations.tracing.langfuse``) was removed
+(#97): it never fetched real traces. Use the Langfuse SDK directly; see the
+Langfuse integration guide.
 
 Example (MLflow):
     ```python
@@ -26,40 +28,29 @@ Example (MLflow):
 
 # Type stubs for pyright - these won't execute but provide type information
 if False:
-    from .langfuse import (  # noqa: F401
-        LangfuseTrace,
-        add_query_param,
-        logger,
-        observe,
-        sync_trace,
-    )
     from .mlflow import MLflowTrace  # noqa: F401
+
+_REMOVED_LANGFUSE = {
+    "observe",
+    "logger",
+    "LangfuseTrace",
+    "sync_trace",
+    "add_query_param",
+}
 
 
 # Lazy imports to handle optional dependencies gracefully
 def __getattr__(name: str):
-    if name in ["observe", "logger", "LangfuseTrace", "sync_trace", "add_query_param"]:
-        from .langfuse import (
-            LangfuseTrace,
-            add_query_param,
-            logger,
-            observe,
-            sync_trace,
-        )
-
-        if name == "observe":
-            return observe
-        elif name == "logger":
-            return logger
-        elif name == "LangfuseTrace":
-            return LangfuseTrace
-        elif name == "sync_trace":
-            return sync_trace
-        elif name == "add_query_param":
-            return add_query_param
-    elif name == "MLflowTrace":
+    if name == "MLflowTrace":
         from .mlflow import MLflowTrace
 
         return MLflowTrace
-    else:
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+    if name in _REMOVED_LANGFUSE:
+        raise AttributeError(
+            f"ragas.integrations.tracing.{name} was removed with the Langfuse "
+            "helper (#97), which never fetched real traces. Use the Langfuse "
+            "SDK directly (`from langfuse import observe, get_client`); ragas "
+            "runs reach Langfuse as OpenTelemetry spans. See the Langfuse "
+            "integration guide."
+        )
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")

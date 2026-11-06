@@ -2,8 +2,8 @@
 Comprehensive test suite for tracing integrations.
 
 Tests the MLflow integration with proper mocking to avoid external
-dependencies. The retired Langfuse helper is covered by
-test_langfuse_retired.py.
+dependencies. The removed Langfuse helper is covered by
+test_langfuse_removed.py.
 """
 
 import os
@@ -150,14 +150,6 @@ class TestMLflowIntegration:
 class TestTracingIntegrationInitModule:
     """Test the tracing integration __init__ module."""
 
-    def test_lazy_import_langfuse_functions(self):
-        """Test lazy imports for Langfuse functions."""
-        from ragas.integrations.tracing import LangfuseTrace, observe, sync_trace
-
-        assert callable(observe)
-        assert callable(sync_trace)
-        assert LangfuseTrace is not None
-
     def test_lazy_import_mlflow_classes(self):
         """Test lazy imports for MLflow classes."""
         from ragas.integrations.tracing import MLflowTrace
@@ -170,46 +162,6 @@ class TestTracingIntegrationInitModule:
 
         with pytest.raises(AttributeError, match="has no attribute 'non_existent'"):
             _ = tracing.non_existent
-
-
-class TestTracingWithCallbackSystem:
-    """Test tracing integrations with the existing callback system."""
-
-    def test_tracing_with_ragas_tracer(self):
-        """Test that tracing can work alongside RagasTracer."""
-        from ragas.callbacks import RagasTracer
-        from ragas.integrations.tracing.langfuse import observe
-
-        tracer = RagasTracer()
-
-        @observe()
-        def traced_function():
-            return "test_result"
-
-        # Should work without conflicts
-        result = traced_function()
-        assert result == "test_result"
-
-        # Tracer should still be functional
-        assert isinstance(tracer.traces, dict)
-
-    def test_callback_group_compatibility(self):
-        """Test compatibility with the ragas callback group."""
-        from ragas.callbacks import CallbackGroup, RagasTracer
-        from ragas.integrations.tracing.langfuse import observe
-
-        tracer = RagasTracer()
-        callback_manager = CallbackGroup([tracer])
-
-        @observe()
-        def evaluation_function():
-            return {"score": 0.85}
-
-        result = evaluation_function()
-        assert result["score"] == 0.85
-
-        # Should not interfere with callback functionality
-        assert len(callback_manager.handlers) == 1
 
 
 if __name__ == "__main__":

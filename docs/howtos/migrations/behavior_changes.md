@@ -295,20 +295,21 @@ load with.
       `ValueError`.
     - An unknown or missing role still raises.
 
-## Langfuse helper retired ([#97](https://github.com/arpieb/ragas-ng/issues/97))
+## Langfuse helper removed ([#97](https://github.com/arpieb/ragas-ng/issues/97))
 
-`ragas.integrations.tracing.langfuse` is deprecated, and importing it warns.
-It never worked in ragas-ng: `sync_trace()` returned a placeholder trace with
-no observations, and `LangfuseTrace.filter()` always returned `[]`. It is
-retired rather than ported to the Langfuse SDK, because Langfuse's own SDK and
-OpenTelemetry already cover both of its jobs without vendor-specific code in
-ragas.
+`ragas.integrations.tracing.langfuse` is removed, and importing it raises
+`ModuleNotFoundError`. It never worked in ragas-ng: `sync_trace()` returned a
+placeholder trace with no observations, and `LangfuseTrace.filter()` always
+returned `[]`. Langfuse's own SDK and OpenTelemetry cover both of its jobs
+without vendor-specific code in ragas, so it is removed rather than ported to
+the Langfuse SDK.
 
 | Before | Now |
 |---|---|
-| `from ragas.integrations.tracing.langfuse import observe` | `from langfuse import observe`. The old import still works, with a warning. |
-| `await sync_trace(trace_id)` / `LangfuseTrace(...)` | `NotImplementedError` pointing to the replacement: `get_client().api.trace.get(trace_id)` and its `observations` |
+| `from ragas.integrations.tracing.langfuse import observe` (or `from ragas.integrations.tracing import observe`) | `from langfuse import observe` |
+| `await sync_trace(trace_id)` / `LangfuseTrace(...)` | `from langfuse import get_client; get_client().api.trace.get(trace_id)` |
 | `trace.filter("span_name")` | `[o for o in trace.observations if o.name == "span_name"]` on the Langfuse SDK's trace |
+| `add_query_param(url, name, value)` | `urllib.parse`: `urlencode` / `urlunparse` |
 | `pip install "ragas[tracing]"` installed `langfuse` | it installs only `mlflow`; `pip install langfuse` if you use it |
 
 To see ragas runs in Langfuse, export ragas' OpenTelemetry spans to it. The

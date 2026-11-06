@@ -5,7 +5,7 @@
 1. **See ragas runs in Langfuse.** ragas emits [OpenTelemetry](https://opentelemetry.io) spans, which Langfuse ingests directly. ragas needs no Langfuse-specific code for this.
 2. **Score your app's traces with ragas.** Use Langfuse's own SDK to trace your app and fetch its traces, ragas metrics to score them, and the SDK again to attach the scores.
 
-Neither path needs anything from ragas beyond its metrics. The old `ragas.integrations.tracing.langfuse` helper is deprecated (see [Behavior changes](../migrations/behavior_changes.md#langfuse-helper-retired-97)).
+Neither path needs anything from ragas beyond its metrics. The old `ragas.integrations.tracing.langfuse` helper has been removed (see [Behavior changes](../migrations/behavior_changes.md#langfuse-helper-removed-97)).
 
 This guide was checked against Langfuse Python SDK 4.15. Install what you need:
 

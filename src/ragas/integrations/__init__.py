@@ -5,7 +5,8 @@ This module provides integrations with various platforms, frameworks, and tools
 to enhance the Ragas evaluation experience.
 
 Available integrations:
-- Tracing: Langfuse, MLflow for observability and tracking
+- Tracing: MLflow trace read-back (ragas runs reach any OpenTelemetry backend,
+  such as Langfuse or Phoenix, with no integration code)
 - Frameworks: LlamaIndex, Griptape
 - Observability: Helicone
 - Platforms: Amazon Bedrock, R2R
@@ -14,7 +15,7 @@ Available integrations:
 
 Import tracing integrations:
 ```python
-from ragas.integrations.tracing import observe, LangfuseTrace, MLflowTrace
+from ragas.integrations.tracing import MLflowTrace
 ```
 """
 
