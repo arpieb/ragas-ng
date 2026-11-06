@@ -41,4 +41,9 @@ What the script leaves alone:
 
 The list is `ALLOWED` in `model_ids.py`.
 
+**Not matched:** Bedrock-style IDs that wrap a model name in a vendor prefix and version suffix (`anthropic.claude-3-5-sonnet-20241022-v2:0`). Their replacement isn't simply the new model name, so search for them by hand:
+```bash
+grep -rnE "\.claude-[0-9a-z.-]+-v[0-9]+:[0-9]" src examples docs
+```
+
 Example templates read `RAGAS_EXAMPLE_APP_MODEL` / `RAGAS_EXAMPLE_JUDGE_MODEL`, and their defaults are the literals the script updates.

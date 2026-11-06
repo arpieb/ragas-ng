@@ -240,9 +240,12 @@ async def _aevaluate(
                     # Fall back to the provider-neutral default.
                     embeddings = embedding_factory()
                 else:
+                    # the caller's own client (llm_factory keeps it as
+                    # source_client), not the instructor wrapper around it
                     embeddings = embedding_factory(
                         provider=inferred_provider,
-                        client=getattr(llm, "client", None),
+                        client=getattr(llm, "source_client", None)
+                        or getattr(llm, "client", None),
                     )
             metric.embeddings = embeddings
 

@@ -1,53 +1,15 @@
 # Google Gemini Integration Guide
 
-This guide covers setting up and using Google's Gemini models with Ragas for evaluation.
-
-## Overview
-
-Ragas supports Google Gemini models with automatic adapter selection. The framework works with both the new `google-genai` SDK (recommended) and the legacy `google-generativeai` SDK.
+Use Gemini models as ragas' evaluator and testset generator through [LiteLLM](https://docs.litellm.ai/docs/providers/gemini). You need no Google SDK for the LLM.
 
 ## Setup
 
-### Prerequisites
-
-- Google API Key with Gemini API access
-- Python 3.8+
-- Ragas installed
-
-### Installation
-
-Install required dependencies:
+Get an API key from [Google AI Studio](https://aistudio.google.com/apikey), then:
 
 ```bash
-# Google GenAI SDK
-pip install ragas google-genai
-
-# Or no Google SDK at all: ragas routes through LiteLLM (see Option 2)
 pip install ragas
+export GOOGLE_API_KEY="your-google-api-key"   # or GEMINI_API_KEY
 ```
-
-## Configuration
-
-### Option 1: Using New Google GenAI SDK (Recommended)
-
-The new `google-genai` SDK is the recommended approach:
-
-```python
-import os
-from google import genai
-from ragas.llms import llm_factory
-
-# Create client with API key
-client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
-
-# Create LLM - adapter is auto-detected for google provider
-llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
-```
-
-### Option 2: No Client (LiteLLM)
-
-Without a client, `llm_factory` routes through LiteLLM and reads `GEMINI_API_KEY`
-from the environment:
 
 ```python
 from ragas.llms import llm_factory
@@ -55,438 +17,143 @@ from ragas.llms import llm_factory
 llm = llm_factory("gemini/gemini-3.6-flash")
 ```
 
-!!! note "Legacy `google-generativeai` SDK"
-    A `google.generativeai.GenerativeModel` client is not supported: it never
-    worked with the collections metrics, and `llm_factory` now rejects it with
-    a pointer to the options above. The SDK itself reached end of support in
-    August 2025.
+### Vertex AI
 
-### Option 3: Using LiteLLM Proxy (Advanced)
-
-For advanced use cases where you need LiteLLM's proxy capabilities, set up the LiteLLM proxy server first, then use:
+With Google Cloud credentials (Application Default Credentials, e.g. `gcloud auth application-default login`):
 
 ```python
-import os
-from openai import OpenAI
-from ragas.llms import llm_factory
-
-# Requires running: litellm --model gemini-3.6-flash
-client = OpenAI(
-    api_key="anything",
-    base_url="http://0.0.0.0:4000",  # LiteLLM proxy endpoint
-)
-
-# Create LLM with explicit adapter selection
-llm = llm_factory("gemini-3.6-flash", client=client, adapter="litellm")
-```
-
-## Supported Models
-
-Ragas works with all Gemini models:
-
-- **Flash**: `gemini-3.6-flash` (stable; used in the examples on this page) and `gemini-3.8-flash` (newest)
-- **Flash-Lite**: `gemini-3.5-flash-lite`, the fastest and cheapest
-
-Older models (Gemini 1.x, 2.0) are shut down; 2.5 models shut down on December 1, 2026.
-
-For the latest models and pricing, see [Google AI Studio](https://aistudio.google.com/apikey).
-
-## Embeddings Configuration
-
-Ragas metrics fall into two categories:
-
-1. **LLM-only metrics** (don't require embeddings):
-   - ContextPrecision
-   - ContextRecall
-   - Faithfulness
-   - AspectCritic
-
-2. **Embedding-dependent metrics** (require embeddings):
-   - AnswerCorrectness
-   - AnswerRelevancy
-   - AnswerSimilarity
-   - SemanticSimilarity
-   - ContextEntityRecall
-
-### Automatic Provider Matching
-
-When using Ragas with Gemini, the embedding provider is **automatically matched** to your LLM provider. If you provide a Gemini LLM, Ragas will default to using Google embeddings. **No OpenAI API key is needed.**
-
-### Option 1: Default Embeddings (Recommended)
-
-Let Ragas automatically select the right embeddings based on your LLM:
-
-```python
-import os
-from datasets import Dataset
-from google import genai
-from ragas import evaluate
-from ragas.llms import llm_factory
-from ragas.metrics import (
-    AnswerCorrectness,
-    ContextPrecision,
-    ContextRecall,
-    Faithfulness,
-)
-
-# Initialize Gemini client (new SDK)
-client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
-llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
-
-# Create sample evaluation data
-data = {
-    "question": ["What is the capital of France?"],
-    "answer": ["Paris is the capital of France."],
-    "contexts": [["France is a country in Western Europe. Paris is its capital."]],
-    "ground_truth": ["Paris"],
-}
-
-dataset = Dataset.from_dict(data)
-
-# Define metrics - embeddings are auto-configured for Google
-metrics = [
-    ContextPrecision(llm=llm),
-    ContextRecall(llm=llm),
-    Faithfulness(llm=llm),
-    AnswerCorrectness(llm=llm),  # Uses Google embeddings automatically
-]
-
-# Run evaluation
-results = evaluate(dataset, metrics=metrics)
-print(results)
-```
-
-### Option 2: Explicit Embeddings
-
-For explicit control over embeddings, you can create them separately. Google embeddings work with multiple configuration options:
-
-```python
-import os
-from google import genai
-from ragas.llms import llm_factory
-from ragas.embeddings import GoogleEmbeddings
-from ragas.embeddings.base import embedding_factory
-from datasets import Dataset
-from ragas import evaluate
-from ragas.metrics import (
-    AnswerCorrectness,
-    ContextPrecision,
-    ContextRecall,
-    Faithfulness,
-)
-
-# Initialize Gemini client (new SDK)
-client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
-llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
-
-# Initialize Google embeddings (multiple options):
-
-# Option A: Using the same client (recommended for new SDK)
-embeddings = GoogleEmbeddings(client=client, model="gemini-embedding-001")
-
-# Option B: Using embedding factory
-embeddings = embedding_factory("google", model="gemini-embedding-001")
-
-# Option C: Auto-import (creates client automatically)
-embeddings = GoogleEmbeddings(model="gemini-embedding-001")
-
-# Create sample evaluation data
-data = {
-    "question": ["What is the capital of France?"],
-    "answer": ["Paris is the capital of France."],
-    "contexts": [["France is a country in Western Europe. Paris is its capital."]],
-    "ground_truth": ["Paris"],
-}
-
-dataset = Dataset.from_dict(data)
-
-# Define metrics with explicit embeddings
-metrics = [
-    ContextPrecision(llm=llm),
-    ContextRecall(llm=llm),
-    Faithfulness(llm=llm),
-    AnswerCorrectness(llm=llm, embeddings=embeddings),
-]
-
-# Run evaluation
-results = evaluate(dataset, metrics=metrics)
-print(results)
-```
-
-## Example: Complete Evaluation
-
-Here's a complete example evaluating a RAG application with Gemini (using automatic embedding provider matching):
-
-```python
-import os
-from datasets import Dataset
-from google import genai
-from ragas import evaluate
-from ragas.llms import llm_factory
-from ragas.metrics import (
-    AnswerCorrectness,
-    ContextPrecision,
-    ContextRecall,
-    Faithfulness,
-)
-
-# Initialize Gemini client (new SDK)
-client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
-llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
-
-# Create sample evaluation data
-data = {
-    "question": ["What is the capital of France?"],
-    "answer": ["Paris is the capital of France."],
-    "contexts": [["France is a country in Western Europe. Paris is its capital."]],
-    "ground_truth": ["Paris"],
-}
-
-dataset = Dataset.from_dict(data)
-
-# Define metrics - embeddings automatically use Google provider
-metrics = [
-    ContextPrecision(llm=llm),
-    ContextRecall(llm=llm),
-    Faithfulness(llm=llm),
-    AnswerCorrectness(llm=llm),
-]
-
-# Run evaluation
-results = evaluate(dataset, metrics=metrics)
-print(results)
-```
-
-## Performance Considerations
-
-### Model Selection
-
-- **gemini-3.6-flash**: Stable; a good balance of speed, cost and quality
-- **gemini-3.8-flash**: Google's newest Flash model, with better reasoning for complex evaluations
-- **gemini-3.5-flash-lite**: Fastest and cheapest, for simple or very high-volume metrics
-
-### Cost Optimization
-
-Gemini models are cost-effective. For large-scale evaluations:
-
-1. Use `gemini-3.6-flash` for most metrics
-2. Consider batch processing for multiple evaluations
-3. Cache prompts when possible (Gemini supports prompt caching)
-
-### Async Support
-
-For high-throughput evaluations, use async operations:
-
-```python
-import os
-from google import genai
-from ragas.llms import llm_factory
-
-# Create client (new SDK)
-client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
-llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
-
-# Use in async evaluation
-# response = await llm.agenerate(prompt, ResponseModel)
-```
-
-## Adapter Selection
-
-Ragas automatically selects the appropriate adapter based on your setup:
-
-```python
-# Auto-detection happens automatically
-# For Gemini: uses LiteLLM adapter
-# For other providers: uses Instructor adapter
-
-# Explicit selection (if needed)
 llm = llm_factory(
-    "gemini-3.6-flash",
-    client=client,
-    adapter="litellm",  # Explicit adapter selection
+    "vertex_ai/gemini-3.6-flash",
+    vertex_project="my-project",
+    vertex_location="us-central1",
 )
-
-# Check auto-detected adapter
-from ragas.llms.adapters import auto_detect_adapter
-
-adapter_name = auto_detect_adapter(client, "google")
-print(f"Using adapter: {adapter_name}")  # Output: Using adapter: litellm
 ```
 
-## Troubleshooting
+### Gemini's OpenAI-compatible endpoint
 
-### API Key Issues
+An `OpenAI` client pointed at Gemini's endpoint works too. The client's settings (headers, timeout, proxy) carry over:
 
 ```python
-# Make sure your API key is set
 import os
 
-if not os.environ.get("GOOGLE_API_KEY"):
-    raise ValueError("GOOGLE_API_KEY environment variable not set")
-```
-
-### Known Issue: Instructor Safety Settings (New SDK)
-
-There is a known upstream issue with the instructor library where it sends invalid safety settings to the Gemini API when using the new `google-genai` SDK. This may cause errors like:
-
-```
-Invalid value at 'safety_settings[5].category'... "HARM_CATEGORY_JAILBREAK"
-```
-
-**Workarounds:**
-
-1. Use the OpenAI-compatible endpoint (recommended for now):
-```python
 from openai import OpenAI
 
 client = OpenAI(
-    api_key=os.environ.get("GOOGLE_API_KEY"),
+    api_key=os.environ["GOOGLE_API_KEY"],
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
 )
-llm = llm_factory("gemini-3.6-flash", provider="openai", client=client)
+llm = llm_factory("gemini-3.6-flash", client=client)
 ```
 
-2. Track the upstream issue: [instructor#1658](https://github.com/567-labs/instructor/issues/1658)
+!!! note "google-genai clients are no longer accepted for LLMs"
+    `llm_factory("gemini-...", provider="google", client=genai.Client(...))` raises an
+    error naming `llm_factory("gemini/gemini-...")` instead (#182). Every call goes
+    through LiteLLM, and instructor's native Gemini mode, with its
+    `HARM_CATEGORY_JAILBREAK` safety-settings bug, isn't used any more.
+    Embeddings still take a google-genai client (below).
 
-Note: Embeddings work correctly with the new SDK - this issue only affects LLM generation.
+## Models
 
-### Rate Limits
+- **Flash:** `gemini-3.6-flash` (stable, used on this page) and `gemini-3.8-flash` (Google's newest Flash model, with better reasoning for complex evaluations).
+- **Flash-Lite:** `gemini-3.5-flash-lite`, the fastest and cheapest, for simple or very high-volume metrics.
 
-Gemini has rate limits. For production use, the LLM adapter handles retries and timeouts automatically. If you need fine-grained control, ensure your client is properly configured with appropriate timeouts at the HTTP client level.
+Older models are shut down (Gemini 1.x and 2.0) or shut down on 2026-12-01 (2.5). See Google's [models](https://aistudio.google.com/docs/models) and [deprecations](https://aistudio.google.com/docs/deprecations) pages.
 
-### Model Availability
+## Embeddings
 
-If a model isn't available:
-
-1. Check your region/quota in [Google Cloud Console](https://console.cloud.google.com)
-2. Try a different model from the supported list
-3. Verify your API key has access to the Generative AI API
-
-## Migration from Other Providers
-
-### From OpenAI
+Metrics such as `AnswerCorrectness`, `AnswerRelevancy` and `SemanticSimilarity` also need embeddings. Use Google's:
 
 ```python
-# Before: OpenAI-only
-from openai import OpenAI
-
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-llm = llm_factory("gpt-6-luna", client=client)
-
-# After: Gemini with new SDK
-from google import genai
-
-client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
-llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
-```
-
-### From Anthropic
-
-```python
-# Before: Anthropic
-from anthropic import Anthropic
-
-client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-llm = llm_factory("claude-sonnet-5-5", provider="anthropic", client=client)
-
-# After: Gemini with new SDK
-from google import genai
-
-client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
-llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
-```
-
-### From Legacy google-generativeai SDK
-
-```python
-# Before: Legacy SDK (no longer supported)
-import google.generativeai as genai
-
-genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
-client = genai.GenerativeModel("gemini-3.6-flash")
-llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
-
-# After: New SDK (recommended)
-from google import genai
-
-client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
-llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
-```
-
-## Using with Metrics Collections (Modern Approach)
-
-For the modern metrics collections API, you need to explicitly create both LLM and embeddings:
-
-```python
-import os
-from google import genai
-from ragas.llms import llm_factory
 from ragas.embeddings import GoogleEmbeddings
-from ragas.metrics.collections import AnswerCorrectness, ContextPrecision
 
-# Create client (new SDK)
-client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
+embeddings = GoogleEmbeddings(model="gemini-embedding-001")  # pip install google-genai
+# or, with your own google-genai client:
+# from google import genai
+# embeddings = GoogleEmbeddings(client=genai.Client(), model="gemini-embedding-001")
+```
 
-# Create LLM
-llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
+!!! warning "Pass embeddings explicitly"
+    With no `embeddings`, `evaluate()` falls back to ragas' default, OpenAI's
+    `text-embedding-ada-002` through LiteLLM, which needs `OPENAI_API_KEY`. For
+    a Gemini-only setup, pass Google embeddings to `evaluate(..., embeddings=...)`
+    or to each metric.
 
-# Create embeddings using the same client
-embeddings = GoogleEmbeddings(client=client, model="gemini-embedding-001")
+## Example
 
-# Create metrics with explicit LLM and embeddings
-metrics = [
-    ContextPrecision(llm=llm),  # LLM-only metric
-    AnswerCorrectness(llm=llm, embeddings=embeddings),  # Needs both
-]
+```python
+from ragas import EvaluationDataset, evaluate
+from ragas.embeddings import GoogleEmbeddings
+from ragas.llms import llm_factory
+from ragas.metrics.collections import AnswerCorrectness, ContextPrecision, Faithfulness
 
-# Use metrics with your evaluation workflow
-result = await metrics[1].ascore(
+llm = llm_factory("gemini/gemini-3.6-flash")
+embeddings = GoogleEmbeddings(model="gemini-embedding-001")
+
+dataset = EvaluationDataset.from_list(
+    [
+        {
+            "user_input": "What is the capital of France?",
+            "response": "Paris is the capital of France.",
+            "retrieved_contexts": [
+                "France is in Western Europe. Paris is its capital."
+            ],
+            "reference": "Paris",
+        }
+    ]
+)
+
+result = evaluate(
+    dataset,
+    metrics=[
+        ContextPrecision(llm=llm),
+        Faithfulness(llm=llm),
+        AnswerCorrectness(llm=llm, embeddings=embeddings),
+    ],
+)
+print(result)
+```
+
+Or score one sample with a collections metric:
+
+```python
+result = await AnswerCorrectness(llm=llm, embeddings=embeddings).ascore(
     user_input="What is the capital of France?",
     response="Paris",
     reference="Paris is the capital of France.",
 )
 ```
 
-**Key difference from legacy approach:**
-- Legacy `evaluate()`: Auto-creates embeddings from LLM provider
-- Modern collections: You explicitly pass embeddings to each metric
+--8<--
+running_async.md
+--8<--
 
-This gives you more control and works seamlessly with Gemini!
-
-## Supported Metrics
-
-All Ragas metrics work with Gemini:
-
-- Answer Correctness
-- Answer Relevancy
-- Answer Similarity
-- Aspect Critique
-- Context Precision
-- Context Recall
-- Context Entities Recall
-- Faithfulness
-- NLI Eval
-
-See [Metrics Reference](../../concepts/metrics/index.md) for details.
-
-## Advanced: Custom Model Parameters
-
-Pass custom parameters to Gemini:
+## Model parameters
 
 ```python
 llm = llm_factory(
-    "gemini-3.6-flash",
-    client=client,
-    temperature=0.5,
-    max_tokens=2048,
-    top_p=0.9,
-    top_k=40,
+    "gemini/gemini-3.6-flash", temperature=0.5, max_tokens=2048, top_p=0.9
 )
 ```
 
+Without them, ragas sends near-deterministic defaults (`temperature=0.01`, `top_p=0.1`), which LiteLLM drops if the model rejects them. See [LLMs (llm_factory)](../llm-adapters.md#model-arguments).
+
+## Troubleshooting
+
+- **Missing key:** set `GOOGLE_API_KEY` or `GEMINI_API_KEY`, or pass `api_key=` to `llm_factory`.
+- **Rate limits:** ragas retries transient errors (rate limits, timeouts, 5xx) with backoff according to `RunConfig`. Lower `RunConfig(max_workers=...)` if you still hit quota limits.
+- **Model not available:** check your region and quota, and that the model is on Google's current [models page](https://aistudio.google.com/docs/models).
+
+## Migrating
+
+| Before | Now |
+|---|---|
+| `llm_factory("gemini-...", provider="google", client=genai.Client(api_key=...))` | `llm_factory("gemini/gemini-3.6-flash")` |
+| `llm_factory("gemini-...", provider="google", client=genai.GenerativeModel(...))` (legacy SDK) | `llm_factory("gemini/gemini-3.6-flash")` |
+| a google-genai Vertex client | `llm_factory("vertex_ai/gemini-3.6-flash", vertex_project=..., vertex_location=...)` |
+| `GoogleEmbeddings(client=genai.Client(), ...)` | unchanged |
+
 ## Resources
 
-- [Google GenAI SDK Documentation](https://googleapis.github.io/python-genai/)
-- [Google Gemini API Docs](https://ai.google.dev/gemini-api/docs)
-- [Ragas Metrics Documentation](../../concepts/metrics/index.md)
-- [Ragas LLM Factory Guide](../llm-adapters.md)
+- [LiteLLM: Gemini](https://docs.litellm.ai/docs/providers/gemini) and [Vertex AI](https://docs.litellm.ai/docs/providers/vertex)
+- [Google AI Studio](https://aistudio.google.com)
+- [LLMs (llm_factory)](../llm-adapters.md)

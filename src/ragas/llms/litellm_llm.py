@@ -2,6 +2,7 @@ import asyncio
 import inspect
 import logging
 import typing as t
+import warnings
 
 from ragas.async_utils import run_sync
 from ragas.cache import CacheInterface, cache_identity, cacher
@@ -17,6 +18,9 @@ logger = logging.getLogger(__name__)
 
 class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
     """
+    Deprecated (#182): ``llm_factory()`` returns an ``InstructorLLM`` over
+    LiteLLM for every model. Kept for one release for direct construction.
+
     LLM wrapper using LiteLLM for structured outputs.
 
     Works with all 100+ LiteLLM-supported providers including Gemini,
@@ -52,6 +56,12 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
                 detects it from the model ID (see ``is_reasoning_model``).
             **kwargs: Additional model arguments (temperature, max_tokens, etc.)
         """
+        warnings.warn(
+            "LiteLLMStructuredLLM is deprecated: llm_factory() now returns an "
+            "InstructorLLM for every model, over LiteLLM (#182).",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.client = client
         self.sync_client = sync_client
         self.reasoning = reasoning

@@ -175,7 +175,7 @@ To use model-based metrics, first define your evaluator LLM and embeddings.
 from ragas.embeddings import embedding_factory
 from ragas.llms import llm_factory
 
-evaluator_llm = llm_factory("vertex_ai/gemini-pro")
+evaluator_llm = llm_factory("vertex_ai/gemini-3.6-flash")
 evaluator_embeddings = embedding_factory("vertex_ai/gemini-embedding-2")
 ```
 
