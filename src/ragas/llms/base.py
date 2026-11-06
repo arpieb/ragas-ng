@@ -326,18 +326,42 @@ def _get_instructor_clients(
 ) -> t.Tuple[t.Any, t.Optional[t.Any]]:
     """Instructor client(s) for ``client``: ``(primary, sync_twin)``.
 
-    A google-genai ``Client`` serves both sync and async calls, but instructor
-    wraps it one way only. The primary is async, so collections metrics
+    A google-genai ``Client`` or ``mistralai.Mistral`` serves both sync and
+    async calls, but instructor wraps it one way only. The primary is async, so collections metrics
     (which are all async) work; the sync twin serves ``generate()`` (#68).
     Other SDKs come as separate sync/async classes, so the caller's choice
     stands and there is no twin.
     """
-    if provider.lower() in ("google", "gemini") and _is_new_google_genai_client(client):
+    provider_lower = provider.lower()
+    if provider_lower in ("google", "gemini") and _is_new_google_genai_client(client):
         return (
-            instructor.from_genai(client, use_async=True),
-            instructor.from_genai(client),
+            instructor.from_genai(client, use_async=True, **_mode_kwargs(mode)),
+            instructor.from_genai(client, **_mode_kwargs(mode)),
+        )
+    if provider_lower == "mistral" and _is_mistralai_client(client):
+        # mistralai.Mistral has chat.complete / chat.complete_async, not the
+        # OpenAI or Anthropic shapes the generic patcher looks for (#70).
+        return (
+            instructor.from_mistral(client, use_async=True, **_mode_kwargs(mode)),
+            instructor.from_mistral(client, **_mode_kwargs(mode)),
         )
     return _get_instructor_client(client, provider, mode=mode), None
+
+
+def _is_mistralai_client(client: t.Any) -> bool:
+    """A ``mistralai.Mistral`` SDK client (``chat.complete``, no ``completions``)."""
+    module = getattr(type(client), "__module__", "") or ""
+    return module.split(".")[0] == "mistralai"
+
+
+def _mode_kwargs(mode: t.Optional[instructor.Mode]) -> t.Dict[str, t.Any]:
+    """``mode=`` only when the caller chose one.
+
+    Provider factories validate the mode against what the provider supports,
+    so forcing ``Mode.JSON`` on e.g. Anthropic would break it; without a
+    caller's choice each provider keeps its own default.
+    """
+    return {} if mode is None else {"mode": mode}
 
 
 def _get_instructor_client(
@@ -347,35 +371,40 @@ def _get_instructor_client(
     Get an instructor-patched client for the specified provider.
 
     Uses provider-specific methods when available, falls back to generic patcher.
+    ``mode`` reaches every provider factory (#71).
 
-    Note: For OpenAI, we use Mode.JSON by default instead of Mode.TOOLS because
-    OpenAI's function calling (TOOLS mode) has issues with Dict type annotations
-    in Pydantic models - it returns empty objects `{}` instead of proper structured
-    data. Mode.JSON works correctly with all Pydantic types including Dict.
+    Note: For OpenAI-style clients, we use Mode.JSON by default instead of
+    Mode.TOOLS because OpenAI's function calling (TOOLS mode) has issues with
+    Dict type annotations in Pydantic models - it returns empty objects `{}`
+    instead of proper structured data. Mode.JSON works correctly with all
+    Pydantic types including Dict.
     See: https://github.com/vibrantlabsai/ragas/issues/2490
+
+    Other provider factories (Anthropic, Google, Mistral, Perplexity) keep
+    their own default unless ``mode`` is given.
 
     For Google/Gemini, supports both SDKs:
     - New SDK (google-genai): Uses instructor.from_genai()
     - Old SDK (google-generativeai): Uses instructor.from_gemini()
     """
-    if mode is None:
-        mode = instructor.Mode.JSON
-
     provider_lower = provider.lower()
+    json_by_default = instructor.Mode.JSON if mode is None else mode
 
     if provider_lower == "openai":
-        return instructor.from_openai(client, mode=mode)
+        return instructor.from_openai(client, mode=json_by_default)
     elif provider_lower == "anthropic":
-        return instructor.from_anthropic(client)
+        return instructor.from_anthropic(client, **_mode_kwargs(mode))
     elif provider_lower in ("google", "gemini"):
         if _is_new_google_genai_client(client):
-            return instructor.from_genai(client)
+            return instructor.from_genai(client, **_mode_kwargs(mode))
         else:
-            return instructor.from_gemini(client)
+            return instructor.from_gemini(client, **_mode_kwargs(mode))
     elif provider_lower == "litellm":
-        return instructor.from_litellm(client, mode=mode)
+        return instructor.from_litellm(client, mode=json_by_default)
     elif provider_lower == "perplexity":
-        return instructor.from_perplexity(client)
+        return instructor.from_perplexity(client, **_mode_kwargs(mode))
+    elif provider_lower == "mistral" and _is_mistralai_client(client):
+        return instructor.from_mistral(client, **_mode_kwargs(mode))
     else:
         return _patch_client_for_provider(client, provider_lower, mode=mode)
 
@@ -515,8 +544,11 @@ def llm_factory(
         # Async primary, because every collections metric is async: a sync
         # client here made the default path fail with "Cannot use agenerate()
         # with a synchronous client" (#68). generate() uses the sync twin.
-        client = _instructor.from_litellm(_litellm.acompletion)
-        kwargs["sync_client"] = _instructor.from_litellm(_litellm.completion)
+        client = _instructor.from_litellm(_litellm.acompletion, **_mode_kwargs(mode))
+        kwargs["sync_client"] = _instructor.from_litellm(
+            _litellm.completion, **_mode_kwargs(mode)
+        )
+        mode = None  # applied above; never sent to the model (#71)
         provider = "litellm"
         adapter = "litellm"
 

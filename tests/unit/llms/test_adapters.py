@@ -200,6 +200,13 @@ class TestInstructorAdapter:
 class TestLiteLLMAdapter:
     """Test LiteLLMAdapter implementation."""
 
+    @pytest.fixture(autouse=True)
+    def _patch_from_openai(self, monkeypatch):
+        # An OpenAI-style client is patched with instructor (#71).
+        monkeypatch.setattr(
+            "instructor.from_openai", lambda client, mode=None: MockInstructor(client)
+        )
+
     def test_litellm_adapter_create_llm(self):
         """Test creating LLM with LiteLLMAdapter."""
         adapter = LiteLLMAdapter()
@@ -253,6 +260,10 @@ class TestAdapterIntegration:
     def test_llm_factory_auto_detects_google_provider(self, monkeypatch):
         """Test that llm_factory auto-detects litellm for google."""
         from ragas.llms.base import llm_factory
+
+        monkeypatch.setattr(
+            "instructor.from_openai", lambda client, mode=None: MockInstructor(client)
+        )
 
         client = MockClient()
         llm = llm_factory("gemini-2.0-flash", provider="google", client=client)
