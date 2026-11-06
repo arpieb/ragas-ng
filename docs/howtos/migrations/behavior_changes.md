@@ -454,3 +454,43 @@ Instructor's defaults (`ANTHROPIC_TOOLS` / `TOOLS`) force a tool call. `claude-s
 - **Metric docstrings** show `llm_factory("<model>", client=client)` instead of a specific model.
 - **Model retirements** are tracked in `scripts/model_registry.toml`, and a unit test fails when a retired model is named in code, docs or examples. See `scripts/README.md`.
 - `text2sql/analyze_errors.py` used `gpt-5` (shutting down 2026-12-11) and now uses `gpt-5.6-sol`. A source comment and two doc lines still named `gpt-5` or the shut-down `o1`; they were updated.
+
+## One path for every LLM: LiteLLM ([#182](https://github.com/arpieb/ragas-ng/issues/182))
+
+`llm_factory()` returns an `InstructorLLM`, and every call goes through LiteLLM. ragas no longer wraps each provider's own SDK.
+
+**Breaking:** native SDK clients of providers other than OpenAI are rejected with `ValueError`. That covers `Anthropic()`, `genai.Client()` and `GenerativeModel`, `Mistral()`, `Groq()`, `Cohere()`, boto3 Bedrock and xAI, and instructor-patched clients. The error names the model string to use:
+
+| Before | Now |
+|---|---|
+| `llm_factory("claude-sonnet-5-5", provider="anthropic", client=Anthropic())` | `llm_factory("anthropic/claude-sonnet-5-5")` |
+| `llm_factory("gemini-3.6-flash", provider="google", client=genai.Client(...))` | `llm_factory("gemini/gemini-3.6-flash")` |
+| a google-genai Vertex client | `llm_factory("vertex_ai/gemini-3.6-flash", vertex_project=..., vertex_location=...)` |
+| Mistral / Groq / Cohere clients | `llm_factory("mistral/<m>")` / `"groq/<m>"` / `"cohere_chat/<m>"` |
+| a boto3 Bedrock client | `llm_factory("bedrock/<model id>", aws_region_name=...)` |
+| `mode=instructor.Mode.ANTHROPIC_JSON` / `ANTHROPIC_TOOLS` (and other native modes) | `Mode.JSON` / `Mode.TOOLS`; native modes raise |
+
+The provider's key comes from its environment variable (`ANTHROPIC_API_KEY`, `GOOGLE_API_KEY` or `GEMINI_API_KEY`, ...), or pass `api_key=`. To keep your own instructor client, construct `InstructorLLM(client=..., model=..., provider=...)` directly. Its per-provider parameter rules are unchanged.
+
+**Unchanged, but routed differently:**
+- `OpenAI` / `AsyncOpenAI` and `AzureOpenAI` / `AsyncAzureOpenAI` clients still work, through LiteLLM, as `openai/<model>` or `azure/<deployment>`.
+  - LiteLLM gets a **copy** of the client, because it writes `max_retries` and `organization` onto the object it receives. Your client is left untouched.
+  - `evaluate()` still builds its default embeddings from your client.
+- A `litellm.Router` as `client` works as before.
+
+**Deprecated:**
+- `llm_factory(adapter=...)` is ignored, with a `DeprecationWarning`.
+- `ragas.llms.adapters` (`get_adapter`, `auto_detect_adapter`, `InstructorAdapter`, `LiteLLMAdapter`) still imports, and both adapters call `llm_factory()`.
+- Constructing `LiteLLMStructuredLLM` warns. `llm_factory()` no longer returns it.
+
+All three are removed in the next release.
+
+**Parameters** (one set of rules for every `llm_factory()` LLM):
+- ragas' defaults `temperature=0.01` and `top_p=0.1` are sent with LiteLLM's `drop_params`, so LiteLLM drops them for models that reject them.
+- Values you set are sent as given.
+- `max_tokens` is sent only if you set it. The default of 1024 used to truncate long and reasoning outputs on the client path.
+- The OpenAI reasoning-model and Claude rules are unchanged (see [LLMs (llm_factory)](../llm-adapters.md#model-arguments)).
+
+**Token usage:** responses are OpenAI-shaped for every provider, so use `get_token_usage_for_openai`.
+
+**Embeddings:** the default embeddings for a Gemini LLM are now ragas' default (OpenAI's `text-embedding-ada-002` through LiteLLM). They used to be Google's, when you passed a google-genai client. Pass `GoogleEmbeddings(...)` explicitly for a Gemini-only setup. `GoogleEmbeddings` still takes a google-genai client.

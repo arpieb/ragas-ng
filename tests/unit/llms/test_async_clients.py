@@ -13,7 +13,6 @@ from __future__ import annotations
 import threading
 import typing as t
 
-import instructor
 import pytest
 from pydantic import BaseModel
 
@@ -72,7 +71,7 @@ def test_default_llm_sync_generate_uses_the_sync_twin(api_key):
         mock_response="",
         mock_tool_calls=entities_tool_call("Paris"),
     )
-    assert isinstance(llm, LiteLLMStructuredLLM)
+    assert isinstance(llm, InstructorLLM) and llm._litellm  # one path (#182)
     assert type(llm.client).__name__ == "AsyncInstructor"
     assert type(llm.sync_client).__name__ == "Instructor"
     assert "sync_client" not in llm.model_args
@@ -137,68 +136,6 @@ async def test_sync_client_metric_scores_under_ascore():
         reference="Paris", retrieved_contexts=["Paris"]
     )
     assert result.value == pytest.approx(1.0)
-
-
-# --- google-genai: async primary, sync twin ----------------------------------
-
-
-class FakeGenaiClient:
-    """Looks like google.genai.Client to the SDK detection."""
-
-    models = object()
-
-
-FakeGenaiClient.__module__ = "google.genai.client"
-FakeGenaiClient.__name__ = "Client"
-
-
-class FakeInstructor:
-    """Like instructor's clients: ``create`` and ``chat.completions.create``."""
-
-    def __init__(self, use_async: bool):
-        self.use_async = use_async
-        self.calls: t.List[str] = []
-        self.chat = type("Chat", (), {"completions": self})()
-
-    def create(self, response_model, **kwargs):
-        self.calls.append("sync")
-        return response_model(value=2)
-
-
-class FakeAsyncInstructor(FakeInstructor):
-    async def create(self, response_model, **kwargs):  # type: ignore[override]
-        self.calls.append("async")
-        return response_model(value=3)
-
-
-FakeAsyncInstructor.__name__ = "AsyncInstructor"
-
-
-@pytest.fixture
-def fake_from_genai(monkeypatch):
-    built: t.List[FakeInstructor] = []
-
-    def from_genai(client, use_async=False, **kwargs):
-        inst = FakeAsyncInstructor(True) if use_async else FakeInstructor(False)
-        built.append(inst)
-        return inst
-
-    monkeypatch.setattr(instructor, "from_genai", from_genai, raising=False)
-    return built
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("provider", ["google", "gemini"])
-async def test_genai_client_is_wrapped_async_with_a_sync_twin(
-    fake_from_genai, provider
-):
-    llm = llm_factory("gemini-2.5-flash", provider=provider, client=FakeGenaiClient())
-    assert isinstance(llm, InstructorLLM)
-    assert llm.is_async
-    assert [i.use_async for i in fake_from_genai] == [True, False]
-
-    assert (await llm.agenerate("p", Answer)).value == 3
-    assert llm.generate("p", Answer).value == 2
 
 
 # --- embeddings: a sync OpenAI client works under aembed_* --------------------

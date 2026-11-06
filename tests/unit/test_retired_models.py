@@ -114,7 +114,7 @@ def test_default_model_is_mapped_as_reasoning(monkeypatch):
     assert is_reasoning_model(DEFAULT_LLM_MODEL)
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     llm = llm_factory(DEFAULT_LLM_MODEL)
-    args = llm._request_args(None)
+    args = llm._map_provider_params()
     # reasoning models: no low temperature, no top_p, no default output cap
     assert args.get("temperature") in (None, 1.0)
     assert "top_p" not in args

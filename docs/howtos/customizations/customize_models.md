@@ -143,7 +143,7 @@ from ragas.embeddings.base import embedding_factory
 
 config = {
     "region_name": "us-east-1",  # E.g. "us-east-1"
-    "llm": "anthropic.claude-3-5-sonnet-20241022-v2:0",  # Your LLM model ID
+    "llm": "<bedrock-model-id>",  # your LLM model ID from the Bedrock console
     "embeddings": "amazon.titan-embed-text-v2:0",  # Your embedding model ID
     "temperature": 0.4,
 }

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import inspect
 import logging
 import re
 import typing as t
+import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
@@ -226,142 +228,6 @@ class LlamaIndexLLMWrapper(BaseRagasLLM):
         return f"{self.__class__.__name__}(llm={self.llm.__class__.__name__}(...))"
 
 
-def _patch_client_for_provider(
-    client: t.Any, provider: str, mode: t.Optional[instructor.Mode] = None
-) -> t.Any:
-    """
-    Patch a client with Instructor for generic providers.
-
-    Detects the client API style and uses the appropriate instructor patching method:
-    - OpenAI-compatible (chat.completions.create): Uses instructor.from_openai()
-    - Anthropic-compatible (messages.create): Uses instructor.AsyncInstructor/Instructor
-
-    This allows OpenAI-compatible providers (DeepSeek, Groq, Mistral, etc.) to work
-    correctly when using OpenAI SDK clients.
-    """
-    from instructor import Provider
-
-    if mode is None:
-        mode = instructor.Mode.JSON
-
-    provider_map = {
-        "anthropic": Provider.ANTHROPIC,
-        "google": Provider.GENAI,
-        "gemini": Provider.GENAI,
-        "azure": Provider.OPENAI,
-        "groq": Provider.GROQ,
-        "mistral": Provider.MISTRAL,
-        "cohere": Provider.COHERE,
-        "xai": Provider.XAI,
-        "bedrock": Provider.BEDROCK,
-        "deepseek": Provider.DEEPSEEK,
-    }
-
-    provider_enum = provider_map.get(provider, Provider.OPENAI)
-
-    if (
-        hasattr(client, "chat")
-        and client.chat is not None
-        and hasattr(client.chat, "completions")
-        and hasattr(client.chat.completions, "create")
-    ):
-        return instructor.from_openai(client, mode=mode)
-
-    elif (
-        hasattr(client, "messages")
-        and client.messages is not None
-        and hasattr(client.messages, "create")
-    ):
-        create_method = client.messages.create
-        is_async = "Async" in client.__class__.__name__
-
-        if is_async:
-            return instructor.AsyncInstructor(
-                client=client,
-                create=create_method,
-                provider=provider_enum,
-                mode=mode,
-            )
-        else:
-            return instructor.Instructor(
-                client=client,
-                create=create_method,
-                provider=provider_enum,
-                mode=mode,
-            )
-    else:
-        raise ValueError(
-            f"Unable to detect API style for {provider} client. "
-            f"Client should have either 'chat.completions.create' (OpenAI-style) "
-            f"or 'messages.create' (Anthropic-style) method."
-        )
-
-
-def _is_new_google_genai_client(client: t.Any) -> bool:
-    """
-    Detect if client is from the new google-genai SDK vs old google-generativeai.
-
-    New SDK (google-genai):
-        - Import: from google import genai / import google.genai
-        - Client: genai.Client(api_key="...")
-        - Module: google.genai.client.Client
-
-    Old SDK (google-generativeai):
-        - Import: import google.generativeai as genai
-        - Client: genai.GenerativeModel("model-name")
-        - Module: google.generativeai.generative_models.GenerativeModel
-
-    Note: The old SDK is deprecated (support ends Aug 2025). The new SDK is recommended
-    but has a known upstream instructor issue with safety settings. See:
-    https://github.com/567-labs/instructor/issues/1658
-    """
-    client_module = getattr(client, "__module__", "") or ""
-    client_class = client.__class__.__name__
-
-    # New SDK: google.genai.client.Client or similar
-    if "google.genai" in client_module and "generativeai" not in client_module:
-        return True
-
-    # Check class name as fallback (new SDK uses Client, old uses GenerativeModel)
-    if client_class == "Client" and "genai" in client_module.lower():
-        return True
-
-    return False
-
-
-def _get_instructor_clients(
-    client: t.Any, provider: str, mode: t.Optional[instructor.Mode] = None
-) -> t.Tuple[t.Any, t.Optional[t.Any]]:
-    """Instructor client(s) for ``client``: ``(primary, sync_twin)``.
-
-    A google-genai ``Client`` or ``mistralai.Mistral`` serves both sync and
-    async calls, but instructor wraps it one way only. The primary is async, so collections metrics
-    (which are all async) work; the sync twin serves ``generate()`` (#68).
-    Other SDKs come as separate sync/async classes, so the caller's choice
-    stands and there is no twin.
-    """
-    provider_lower = provider.lower()
-    if provider_lower in ("google", "gemini") and _is_new_google_genai_client(client):
-        return (
-            instructor.from_genai(client, use_async=True, **_mode_kwargs(mode)),
-            instructor.from_genai(client, **_mode_kwargs(mode)),
-        )
-    if provider_lower == "mistral" and _is_mistralai_client(client):
-        # mistralai.Mistral has chat.complete / chat.complete_async, not the
-        # OpenAI or Anthropic shapes the generic patcher looks for (#70).
-        return (
-            instructor.from_mistral(client, use_async=True, **_mode_kwargs(mode)),
-            instructor.from_mistral(client, **_mode_kwargs(mode)),
-        )
-    return _get_instructor_client(client, provider, mode=mode), None
-
-
-def _is_mistralai_client(client: t.Any) -> bool:
-    """A ``mistralai.Mistral`` SDK client (``chat.complete``, no ``completions``)."""
-    module = getattr(type(client), "__module__", "") or ""
-    return module.split(".")[0] == "mistralai"
-
-
 def _mode_kwargs(mode: t.Optional[instructor.Mode]) -> t.Dict[str, t.Any]:
     """``mode=`` only when the caller chose one.
 
@@ -370,56 +236,6 @@ def _mode_kwargs(mode: t.Optional[instructor.Mode]) -> t.Dict[str, t.Any]:
     caller's choice each provider keeps its own default.
     """
     return {} if mode is None else {"mode": mode}
-
-
-def _get_instructor_client(
-    client: t.Any, provider: str, mode: t.Optional[instructor.Mode] = None
-) -> t.Any:
-    """
-    Get an instructor-patched client for the specified provider.
-
-    Uses provider-specific methods when available, falls back to generic patcher.
-    ``mode`` reaches every provider factory (#71).
-
-    Note: For OpenAI-style clients, we use Mode.JSON by default instead of
-    Mode.TOOLS because OpenAI's function calling (TOOLS mode) has issues with
-    Dict type annotations in Pydantic models - it returns empty objects `{}`
-    instead of proper structured data. Mode.JSON works correctly with all
-    Pydantic types including Dict.
-    See: https://github.com/vibrantlabsai/ragas/issues/2490
-
-    Anthropic defaults to ``Mode.ANTHROPIC_JSON``: instructor's own default,
-    ``ANTHROPIC_TOOLS``, forces a tool call, which ``claude-sonnet-5-5``
-    rejects ("tool_choice: type "tool" and "any" are not supported for this
-    model", #184). Other provider factories (Google, Mistral, Perplexity) keep
-    their own default unless ``mode`` is given.
-
-    For Google/Gemini, supports both SDKs:
-    - New SDK (google-genai): Uses instructor.from_genai()
-    - Old SDK (google-generativeai): Uses instructor.from_gemini()
-    """
-    provider_lower = provider.lower()
-    json_by_default = instructor.Mode.JSON if mode is None else mode
-
-    if provider_lower == "openai":
-        return instructor.from_openai(client, mode=json_by_default)
-    elif provider_lower == "anthropic":
-        return instructor.from_anthropic(
-            client, mode=instructor.Mode.ANTHROPIC_JSON if mode is None else mode
-        )
-    elif provider_lower in ("google", "gemini"):
-        if _is_new_google_genai_client(client):
-            return instructor.from_genai(client, **_mode_kwargs(mode))
-        else:
-            return instructor.from_gemini(client, **_mode_kwargs(mode))
-    elif provider_lower == "litellm":
-        return instructor.from_litellm(client, mode=json_by_default)
-    elif provider_lower == "perplexity":
-        return instructor.from_perplexity(client, **_mode_kwargs(mode))
-    elif provider_lower == "mistral" and _is_mistralai_client(client):
-        return instructor.from_mistral(client, **_mode_kwargs(mode))
-    else:
-        return _patch_client_for_provider(client, provider_lower, mode=mode)
 
 
 DEFAULT_LLM_MODEL = "gpt-6-luna"
@@ -435,6 +251,129 @@ def default_llm() -> "InstructorBaseRagasLLM":
     return llm_factory(DEFAULT_LLM_MODEL)
 
 
+# Native SDK clients llm_factory() no longer accepts (#182): module prefix ->
+# (LiteLLM model prefix, environment variable LiteLLM reads the key from).
+_NATIVE_CLIENTS: t.Dict[str, t.Tuple[str, str]] = {
+    "anthropic": ("anthropic", "ANTHROPIC_API_KEY"),
+    "google": ("gemini", "GOOGLE_API_KEY or GEMINI_API_KEY"),
+    "mistralai": ("mistral", "MISTRAL_API_KEY"),
+    "groq": ("groq", "GROQ_API_KEY"),
+    "cohere": ("cohere_chat", "COHERE_API_KEY"),
+    "botocore": ("bedrock", "AWS_ACCESS_KEY_ID / AWS_REGION_NAME"),
+    "boto3": ("bedrock", "AWS_ACCESS_KEY_ID / AWS_REGION_NAME"),
+    "xai_sdk": ("xai", "XAI_API_KEY"),
+    "instructor": ("<provider>", "the provider's API key"),
+}
+
+# instructor modes that only exist for native SDK clients, and the mode that
+# does the same through LiteLLM.
+_NATIVE_MODE_EQUIVALENT = {
+    "ANTHROPIC_JSON": "JSON",
+    "ANTHROPIC_TOOLS": "TOOLS",
+    "ANTHROPIC_REASONING_TOOLS": "TOOLS",
+    "ANTHROPIC_PARALLEL_TOOLS": "PARALLEL_TOOLS",
+}
+
+
+def _native_mode_error(mode: instructor.Mode) -> t.Optional[str]:
+    name = getattr(mode, "name", str(mode))
+    prefixes = (
+        "ANTHROPIC_",
+        "GENAI_",
+        "GEMINI_",
+        "VERTEXAI_",
+        "MISTRAL_",
+        "BEDROCK_",
+        "COHERE_",
+        "WRITER_",
+        "XAI_",
+        "CEREBRAS_",
+        "FIREWORKS_",
+    )
+    if not name.startswith(prefixes):
+        return None
+    equivalent = _NATIVE_MODE_EQUIVALENT.get(name, "JSON")
+    return (
+        f"mode=instructor.Mode.{name} is for native SDK clients, which "
+        "llm_factory() no longer uses: every call goes through LiteLLM (#182). "
+        f"Use mode=instructor.Mode.{equivalent}."
+    )
+
+
+def _is_openai_sdk_client(client: t.Any) -> t.Optional[str]:
+    """``"openai"`` / ``"azure"`` for openai SDK clients, else None."""
+    cls = type(client)
+    if not (getattr(cls, "__module__", "") or "").startswith("openai"):
+        return None
+    name = cls.__name__
+    if name in ("AzureOpenAI", "AsyncAzureOpenAI"):
+        return "azure"
+    if name in ("OpenAI", "AsyncOpenAI"):
+        return "openai"
+    return None
+
+
+def _unsupported_client_error(client: t.Any, model: str) -> ValueError:
+    cls = type(client)
+    root = (getattr(cls, "__module__", "") or "").split(".")[0]
+    prefix, env = _NATIVE_CLIENTS.get(root, ("<provider>", "the provider's API key"))
+    bare = model.split("/", 1)[-1]
+    if root == "instructor":
+        what = "an instructor-patched client"
+        extra = (
+            " To use your own instructor client, construct "
+            "ragas.llms.InstructorLLM(client=..., model=..., provider=...) "
+            "directly."
+        )
+    else:
+        what = f"{cls.__module__}.{cls.__name__} clients"
+        extra = ""
+    return ValueError(
+        f"llm_factory() no longer accepts {what} (#182). Every call goes "
+        f"through LiteLLM, addressed by model name: "
+        f"llm_factory('{prefix}/{bare}'), which reads {env} from the "
+        "environment (or pass api_key=... / api_base=...). OpenAI, AsyncOpenAI "
+        "and Azure OpenAI clients are still accepted, and so is a "
+        "litellm.Router. See https://docs.litellm.ai/docs/providers for the "
+        f"model prefixes.{extra}"
+    )
+
+
+def _litellm_transport(
+    model: str, provider: str, client: t.Any
+) -> t.Tuple[str, t.Any, t.Optional[t.Any], t.Dict[str, t.Any], t.Optional[str]]:
+    """``(litellm_model, async_fn, sync_fn, call_defaults, client_kind)``.
+
+    ``call_defaults`` are sent with every call: an OpenAI/Azure client is
+    passed to LiteLLM as a copy, because LiteLLM writes ``max_retries`` and
+    ``organization`` onto the client object it is given.
+    """
+    import litellm
+
+    if client is None:
+        # LiteLLM routes on "provider/model"; "openai" needs no prefix.
+        if provider.lower() not in ("openai", "litellm") and "/" not in model:
+            model = f"{provider.lower()}/{model}"
+        return model, litellm.acompletion, litellm.completion, {}, None
+
+    if hasattr(client, "acompletion") and hasattr(client, "completion"):
+        # the litellm module or a litellm.Router
+        return model, client.acompletion, client.completion, {}, "litellm"
+
+    kind = _is_openai_sdk_client(client)
+    if kind is None:
+        raise _unsupported_client_error(client, model)
+
+    if not model.startswith(f"{kind}/"):
+        model = f"{kind}/{model}"
+    copy = client.copy()
+    is_async = type(client).__name__.startswith("Async")
+    defaults = {"client": copy}
+    if is_async:
+        return model, litellm.acompletion, None, defaults, kind
+    return model, litellm.completion, None, defaults, kind
+
+
 def llm_factory(
     model: str,
     provider: str = "openai",
@@ -445,168 +384,107 @@ def llm_factory(
     **kwargs: t.Any,
 ) -> InstructorBaseRagasLLM:
     """
-    Create an LLM instance for structured output generation with automatic adapter selection.
+    Create an LLM for structured output. Every call goes through LiteLLM.
 
-    Supports multiple LLM providers and structured output backends with unified interface
-    for both sync and async operations. Returns instances with .generate() and .agenerate()
-    methods that accept Pydantic models for structured outputs.
-
-    Without a client, routes through LiteLLM and resolves credentials from the
-    environment, so any LiteLLM-supported provider works with no vendor SDK.
-
-    With a client, auto-detects the best adapter for your provider:
-    - Google Gemini → uses LiteLLM adapter
-    - Other providers → uses Instructor adapter (default)
-    - Explicit control available via adapter parameter
+    Address any LiteLLM-supported provider by model name; credentials come from
+    the environment (``OPENAI_API_KEY``, ``ANTHROPIC_API_KEY``,
+    ``GEMINI_API_KEY``, ...) or from ``api_key=`` / ``api_base=``.
 
     Args:
-        model: Model name (e.g., "gpt-6-luna", "claude-sonnet-5-5", "gemini-3.6-flash").
-               Without a client, any LiteLLM model string is accepted, such as
-               "anthropic/claude-sonnet-5-5" or "ollama/llama3".
-        provider: LLM provider (default: "openai").
-                 Examples: openai, anthropic, google, groq, mistral, etc.
-                 Without a client, a non-OpenAI provider is prefixed onto a bare
-                 model name to form LiteLLM's "provider/model" string.
-        client: Optional pre-initialized client instance. For OpenAI, can be
-               OpenAI(...) or AsyncOpenAI(...). If omitted, the LLM is created
-               through LiteLLM and the adapter argument is ignored.
-        adapter: Structured output adapter to use (default: "auto").
-                - "auto": Auto-detect based on provider/client (recommended)
-                - "instructor": Use Instructor library
-                - "litellm": Use LiteLLM (supports 100+ providers)
-        cache: Optional cache backend for caching LLM responses.
-               Pass DiskCacheBackend() for persistent caching across runs.
-               Saves costs and speeds up repeated evaluations by 60x.
-        mode: Instructor mode for structured outputs (default: Mode.JSON).
-              Only applies when using instructor adapter.
-              Options: Mode.JSON, Mode.MD_JSON, Mode.TOOLS, Mode.JSON_SCHEMA, etc.
-              Use Mode.MD_JSON for backends that don't support response_format parameter.
-        **kwargs: Additional model arguments (temperature, max_tokens, top_p, etc).
-                 ``reasoning=True/False`` is not sent to the model: it marks the
-                 model as an OpenAI reasoning model (or not) where the name
-                 doesn't say, e.g. an Azure deployment. See ``is_reasoning_model``.
+        model: A LiteLLM model string: ``"gpt-6-luna"``,
+            ``"anthropic/claude-sonnet-5-5"``, ``"gemini/gemini-3.6-flash"``,
+            ``"ollama/qwen3.8:27b"``, ``"bedrock/<model id>"``, ...
+            See https://docs.litellm.ai/docs/providers.
+        provider: Prefixed onto a bare ``model`` when there is no client:
+            ``llm_factory("llama3", provider="ollama")`` is
+            ``"ollama/llama3"``. ``"openai"`` adds no prefix.
+        client: Optional. An ``OpenAI`` / ``AsyncOpenAI`` (any
+            OpenAI-compatible endpoint, via ``base_url``) or ``AzureOpenAI`` /
+            ``AsyncAzureOpenAI`` client, passed to LiteLLM with its settings
+            (a copy of it: LiteLLM changes the object it is given), or a
+            ``litellm.Router``. Native SDK clients of other providers
+            (``Anthropic()``, ``genai.Client()``, Mistral, Groq, Cohere,
+            boto3) are no longer accepted; use the provider's model string
+            instead (#182).
+        adapter: Deprecated and ignored: there is one path (#182).
+        cache: Optional cache backend for LLM responses.
+        mode: instructor mode. Defaults to ``Mode.JSON`` for OpenAI/Azure
+            clients and for Claude, otherwise instructor's default. Native
+            modes (``Mode.ANTHROPIC_*``, ``Mode.GENAI_*``, ...) raise.
+        **kwargs: Model arguments (``temperature``, ``top_p``, ``max_tokens``,
+            ``system_prompt``, ``reasoning``, ...) and LiteLLM call
+            arguments (``api_key``, ``api_base``, ``extra_headers``, ...).
 
     Returns:
-        InstructorBaseRagasLLM: Instance with generate() and agenerate() methods.
-
-    Raises:
-        ValueError: If model is empty, provider is unsupported, or adapter
-                   initialization fails.
+        An ``InstructorLLM`` with ``generate()`` and ``agenerate()``.
 
     Examples:
-        # No client: routed through LiteLLM, credentials read from the environment
-        llm = llm_factory("gpt-6-luna")
-        llm = llm_factory("anthropic/claude-sonnet-5-5")
-        llm = llm_factory("llama3", provider="ollama")  # -> "ollama/llama3"
+        llm = llm_factory("gpt-6-luna")  # OPENAI_API_KEY
+        llm = llm_factory("anthropic/claude-sonnet-5-5")  # ANTHROPIC_API_KEY
+        llm = llm_factory("gemini/gemini-3.6-flash")  # GEMINI_API_KEY
+        llm = llm_factory("ollama/qwen3.8:27b")  # local Ollama
 
-        # With an explicit client
+        # an OpenAI-compatible endpoint, with your own client settings
         from openai import OpenAI
-
-        client = OpenAI(api_key="...")
-        llm = llm_factory("gpt-6-luna", client=client)
-        response = llm.generate(prompt, ResponseModel)
-
-        # With caching (recommended for experiments)
-        from ragas.cache import DiskCacheBackend
-        cache = DiskCacheBackend()
-        llm = llm_factory("gpt-6-luna", client=client, cache=cache)
-
-        # Anthropic
-        from anthropic import Anthropic
-        client = Anthropic(api_key="...")
-        llm = llm_factory("claude-sonnet-5-5", provider="anthropic", client=client)
-
-        # Google Gemini, no SDK needed (reads GEMINI_API_KEY)
-        llm = llm_factory("gemini/gemini-3.6-flash")
-
-        # Explicit adapter selection
-        llm = llm_factory("gpt-6-luna", client=client, adapter="litellm")
-
-        # Custom instructor mode for backends without response_format support
-        import instructor
-        client = OpenAI(api_key="...", base_url="https://custom-backend")
-        llm = llm_factory("custom-model", client=client, mode=instructor.Mode.MD_JSON)
-
-        # Async
-        from openai import AsyncOpenAI
-        client = AsyncOpenAI(api_key="...")
-        llm = llm_factory("gpt-6-luna", client=client)
-        response = await llm.agenerate(prompt, ResponseModel)
+        client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+        llm = llm_factory("qwen3.8:27b", client=client)
     """
     if not model:
         raise ValueError("model parameter is required")
-
-    if client is None:
-        # No client: route through LiteLLM, which resolves credentials from the
-        # environment. This mirrors embedding_factory(), which has worked this way
-        # since the LangChain adapters were removed -- the two factories used to
-        # disagree, with this one raising where the other succeeded.
-        try:
-            import instructor as _instructor
-            import litellm as _litellm
-        except ImportError as e:  # pragma: no cover - litellm is a core dependency
-            raise ImportError(
-                "llm_factory() without an explicit client requires litellm. "
-                "Install it, or pass a client: "
-                f"llm_factory('{DEFAULT_LLM_MODEL}', client=OpenAI())"
-            ) from e
-
-        # Prefix the model with the provider when the caller named one and the
-        # model string does not already carry it, since LiteLLM routes on the
-        # "provider/model" form. "openai" needs no prefix.
-        if provider.lower() not in ("openai", "litellm") and "/" not in model:
-            model = f"{provider.lower()}/{model}"
-
-        # Claude: JSON rather than instructor's default TOOLS mode, which
-        # forces a tool call that claude-sonnet-5-5 rejects (#184).
-        if mode is None and _is_anthropic_model("", model):
-            mode = _instructor.Mode.JSON
-
-        # Async primary, because every collections metric is async: a sync
-        # client here made the default path fail with "Cannot use agenerate()
-        # with a synchronous client" (#68). generate() uses the sync twin.
-        client = _instructor.from_litellm(_litellm.acompletion, **_mode_kwargs(mode))
-        kwargs["sync_client"] = _instructor.from_litellm(
-            _litellm.completion, **_mode_kwargs(mode)
+    if adapter != "auto":
+        warnings.warn(
+            f"llm_factory(adapter={adapter!r}) is deprecated and ignored: every "
+            "call goes through LiteLLM (#182).",
+            DeprecationWarning,
+            stacklevel=2,
         )
-        mode = None  # applied above; never sent to the model (#71)
-        provider = "litellm"
-        adapter = "litellm"
-
-    provider_lower = provider.lower()
-
-    # Auto-detect adapter if needed
-    if adapter == "auto":
-        from ragas.llms.adapters import auto_detect_adapter
-
-        adapter = auto_detect_adapter(client, provider_lower)
-
-    # Create LLM using selected adapter
-    from ragas.llms.adapters import get_adapter
+    if mode is not None:
+        message = _native_mode_error(mode)
+        if message:
+            raise ValueError(message)
 
     try:
-        adapter_instance = get_adapter(adapter)
-        llm = adapter_instance.create_llm(
-            client, model, provider_lower, cache=cache, mode=mode, **kwargs
-        )
-    except ValueError as e:
-        # Re-raise ValueError from get_adapter for unknown adapter names
-        # Also handle adapter initialization failures
-        if "Unknown adapter" in str(e):
-            raise
-        # Adapter-specific failures get wrapped
-        raise ValueError(
-            f"Failed to initialize {provider} client with {adapter} adapter. "
-            f"Ensure you've created a valid {provider} client.\n"
-            f"Error: {str(e)}"
-        )
-    except Exception as e:
-        raise ValueError(
-            f"Failed to initialize {provider} client with {adapter} adapter. "
-            f"Ensure you've created a valid {provider} client.\n"
-            f"Error: {str(e)}"
-        )
+        import instructor as _instructor
+    except ImportError as e:  # pragma: no cover - a core dependency
+        raise ImportError("llm_factory() requires instructor.") from e
 
+    litellm_model, async_fn, sync_fn, call_defaults, kind = _litellm_transport(
+        model, provider, client
+    )
+
+    # Default mode: JSON for OpenAI/Azure clients (TOOLS mode returned {} for
+    # Dict fields, vibrantlabsai/ragas#2490) and for Claude (instructor's
+    # forced tool call fails on claude-sonnet-5-5, #184); otherwise
+    # instructor's own default, as before.
+    if mode is None and (
+        kind in ("openai", "azure") or _is_anthropic_model("", litellm_model)
+    ):
+        mode = _instructor.Mode.JSON
+
+    if call_defaults:
+        # bound per call; instructor's from_litellm(**kw) has its own `client`
+        async_fn = functools.partial(async_fn, **call_defaults)
+        if sync_fn is not None:
+            sync_fn = functools.partial(sync_fn, **call_defaults)
+    primary = _instructor.from_litellm(async_fn, **_mode_kwargs(mode))
+    sync_twin = (
+        _instructor.from_litellm(sync_fn, **_mode_kwargs(mode))
+        if sync_fn is not None
+        else None
+    )
+    llm = InstructorLLM(
+        client=primary,
+        model=litellm_model,
+        # "openai"/"azure" for those clients, "litellm" otherwise: evaluate()
+        # picks default embeddings from it (_infer_embedding_provider_from_llm)
+        provider=kind if kind in ("openai", "azure") else "litellm",
+        cache=cache,
+        sync_client=sync_twin,
+        **kwargs,
+    )
+    llm._litellm = True
+    if kind in ("openai", "azure"):
+        llm.source_client = client
     return llm
 
 
@@ -743,7 +621,20 @@ class InstructorBaseRagasLLM(ABC):
 
 
 class InstructorLLM(InstructorBaseRagasLLM):
-    """LLM wrapper using the Instructor library for structured outputs."""
+    """LLM wrapper using the Instructor library for structured outputs.
+
+    ``llm_factory()`` builds these over LiteLLM (#182). You can also construct
+    one directly around your own instructor client (e.g.
+    ``instructor.from_provider(...)``); the provider rules below still apply,
+    but LiteLLM's ``drop_params`` and the LiteLLM-only defaults don't.
+    """
+
+    # Set by llm_factory(): calls go through LiteLLM.
+    _litellm: bool = False
+    # The OpenAI/Azure client the caller passed to llm_factory(), if any.
+    # evaluate() builds default embeddings from it (same base_url, proxy,
+    # credentials); ``client`` is the instructor wrapper around LiteLLM.
+    source_client: t.Optional[t.Any] = None
 
     def __init__(
         self,
@@ -818,11 +709,39 @@ class InstructorLLM(InstructorBaseRagasLLM):
         if args is None:
             args = self.model_args
 
-        if self.provider.lower() == "google":
-            return self._map_google_params(args)
-        if _is_anthropic_model(self.provider, self.model):
-            return self._map_anthropic_params(args, sampled=sampled)
-        return self._map_openai_params(args)
+        if self.provider.lower() == "google" and not self._litellm:
+            mapped = self._map_google_params(args)
+        elif _is_anthropic_model(self.provider, self.model):
+            mapped = self._map_anthropic_params(args, sampled=sampled)
+        else:
+            mapped = self._map_openai_params(args)
+        if self._litellm:
+            mapped = self._map_litellm_defaults(mapped, sampled=sampled)
+        return mapped
+
+    def _map_litellm_defaults(
+        self, mapped: t.Dict[str, t.Any], sampled: bool
+    ) -> t.Dict[str, t.Any]:
+        """LiteLLM-only rules (#182).
+
+        - ``max_tokens``' default (1024) isn't sent: it truncated long and
+          reasoning outputs, and LiteLLM supplies providers' required caps.
+        - When the call carries a sampling value ragas chose (the
+          ``temperature`` / ``top_p`` defaults, or a sampled temperature),
+          ``drop_params=True`` lets LiteLLM drop it for models that reject
+          it, rather than failing the call. A call carrying only values the
+          caller set gets no ``drop_params``, so a rejection surfaces.
+        """
+        mapped = dict(mapped)
+        if "max_tokens" not in self._explicit_args:
+            mapped.pop("max_tokens", None)
+        ragas_chosen = sampled or any(
+            p in mapped and p not in self._explicit_args
+            for p in ("temperature", "top_p")
+        )
+        if ragas_chosen:
+            mapped["drop_params"] = True
+        return mapped
 
     def _map_anthropic_params(
         self, args: t.Optional[t.Dict[str, t.Any]] = None, sampled: bool = False
