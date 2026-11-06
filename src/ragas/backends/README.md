@@ -1,5 +1,7 @@
 # Backend Architecture Guide
 
+For using backends (choosing one, what each keeps, Google Drive setup), see the user guide: `docs/howtos/customizations/storage_backends.md`. This file covers the design, for contributors.
+
 Simple plugin architecture for data storage backends. Implement one abstract class, register via entry points.
 
 ## Architecture

@@ -94,11 +94,16 @@ dataset = Dataset(name="my_eval", backend="local/csv", root_dir="./datasets")
 For larger datasets or team collaboration, consider cloud backends:
 
 ```python
-# Google Drive (experimental)
-dataset = Dataset(name="my_eval", backend="gdrive", root_dir="folder_id")
-
-# Other backends can be added as needed
+# Google Drive: needs pip install "ragas[gdrive]" and Google credentials
+dataset = Dataset(
+    name="my_eval",
+    backend="gdrive",
+    folder_id="your-drive-folder-id",
+    service_account_path="service-account.json",
+)
 ```
+
+See [Storage backends](../howtos/customizations/storage_backends.md) for every backend, what each one keeps, Google Drive setup, and how to add your own.
 
 ### Dataset Versioning
 
