@@ -72,6 +72,8 @@ class GeneratedQueryAnswer(BaseModel):
 class QueryAnswerGenerationPrompt(
     PydanticPrompt[QueryConditions, GeneratedQueryAnswer]
 ):
+    # the generated query and answer are the user-facing output
+    states_output_language: bool = True
     instruction: str = (
         "Generate a multi-hop query and answer based on the specified conditions (persona, themes, style, length) "
         "and the provided context. The themes represent a set of phrases either extracted or generated from the "

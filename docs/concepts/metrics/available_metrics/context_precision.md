@@ -193,6 +193,26 @@ Output:
 0.9999999999
 ```
 
+### Non-LLM and ID-based context precision (legacy)
+
+```python
+from ragas import SingleTurnSample
+from ragas.metrics import IDBasedContextPrecision, NonLLMContextPrecisionWithReference
+
+sample = SingleTurnSample(
+    retrieved_contexts=["The Eiffel Tower is located in Paris."],
+    reference_contexts=[
+        "Paris is the capital of France.",
+        "The Eiffel Tower is one of the most famous landmarks in Paris.",
+    ],
+    retrieved_context_ids=["doc_1", "doc_2", "doc_3", "doc_4"],
+    reference_context_ids=["doc_1", "doc_4", "doc_5", "doc_6"],
+)
+
+await NonLLMContextPrecisionWithReference().single_turn_ascore(sample)  # 1.0
+await IDBasedContextPrecision().single_turn_ascore(sample)  # 0.5
+```
+
 ## Non LLM Based Context Precision
 
 This metric uses non-LLM-based methods (such as [Levenshtein distance measure](https://en.wikipedia.org/wiki/Levenshtein_distance)) to determine whether a retrieved context is relevant.
@@ -206,26 +226,26 @@ Note that this metric would need the rapidfuzz package to be installed: `pip ins
 #### Example
 
 ```python
-from ragas import SingleTurnSample
-from ragas.metrics import NonLLMContextPrecisionWithReference
+from ragas.metrics.collections import NonLLMContextPrecisionWithReference
 
-context_precision = NonLLMContextPrecisionWithReference()
+scorer = NonLLMContextPrecisionWithReference()
 
-sample = SingleTurnSample(
+result = await scorer.ascore(
     retrieved_contexts=["The Eiffel Tower is located in Paris."],
     reference_contexts=[
         "Paris is the capital of France.",
         "The Eiffel Tower is one of the most famous landmarks in Paris.",
     ],
 )
-
-await context_precision.single_turn_ascore(sample)
+print(f"Score: {result.value}")
 ```
 
 Output:
 ```
-0.9999999999
+Score: 1.0
 ```
+
+No LLM is involved, so `scorer.score(...)` gives the same result synchronously. `distance_measure` (default Levenshtein) and `threshold` (default 0.5) control when a retrieved context counts as matching a reference.
 
 ## ID Based Context Precision
 
@@ -240,21 +260,20 @@ $$ \text{ID-Based Context Precision} = \frac{\text{Number of retrieved context I
 ### Example
 
 ```python
-from ragas import SingleTurnSample
-from ragas.metrics import IDBasedContextPrecision
+from ragas.metrics.collections import IDBasedContextPrecision
 
-sample = SingleTurnSample(
+scorer = IDBasedContextPrecision()
+
+result = await scorer.ascore(
     retrieved_context_ids=["doc_1", "doc_2", "doc_3", "doc_4"],
     reference_context_ids=["doc_1", "doc_4", "doc_5", "doc_6"],
 )
-
-id_precision = IDBasedContextPrecision()
-await id_precision.single_turn_ascore(sample)
+print(f"Score: {result.value}")
 ```
 
 Output:
 ```
-0.5
+Score: 0.5
 ```
 
 In this example, out of the 4 retrieved context IDs, only 2 ("doc_1" and "doc_4") are found in the reference context IDs, resulting in a precision score of 0.5 or 50%.

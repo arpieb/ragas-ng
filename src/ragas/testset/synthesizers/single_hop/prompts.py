@@ -21,6 +21,8 @@ class GeneratedQueryAnswer(BaseModel):
 
 
 class QueryAnswerGenerationPrompt(PydanticPrompt[QueryCondition, GeneratedQueryAnswer]):
+    # the generated query and answer are the user-facing output
+    states_output_language: bool = True
     instruction: str = (
         "Generate a single-hop query and answer based on the specified conditions (persona, term, style, length) "
         "and the provided context. Ensure the answer is entirely faithful to the context, using only the information "

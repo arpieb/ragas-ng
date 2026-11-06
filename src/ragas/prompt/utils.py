@@ -182,3 +182,24 @@ def get_examples_from_store(
             stacklevel=3,
         )
     return store.get_examples(data, top_k)
+
+
+def output_language_directive(language: t.Optional[str]) -> str:
+    """A line telling the model which language to write its output in.
+
+    Rendered only by prompts that set ``states_output_language``.
+
+    ``prompt.language`` is set by ``adapt()``, but nothing rendered it, so a
+    prompt adapted to Spanish only carried a translated instruction and
+    examples. With input in another language (a French corpus, English
+    personas), the model wrote French or English output (#106). Empty for
+    English, the prompts' native language, so English prompts are unchanged.
+    """
+    if not language or language.strip().lower() == "english":
+        return ""
+    name = language.strip()
+    name = name[:1].upper() + name[1:]
+    return (
+        f"Write every text value in the output in {name}, even if the input "
+        "is in another language. Keep the JSON keys exactly as in the schema.\n"
+    )

@@ -15,7 +15,12 @@ from ragas.exceptions import RagasOutputParserException
 from ragas.prompt.value import StringPromptValue as PromptValue
 
 from .base import BasePrompt, StringIO
-from .utils import extract_json, get_all_strings, update_strings
+from .utils import (
+    extract_json,
+    get_all_strings,
+    output_language_directive,
+    update_strings,
+)
 
 if t.TYPE_CHECKING:
     from ragas.callbacks import Callbacks
@@ -35,6 +40,13 @@ class PydanticPrompt(BasePrompt, t.Generic[InputModel, OutputModel]):
     output_model: t.Type[OutputModel]
     instruction: str
     examples: t.List[t.Tuple[InputModel, OutputModel]] = []
+    # When True and the prompt is adapted to a language other than English,
+    # the rendered prompt tells the model to write its output in that
+    # language. Opt-in: only prompts whose output is final, user-facing text
+    # (generated queries and answers) set it. Prompts whose output must copy
+    # values from the input (persona names, entities, statements matched by
+    # text later) would break if those values were translated.
+    states_output_language: bool = False
 
     def _generate_instruction(self) -> str:
         return self.instruction
@@ -70,6 +82,11 @@ class PydanticPrompt(BasePrompt, t.Generic[InputModel, OutputModel]):
     def to_string(self, data: t.Optional[InputModel] = None) -> str:
         return (
             f"{self.instruction}\n"
+            + (
+                output_language_directive(getattr(self, "language", None))
+                if self.states_output_language
+                else ""
+            )
             + self._generate_output_signature()
             + "\n"
             + self._generate_examples()

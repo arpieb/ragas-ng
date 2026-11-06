@@ -319,3 +319,27 @@ instrumentations, `ragas` among them, so allow the `ragas` scope with
 both set-ups and how to score your app's traces with ragas.
 
 The MLflow helper, `ragas.integrations.tracing.mlflow`, is unchanged.
+
+## Adapted testset prompts write in the target language ([#106](https://github.com/arpieb/ragas-ng/issues/106))
+
+`adapt_prompts(language, ...)` recorded the target language on each prompt
+but never put it in the rendered prompt. An adapted prompt carried only a
+translated instruction (with `adapt_instruction=True`) and translated
+examples, so the generated queries followed the language of the documents
+and personas. A French corpus adapted to `"spanish"` produced a mix of
+French, English and Spanish queries.
+
+- The single-hop and multi-hop query/answer generation prompts now tell the
+  model to write their output in the adapted language. Testset queries and
+  reference answers come out in that language, whatever the corpus's
+  language is.
+- This is opt-in per prompt, through the `states_output_language` class
+  attribute on `PydanticPrompt`. Other prompts don't get the line: persona
+  matching, entity extraction and theme combination must copy values from
+  their input exactly, and translating those values (for example, a persona
+  named "curious student" coming back as "Estudiante curioso") drops every
+  scenario.
+- **Metric prompts are unchanged.** Adapting a metric still translates its
+  instruction and examples. It doesn't promise the language of the metric's
+  output (reasons, extracted statements), and scores are unaffected.
+- Prompts in English, and prompts never adapted, render exactly as before.
