@@ -4,6 +4,7 @@ import logging
 import typing as t
 from typing import List
 
+from ragas.metrics.collections._reasons import count_phrase, itemized
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
 
@@ -149,7 +150,11 @@ class SummaryScore(BaseMetric):
                 "SummaryScore: no questions generated from the reference contexts; "
                 "returning NaN."
             )
-            return MetricResult(value=float("nan"))
+            return MetricResult(
+                value=float("nan"),
+                reason="No questions could be generated from the source text, so "
+                "the score is undefined.",
+            )
 
         # Step 3: Check if summary can answer the questions
         answers = await self._generate_answers(response, questions)
@@ -161,10 +166,30 @@ class SummaryScore(BaseMetric):
         if self.length_penalty:
             conciseness_score = self._compute_conciseness_score(text, response)
             final_score = qa_score * (1 - self.coeff) + conciseness_score * self.coeff
+            weighting = (
+                f"QA score {qa_score:.2f} weighted {1 - self.coeff:.2f}, "
+                f"conciseness {conciseness_score:.2f} weighted {self.coeff:.2f}."
+            )
         else:
             final_score = qa_score
+            weighting = f"QA score {qa_score:.2f} (no length penalty)."
 
-        return MetricResult(value=float(final_score))
+        if len(answers) == len(questions):
+            answered = sum(a.strip() == "1" for a in answers)
+            reason = itemized(
+                f"The summary answers "
+                f"{count_phrase(answered, len(questions), 'question')} generated "
+                f"from the source text. {weighting}",
+                ((q, a.strip() == "1", None) for q, a in zip(questions, answers)),
+                yes="answered",
+                no="not answered",
+            )
+        else:
+            reason = (
+                f"The judge returned {len(answers)} answers for {len(questions)} "
+                f"questions, so the QA score is undefined."
+            )
+        return MetricResult(value=float(final_score), reason=reason)
 
     async def _extract_keyphrases(self, text: str) -> List[str]:
         """Extract keyphrases from text using the keyphrase extraction prompt."""

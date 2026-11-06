@@ -3,6 +3,7 @@
 import typing as t
 from typing import List, Sequence
 
+from ragas.metrics.collections._reasons import count_phrase, itemized
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
 
@@ -102,7 +103,19 @@ class ContextEntityRecall(BaseMetric):
         # Calculate recall score
         recall_score = self._compute_recall_score(reference_entities, context_entities)
 
-        return MetricResult(value=float(recall_score))
+        found = set(context_entities)
+        reference_set = list(dict.fromkeys(reference_entities))
+        recalled = sum(1 for e in reference_set if e in found)
+        reason = itemized(
+            f"{count_phrase(recalled, len(reference_set), 'entity')} in the "
+            f"reference appear in the retrieved context."
+            if reference_set
+            else "No entities were found in the reference.",
+            ((e, e in found, None) for e in reference_set),
+            yes="found",
+            no="missing",
+        )
+        return MetricResult(value=float(recall_score), reason=reason)
 
     async def _extract_entities(self, text: str) -> List[str]:
         """

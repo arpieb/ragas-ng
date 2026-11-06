@@ -177,7 +177,12 @@ class AnswerCorrectness(BaseMetric):
         # FactualCorrectness (#49). It used to "assume perfect match" (1.0),
         # giving evasive answers full factuality credit (#136).
         if not (response_statements and reference_statements):
-            return MetricResult(value=float("nan"))
+            side = "response" if not response_statements else "reference"
+            return MetricResult(
+                value=float("nan"),
+                reason=f"No statements could be extracted from the {side}, so "
+                f"factuality (and the score) is undefined.",
+            )
         classification = await self._classify_statements(
             user_input, response_statements, reference_statements
         )
@@ -195,7 +200,19 @@ class AnswerCorrectness(BaseMetric):
             weights=self.weights,
         )
 
-        return MetricResult(value=float(final_score))
+        lines = [
+            f"Factuality {factuality_score:.2f} (weight {self.weights[0]}), "
+            f"semantic similarity {similarity_score:.2f} (weight {self.weights[1]})."
+        ]
+        for label, items in (
+            ("In both response and reference (TP)", classification.TP),
+            ("Only in the response (FP)", classification.FP),
+            ("Missing from the response (FN)", classification.FN),
+        ):
+            if items:
+                lines.append(f"{label}:")
+                lines.extend(f"- {i.statement}: {i.reason}" for i in items)
+        return MetricResult(value=float(final_score), reason="\n".join(lines))
 
     async def _generate_statements(self, question: str, text: str) -> List[str]:
         """Generate atomic statements from text using the statement generator prompt."""

@@ -5,6 +5,11 @@ from typing import List
 
 import numpy as np
 
+from ragas.metrics.collections._reasons import (
+    UNMATCHED_VERDICTS,
+    count_phrase,
+    itemized,
+)
 from ragas.metrics.collections._text import split_sentences
 from ragas.metrics.collections._verdicts import judge_each
 from ragas.metrics.collections.base import BaseMetric
@@ -138,7 +143,17 @@ class ContextRecall(BaseMetric):
             metric=self.name,
         )
         if aligned is None:
-            return MetricResult(value=np.nan)
+            return MetricResult(
+                value=np.nan, reason=UNMATCHED_VERDICTS.format(what="sentences")
+            )
 
-        score = sum(1 for c in aligned if c.attributed) / len(aligned)
-        return MetricResult(value=float(score))
+        attributed = sum(1 for c in aligned if c.attributed)
+        score = attributed / len(aligned)
+        reason = itemized(
+            f"{count_phrase(attributed, len(aligned), 'sentence')} of the reference "
+            f"are attributable to the retrieved context.",
+            ((s, bool(c.attributed), c.reason) for s, c in zip(statements, aligned)),
+            yes="attributed",
+            no="not attributed",
+        )
+        return MetricResult(value=float(score), reason=reason)

@@ -2,6 +2,7 @@
 
 import typing as t
 
+from ragas.metrics.collections._reasons import count_phrase, itemized
 from ragas.metrics.collections.faithfulness import Faithfulness
 from ragas.metrics.result import MetricResult
 
@@ -144,7 +145,11 @@ class FaithfulnesswithHHEM(Faithfulness):
 
         statements = await self._create_statements(user_input, response)
         if not statements:
-            return MetricResult(value=float("nan"))
+            return MetricResult(
+                value=float("nan"),
+                reason="No statements could be extracted from the response, so "
+                "faithfulness is undefined.",
+            )
 
         premise = "\n".join(retrieved_contexts)
         pairs = [(premise, statement) for statement in statements]
@@ -154,4 +159,10 @@ class FaithfulnesswithHHEM(Faithfulness):
             predictions = self.classifier.predict(batch).cpu().detach().round()
             scores.extend(predictions.tolist())
 
-        return MetricResult(value=sum(scores) / len(scores))
+        supported = sum(1 for sc in scores if sc)
+        reason = itemized(
+            f"{count_phrase(supported, len(scores), 'statement')} in the response "
+            f"are entailed by the retrieved context (HHEM classifier).",
+            ((st, bool(sc), None) for st, sc in zip(statements, scores)),
+        )
+        return MetricResult(value=sum(scores) / len(scores), reason=reason)

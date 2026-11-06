@@ -100,9 +100,12 @@ class AgentGoalAccuracyWithReference(BaseMetric):
         workflow_result = await self._infer_goal_outcome(conversation)
 
         # Step 2: Compare the end state with reference
-        verdict = await self._compare_outcomes(reference, workflow_result.end_state)
+        judged = await self._judge_outcome(reference, workflow_result.end_state)
 
-        return MetricResult(value=float(verdict))
+        return MetricResult(
+            value=float(int(judged.verdict)),
+            reason=_outcome_reason(reference, workflow_result.end_state, judged),
+        )
 
     def _format_conversation(
         self, messages: List[Union[HumanMessage, AIMessage, ToolMessage]]
@@ -119,14 +122,17 @@ class AgentGoalAccuracyWithReference(BaseMetric):
         prompt_str = self.workflow_prompt.to_string(input_data)
         return await self.llm.agenerate(prompt_str, WorkflowOutput)
 
-    async def _compare_outcomes(self, desired: str, arrived: str) -> int:
-        """Compare desired outcome with achieved outcome."""
+    async def _judge_outcome(self, desired: str, arrived: str) -> CompareOutcomeOutput:
+        """The judge's verdict and reason comparing desired and achieved outcomes."""
         input_data = CompareOutcomeInput(
             desired_outcome=desired, arrived_outcome=arrived
         )
         prompt_str = self.compare_outcome_prompt.to_string(input_data)
-        result = await self.llm.agenerate(prompt_str, CompareOutcomeOutput)
-        return int(result.verdict)
+        return await self.llm.agenerate(prompt_str, CompareOutcomeOutput)
+
+    async def _compare_outcomes(self, desired: str, arrived: str) -> int:
+        """Compare desired outcome with achieved outcome."""
+        return int((await self._judge_outcome(desired, arrived)).verdict)
 
 
 class AgentGoalAccuracyWithoutReference(BaseMetric):
@@ -203,11 +209,16 @@ class AgentGoalAccuracyWithoutReference(BaseMetric):
         workflow_result = await self._infer_goal_outcome(conversation)
 
         # Step 2: Compare the inferred goal with the end state
-        verdict = await self._compare_outcomes(
+        judged = await self._judge_outcome(
             workflow_result.user_goal, workflow_result.end_state
         )
 
-        return MetricResult(value=float(verdict))
+        return MetricResult(
+            value=float(int(judged.verdict)),
+            reason=_outcome_reason(
+                workflow_result.user_goal, workflow_result.end_state, judged
+            ),
+        )
 
     def _format_conversation(
         self, messages: List[Union[HumanMessage, AIMessage, ToolMessage]]
@@ -224,14 +235,26 @@ class AgentGoalAccuracyWithoutReference(BaseMetric):
         prompt_str = self.workflow_prompt.to_string(input_data)
         return await self.llm.agenerate(prompt_str, WorkflowOutput)
 
-    async def _compare_outcomes(self, desired: str, arrived: str) -> int:
-        """Compare desired outcome with achieved outcome."""
+    async def _judge_outcome(self, desired: str, arrived: str) -> CompareOutcomeOutput:
+        """The judge's verdict and reason comparing desired and achieved outcomes."""
         input_data = CompareOutcomeInput(
             desired_outcome=desired, arrived_outcome=arrived
         )
         prompt_str = self.compare_outcome_prompt.to_string(input_data)
-        result = await self.llm.agenerate(prompt_str, CompareOutcomeOutput)
-        return int(result.verdict)
+        return await self.llm.agenerate(prompt_str, CompareOutcomeOutput)
+
+    async def _compare_outcomes(self, desired: str, arrived: str) -> int:
+        """Compare desired outcome with achieved outcome."""
+        return int((await self._judge_outcome(desired, arrived)).verdict)
+
+
+def _outcome_reason(desired: str, arrived: str, judged: CompareOutcomeOutput) -> str:
+    achieved = "achieved" if int(judged.verdict) else "not achieved"
+    return (
+        f"Goal {achieved}. {judged.reason}\n"
+        f"- desired outcome: {desired}\n"
+        f"- end state: {arrived}"
+    )
 
 
 # Convenience alias that defaults to with reference

@@ -239,3 +239,24 @@ class MetricResult:
                 info_arg=True,  # Explicitly specify that we're using the info argument
             ),
         )
+
+
+class ScoreWithReason(float):
+    """A numeric score that also carries the metric's explanation.
+
+    ``evaluate()`` aggregates plain numbers, so a collections metric's
+    ``MetricResult`` is reduced to a float on the way in. This subclass keeps
+    ``MetricResult.reason`` attached through the executor so
+    ``EvaluationResult`` can expose it (``result.reasons``,
+    ``to_pandas(include_reasons=True)``). It behaves exactly like a float.
+    """
+
+    reason: t.Optional[str]
+
+    def __new__(cls, value: float, reason: t.Optional[str] = None):
+        obj = super().__new__(cls, value)
+        obj.reason = reason
+        return obj
+
+    def __reduce__(self):
+        return (ScoreWithReason, (float(self), self.reason))

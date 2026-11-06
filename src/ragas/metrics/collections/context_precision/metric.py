@@ -7,6 +7,7 @@ import numpy as np
 
 from ragas.metrics.collections._average_precision import average_precision
 from ragas.metrics.collections._concurrency import gather_bounded
+from ragas.metrics.collections._reasons import count_phrase, itemized
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
 
@@ -119,7 +120,9 @@ class ContextPrecisionWithReference(BaseMetric):
 
         # Calculate average precision
         score = self._calculate_average_precision(verdicts)
-        return MetricResult(value=float(score))
+        return MetricResult(
+            value=float(score), reason=_ranking_reason(retrieved_contexts, results)
+        )
 
     def _calculate_average_precision(self, verdicts: List[int]) -> float:
         """Calculate average precision from binary verdicts."""
@@ -235,7 +238,9 @@ class ContextPrecisionWithoutReference(BaseMetric):
 
         # Calculate average precision
         score = self._calculate_average_precision(verdicts)
-        return MetricResult(value=float(score))
+        return MetricResult(
+            value=float(score), reason=_ranking_reason(retrieved_contexts, results)
+        )
 
     def _calculate_average_precision(self, verdicts: List[int]) -> float:
         """Calculate average precision from binary verdicts."""
@@ -322,3 +327,23 @@ class ContextUtilization(ContextPrecisionWithoutReference):
     ):
         """Initialize ContextUtilization with the legacy default name."""
         super().__init__(llm, name="context_utilization", **kwargs)
+
+
+def _ranking_reason(contexts: List[str], results: List[ContextPrecisionOutput]) -> str:
+    """Per-rank verdicts: precision depends on where useful contexts appear."""
+
+    def preview(text: str, limit: int = 80) -> str:
+        text = " ".join(text.split())
+        return text if len(text) <= limit else text[: limit - 1] + "\u2026"
+
+    useful = sum(1 for r in results if r.verdict)
+    return itemized(
+        f"{count_phrase(useful, len(results), 'retrieved context')} judged useful; "
+        f"average precision rewards useful contexts ranked first.",
+        (
+            (f"#{rank} {preview(ctx)!r}", bool(r.verdict), r.reason)
+            for rank, (ctx, r) in enumerate(zip(contexts, results), start=1)
+        ),
+        yes="useful",
+        no="not useful",
+    )

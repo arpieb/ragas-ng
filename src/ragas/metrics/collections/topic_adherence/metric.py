@@ -128,7 +128,18 @@ class TopicAdherence(BaseMetric):
         # Step 4: Compute score based on mode
         score = self._compute_score(topic_answered, topic_classifications)
 
-        return MetricResult(value=float(score))
+        lines = [
+            f"{len(topics)} topics discussed; {self.mode} of answering in-scope "
+            f"topics (reference topics: {', '.join(reference_topics)})."
+        ]
+        for topic, answered, in_scope in zip(
+            topics, topic_answered, topic_classifications
+        ):
+            lines.append(
+                f"- {topic}: {'answered' if answered else 'refused'}, "
+                f"{'in scope' if in_scope else 'out of scope'}"
+            )
+        return MetricResult(value=float(score), reason="\n".join(lines))
 
     def _format_conversation(
         self, messages: List[Union[HumanMessage, AIMessage, ToolMessage]]

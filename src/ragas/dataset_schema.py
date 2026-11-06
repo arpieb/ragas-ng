@@ -442,6 +442,18 @@ class EvaluationResult:
     run_id: t.Optional[UUID] = None
 
     def __post_init__(self):
+        # Split metric explanations (#116) off the scores: the scores stay
+        # plain numbers, reasons are kept alongside for `reasons` and
+        # `to_pandas(include_reasons=True)`.
+        self._reasons_dict: t.Dict[str, t.List[t.Optional[str]]] = {}
+        for row_idx, row in enumerate(self.scores):
+            for name, value in row.items():
+                reason = getattr(value, "reason", None)
+                if reason is not None:
+                    self._reasons_dict.setdefault(name, [None] * len(self.scores))
+                    self._reasons_dict[name][row_idx] = reason
+                    row[name] = float(value)
+
         # transform scores from list of dicts to dict of lists
         self._scores_dict = {
             k: [d[k] for d in self.scores] for k in self.scores[0].keys()
@@ -498,7 +510,27 @@ class EvaluationResult:
     def __getitem__(self, key: str) -> t.List[float]:
         return self._scores_dict[key]
 
-    def to_pandas(self, batch_size: int | None = None, batched: bool = False):
+    @property
+    def reasons(self) -> t.Dict[str, t.List[t.Optional[str]]]:
+        """Per-row explanations for metrics that provide them.
+
+        Maps metric name to one entry per row (``None`` where that row has no
+        explanation, e.g. it errored). Metrics that never explain their score
+        (string metrics, BLEU, ...) are absent.
+
+        Example::
+
+            >>> result.reasons["faithfulness"][0]
+            '2 of 3 statements are supported by the retrieved context. ...'
+        """
+        return {name: list(rows) for name, rows in self._reasons_dict.items()}
+
+    def to_pandas(
+        self,
+        batch_size: int | None = None,
+        batched: bool = False,
+        include_reasons: bool = False,
+    ):
         """
         Convert the result to a pandas DataFrame.
 
@@ -508,6 +540,9 @@ class EvaluationResult:
             The batch size for conversion. Default is None.
         batched : bool, optional
             Whether to convert in batches. Default is False.
+        include_reasons : bool, optional
+            Add a ``<metric>_reason`` column after each metric that explains
+            its scores (see ``reasons``). Default is False.
 
         Returns
         -------
@@ -531,6 +566,10 @@ class EvaluationResult:
         assert len(self.scores) == len(self.dataset)
         # convert both to pandas dataframes and concatenate
         scores_df = pd.DataFrame(self.scores)
+        if include_reasons:
+            for name, rows in self._reasons_dict.items():
+                position = list(scores_df.columns).index(name) + 1
+                scores_df.insert(position, f"{name}_reason", rows)
         dataset_df = self.dataset.to_pandas()
         return pd.concat([dataset_df, scores_df], axis=1)
 
