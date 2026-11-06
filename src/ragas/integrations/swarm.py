@@ -1,7 +1,10 @@
-import json
+import logging
 from typing import Any, Dict, List, Union
 
+from ragas.integrations._messages import parse_tool_arguments, text_from_content
 from ragas.messages import AIMessage, HumanMessage, ToolCall, ToolMessage
+
+logger = logging.getLogger(__name__)
 
 
 def convert_to_ragas_messages(
@@ -25,10 +28,18 @@ def convert_to_ragas_messages(
         - AIMessage: For assistant messages with optional tool calls
         - ToolMessage: For tool response messages
 
+    The messages are OpenAI chat-format dicts, so any OpenAI-format history
+    works, not only Swarm's. ``system`` and ``developer`` messages are
+    skipped. Content may be a string, ``None`` or a list of content parts
+    (text parts are kept).
+
     Raises
     ------
     KeyError
         If a message is missing the required 'role' key
+    ValueError
+        If a message has a role other than user, assistant, tool, system or
+        developer
     """
 
     def convert_tool_calls(tool_calls_data: List[Dict[str, Any]]) -> List[ToolCall]:
@@ -36,29 +47,29 @@ def convert_to_ragas_messages(
         return [
             ToolCall(
                 name=tool_call["function"]["name"],
-                args=json.loads(tool_call["function"]["arguments"]),
+                # arguments that aren't a JSON object are kept as raw_args
+                # instead of failing the conversion
+                args=parse_tool_arguments(tool_call["function"].get("arguments")),
             )
             for tool_call in tool_calls_data
         ]
 
     def handle_assistant_message(message: Dict[str, Any]) -> AIMessage:
         """Convert assistant message to Ragas AIMessage"""
-        tool_calls = (
-            convert_tool_calls(message["tool_calls"]) if message["tool_calls"] else []
-        )
-        ai_message_content = message.get("content")
+        # a plain reply has no tool_calls key, or None (#98)
+        tool_calls = convert_tool_calls(message.get("tool_calls") or [])
         return AIMessage(
-            content=ai_message_content if ai_message_content else "",
+            content=text_from_content(message.get("content")),
             tool_calls=tool_calls,
         )
 
-    def handle_tool_message(message: Dict[str, str]) -> ToolMessage:
+    def handle_tool_message(message: Dict[str, Any]) -> ToolMessage:
         """Convert tool message to Ragas ToolMessage"""
-        return ToolMessage(content=message["content"])
+        return ToolMessage(content=text_from_content(message.get("content")))
 
-    def handle_user_message(message: Dict[str, str]) -> HumanMessage:
+    def handle_user_message(message: Dict[str, Any]) -> HumanMessage:
         """Convert user message to Ragas HumanMessage"""
-        return HumanMessage(content=message["content"])
+        return HumanMessage(content=text_from_content(message.get("content")))
 
     converted_messages = []
 
@@ -73,6 +84,10 @@ def convert_to_ragas_messages(
             converted_messages.append(handle_tool_message(message))
         elif role == "user":
             converted_messages.append(handle_user_message(message))
+        elif role in ("system", "developer"):
+            # part of a full OpenAI-format history, but ragas multi-turn
+            # samples carry no system messages
+            logger.debug("Skipping %s message", role)
         else:
             raise ValueError(
                 f"Role must be one of ['assistant', 'user', 'tool'], but found '{role}'"
