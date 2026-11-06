@@ -78,7 +78,7 @@ async def aevaluate(
     return_executor: bool = False,
 ) -> t.Union[EvaluationResult, Executor]:
     """
-    Async version of evaluate that performs evaluation without applying nest_asyncio.
+    Async version of evaluate(), for use from async code.
 
     This function is the async-first implementation that doesn't patch the event loop,
     making it safe to use in production async applications.
@@ -382,7 +382,7 @@ def evaluate(
     _pbar: t.Optional[tqdm] = None,
     _callbacks: Callbacks = None,
     return_executor: bool = False,
-    allow_nest_asyncio: bool = True,
+    allow_nest_asyncio: t.Optional[bool] = None,
 ) -> t.Union[EvaluationResult, Executor]:
     """
     Perform the evaluation on the dataset with different metrics
@@ -425,8 +425,9 @@ def evaluate(
         The returned executor can be used to cancel execution by calling executor.cancel().
         To get results, call executor.results(). Default is False.
     allow_nest_asyncio : bool, optional
-        Whether to allow nest_asyncio patching for Jupyter compatibility.
-        Set to False in production async applications to avoid event loop conflicts. Default is True.
+        Deprecated and ignored. evaluate() no longer patches the event loop
+        with nest_asyncio: it runs on ragas' shared background loop, which
+        works in Jupyter and in async applications alike.
 
     Returns
     -------
@@ -487,16 +488,17 @@ def evaluate(
             return_executor=return_executor,
         )
 
-    if not allow_nest_asyncio:
-        # Run without nest_asyncio - creates a new event loop
-        import asyncio
+    if allow_nest_asyncio is not None:
+        warnings.warn(
+            "evaluate(allow_nest_asyncio=...) is deprecated and has no effect: "
+            "ragas no longer uses nest_asyncio.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
-        return asyncio.run(_async_wrapper())
-    else:
-        # Default behavior: use nest_asyncio for backward compatibility (Jupyter notebooks)
-        from ragas.async_utils import run
+    from ragas.async_utils import run_sync
 
-        return run(_async_wrapper())
+    return run_sync(_async_wrapper())
 
 
 def _warn_on_missing_scores(result: EvaluationResult) -> None:

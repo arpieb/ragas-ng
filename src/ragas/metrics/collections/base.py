@@ -1,12 +1,12 @@
 """Base class for collections metrics with modern component validation."""
 
-import asyncio
 import collections.abc
 import functools
 import inspect
 import re
 import typing as t
 
+from ragas.async_utils import run_sync
 from ragas.embeddings.base import BaseRagasEmbedding
 from ragas.llms.base import InstructorBaseRagasLLM
 from ragas.metrics.base import SimpleBaseMetric
@@ -138,18 +138,11 @@ class BaseMetric(SimpleBaseMetric, NumericValidator):
         Returns:
             MetricResult object
         """
-        try:
-            # Check if we're already in an async context
-            asyncio.get_running_loop()
-            # If we get here, there's already a running loop
-            raise RuntimeError(
-                "Cannot call sync score() from an async context. Use ascore() instead."
-            )
-        except RuntimeError as e:
-            if "Use ascore() instead" in str(e):
-                raise  # Re-raise our custom error
-            # No running loop found, safe to use asyncio.run()
-            return asyncio.run(self.ascore(**kwargs))
+        # On ragas' shared background loop: works inside Jupyter too, and an
+        # async client stays bound to one loop across calls. asyncio.run()
+        # made a new loop per call, so a second score() with AsyncOpenAI
+        # failed with "bound to a different event loop".
+        return run_sync(self.ascore(**kwargs))
 
     def batch_score(
         self,
@@ -167,18 +160,11 @@ class BaseMetric(SimpleBaseMetric, NumericValidator):
         Returns:
             List of MetricResult objects
         """
-        try:
-            # Check if we're already in an async context
-            asyncio.get_running_loop()
-            # If we get here, there's already a running loop
-            raise RuntimeError(
-                "Cannot call sync batch_score() from an async context. Use abatch_score() instead."
-            )
-        except RuntimeError as e:
-            if "Use abatch_score() instead" in str(e):
-                raise  # Re-raise our custom error
-            # No running loop found, safe to use asyncio.run()
-            return asyncio.run(self.abatch_score(inputs))
+        # On ragas' shared background loop: works inside Jupyter too, and an
+        # async client stays bound to one loop across calls. asyncio.run()
+        # made a new loop per call, so a second score() with AsyncOpenAI
+        # failed with "bound to a different event loop".
+        return run_sync(self.abatch_score(inputs))
 
     def _validate_llm(self):
         """Validate that a modern InstructorLLM is provided."""

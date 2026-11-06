@@ -47,9 +47,9 @@ async def test_executor_in_script(batch_size):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("batch_size", [None, 3, 20])
 async def test_executor_with_running_loop(batch_size):
-    loop = asyncio.new_event_loop()
-    loop.run_until_complete(asyncio.sleep(0.1))
-
+    # results() is called with this test's loop running. It used to drive a
+    # second loop here with run_until_complete, which only worked because an
+    # earlier test had patched asyncio globally with nest_asyncio (#80).
     async def echo_order(index: int):
         await asyncio.sleep(1 / index)
         return index
