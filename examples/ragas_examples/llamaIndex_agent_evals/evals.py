@@ -1,6 +1,8 @@
 import json
 import os
+import sys
 from collections import Counter
+from pathlib import Path
 from typing import Any, Dict, List
 
 import instructor
@@ -13,6 +15,9 @@ from ragas.metrics.result import MetricResult
 from llama_index.core.agent.workflow import FunctionAgent
 from llama_index.core.workflow import Context, JsonSerializer
 
+# Add the current directory to the path so the sibling module imports both when
+# run as a script and as a module (python -m, the ragas-llamaindex-agent-evals script)
+sys.path.insert(0, str(Path(__file__).parent))
 from llamaindex_agent import add_item, list_items, llm, remove_item
 
 evaluator_llm = InstructorLLM(

@@ -6,11 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Ragas is an evaluation toolkit for Large Language Model (LLM) applications. It provides objective metrics for evaluating LLM applications, test data generation capabilities, and integrations with popular LLM frameworks.
 
+This repository is **ragas-ng**, a hard fork of `vibrantlabsai/ragas`. The package and import name are still `ragas`. The fork removes vendor lock-in (no LangChain; `openai` is not a core dependency, and `llm_factory()` routes through LiteLLM) and fixes upstream's reported bugs. Changes that affect users are recorded in `docs/howtos/migrations/`: `behavior_changes.md` for API and behavior, and `score_changes.md` for metric scores.
+
 The repository contains:
 
-1. **Ragas Library** - The main evaluation toolkit including experimental features (in `src/ragas/` directory)
-   - Core evaluation metrics and test generation
-   - Experimental features available at `ragas.experimental`
+1. **Ragas Library** (`src/ragas/`) - metrics, test data generation, `evaluate()`, datasets, experiments and storage backends
+2. **Examples** (`examples/`, the `ragas-examples` workspace package) - the `ragas quickstart` templates and standalone example scripts
 
 ## Development Environment Setup
 
@@ -83,8 +84,8 @@ The workspace ensures consistent dependency versions across packages and enables
 
 ```bash
 # Setup and installation  
-make install-minimal # Minimal dev setup (79 packages - recommended)
-make install        # Full dev environment (383 packages - complete)
+make install-minimal # Minimal dev setup (recommended; what CI installs)
+make install        # Full dev environment (adds the ML/tracing stack and all extras)
 
 # Code quality
 make format         # Format and lint all code
@@ -151,10 +152,8 @@ The repository has the following structure:
 
 ```sh
 /                          # Main ragas project
-├── src/ragas/             # Source code including experimental features
-│   └── experimental/      # Experimental features
-├── tests/                 # All tests (core + experimental)
-│   └── experimental/      # Experimental tests
+├── src/ragas/             # Source code
+├── tests/                 # unit/, e2e/, docs/ and benchmarks/ tests
 ├── examples/              # Example code
 ├── pyproject.toml         # Build config
 ├── docs/                  # Documentation
@@ -178,24 +177,20 @@ The Ragas core library provides metrics, test data generation and evaluation fun
 
 2. **Test Data Generation** - Automatic creation of test datasets for LLM applications
 
-3. **Integrations** - Integrations with popular LLM frameworks like LangChain, LlamaIndex, and observability tools
+3. **Integrations** (`src/ragas/integrations/`) - LlamaIndex, Griptape, Amazon Bedrock, R2R, Swarm, Helicone and AG-UI, plus MLflow tracing; Haystack and OCI Gen AI are LLM wrappers in `ragas.llms`. Spans are emitted with the OpenTelemetry API, so any OTel backend (e.g. Langfuse) works without vendor code. LangChain is banned: ruff rejects its imports and `tests/unit/test_langchain_boundary.py` checks it at runtime
 
-### Experimental Components
+### Datasets, Experiments and Backends
 
-The experimental features are now integrated into the main ragas package:
-
-1. **Experimental features** are available at `ragas.experimental`
-2. **Dataset and Experiment management** - Enhanced data handling for experiments
-3. **Advanced metrics** - Extended metric capabilities
-4. **Backend support** - Multiple storage backends (CSV, JSONL, Google Drive, in-memory)
-
-To use experimental features:
+`Dataset`, the `@experiment` decorator and the storage backends are part of the main package (the former `ragas.experimental` namespace no longer exists):
 
 ```python
-from ragas import Dataset
-from ragas import experiment
-from ragas.backends import get_registry
+from ragas import Dataset, experiment
+from ragas.backends import get_registry  # local/csv, local/jsonl, inmemory, gdrive
 ```
+
+- `Dataset(name, backend="local/csv", root_dir="./data")`: a backend by name plus its constructor arguments, or a backend instance.
+- `@experiment(Model, backend=..., backend_kwargs=..., max_workers=16)`, then `await fn.arun(dataset, ...)`. `name`, `backend`, `backend_kwargs` and `max_workers` belong to `arun`; other keyword arguments go to the experiment function.
+- User guide: `docs/howtos/customizations/storage_backends.md`. Contributor notes: `src/ragas/backends/README.md`.
 
 ## Debugging Logs
 
