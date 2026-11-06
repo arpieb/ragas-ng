@@ -3,15 +3,23 @@
 __all__ = ["Experiment", "experiment", "version_experiment"]
 
 import asyncio
+import logging
 import typing as t
 from pathlib import Path
 
 from pydantic import BaseModel
 from tqdm import tqdm
 
+from ragas.async_utils import as_completed
 from ragas.backends.base import BaseBackend
 from ragas.dataset import Dataset, DataTable
 from ragas.utils import find_git_root, memorable_names
+
+logger = logging.getLogger(__name__)
+
+# Rows run at once by default. The same as evaluate()'s RunConfig.max_workers;
+# before #117 every row started at once.
+DEFAULT_MAX_WORKERS = 16
 
 
 class Experiment(DataTable):
@@ -110,6 +118,7 @@ class ExperimentProtocol(t.Protocol):
         backend: t.Optional[t.Union[BaseBackend, str]] = None,
         *args,
         backend_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
+        max_workers: t.Optional[int] = None,
         **kwargs,
     ) -> "Experiment": ...
 
@@ -124,8 +133,11 @@ class ExperimentWrapper:
         default_backend: t.Optional[t.Union[BaseBackend, str]] = None,
         name_prefix: str = "",
         default_backend_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
+        max_workers: int = DEFAULT_MAX_WORKERS,
     ):
         _check_backend_kwargs(default_backend, default_backend_kwargs)
+        _check_max_workers(max_workers)
+        self.max_workers = max_workers
         self.func = func
         self.experiment_model = experiment_model
         self.default_backend = default_backend
@@ -149,9 +161,14 @@ class ExperimentWrapper:
         backend: t.Optional[t.Union[BaseBackend, str]] = None,
         *args,
         backend_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
+        max_workers: t.Optional[int] = None,
         **kwargs,
     ) -> "Experiment":
         """Run the experiment against a dataset.
+
+        Rows run concurrently, at most ``max_workers`` at a time. A sync
+        experiment function runs in worker threads. Results are saved in
+        dataset order. A row whose function raises is logged and left out.
 
         Args:
             dataset: The rows to run the experiment function on.
@@ -162,9 +179,11 @@ class ExperimentWrapper:
             *args: Passed to the experiment function after each row.
             backend_kwargs: Constructor arguments for a backend given by
                 name, e.g. ``{"root_dir": "./data"}``.
+            max_workers: How many rows run at once. Defaults to the
+                decorator's ``max_workers`` (16). ``-1`` means no limit.
             **kwargs: Passed to the experiment function. ``name``,
-                ``backend`` and ``backend_kwargs`` are ``arun``'s own, so pass
-                the function's arguments by keyword.
+                ``backend``, ``backend_kwargs`` and ``max_workers`` are
+                ``arun``'s own, so pass the function's arguments by keyword.
         """
         # Generate name if not provided
         if name is None:
@@ -197,30 +216,58 @@ class ExperimentWrapper:
             backend=resolved_backend,
         )
 
-        # Create tasks for all items
-        tasks = []
-        for item in dataset:
-            tasks.append(self(item, *args, **kwargs))
+        limit = self.max_workers if max_workers is None else max_workers
+        _check_max_workers(limit)
+        is_async = asyncio.iscoroutinefunction(self.func)
 
-        progress_bar = None
+        async def run_row(index: int, item: t.Any):
+            try:
+                if is_async:
+                    result = await self.func(item, *args, **kwargs)
+                else:
+                    # a sync function would block the event loop and run the
+                    # rows one at a time
+                    result = await asyncio.to_thread(self.func, item, *args, **kwargs)
+                return index, result, None
+            except Exception as e:
+                return index, None, e
+
+        rows = list(dataset)
+        results: t.List[t.Any] = [None] * len(rows)
+        failures = 0
+        progress_bar = tqdm(total=len(rows), desc="Running experiment")
         try:
-            progress_bar = tqdm(total=len(dataset), desc="Running experiment")
-
-            # Process all items
-            for future in asyncio.as_completed(tasks):
-                try:
-                    result = await future
-                    if result is not None:
-                        experiment_view.append(result)
-                except Exception as e:
-                    # Log individual task failures but continue
-                    print(f"Warning: Task failed with error: {e}")
-                finally:
-                    progress_bar.update(1)
-
+            for future in as_completed(
+                [run_row(i, item) for i, item in enumerate(rows)], limit
+            ):
+                index, result, error = await future
+                if error is not None:
+                    failures += 1
+                    logger.warning(
+                        "Experiment %r: row %d failed and is not saved: %s: %s",
+                        name,
+                        index,
+                        type(error).__name__,
+                        error,
+                    )
+                else:
+                    results[index] = result
+                progress_bar.update(1)
         finally:
-            if progress_bar:
-                progress_bar.close()
+            progress_bar.close()
+
+        if failures:
+            logger.warning(
+                "Experiment %r: %d of %d rows failed and were not saved.",
+                name,
+                failures,
+                len(rows),
+            )
+
+        # dataset order, not completion order
+        for result in results:
+            if result is not None:
+                experiment_view.append(result)
 
         # Save experiment
         experiment_view.save()
@@ -248,6 +295,17 @@ def _check_backend_kwargs(
         )
 
 
+def _check_max_workers(max_workers: t.Any) -> None:
+    if (
+        isinstance(max_workers, bool)
+        or not isinstance(max_workers, int)
+        or (max_workers < 1 and max_workers != -1)
+    ):
+        raise ValueError(
+            f"max_workers must be a positive int, or -1 for no limit; got {max_workers!r}"
+        )
+
+
 def _resolve_experiment_backend(
     backend: t.Union[BaseBackend, str],
     backend_kwargs: t.Optional[t.Dict[str, t.Any]],
@@ -272,6 +330,7 @@ def experiment(
     name_prefix: str = "",
     *,
     backend_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
+    max_workers: int = DEFAULT_MAX_WORKERS,
 ) -> t.Callable[[t.Callable], ExperimentProtocol]:
     """Decorator for creating experiment functions.
 
@@ -282,6 +341,9 @@ def experiment(
         name_prefix: Optional prefix for experiment names
         backend_kwargs: Constructor arguments for a backend given by name,
             e.g. ``{"root_dir": "./data"}``
+        max_workers: How many rows ``arun`` runs at once (default 16, the
+            same as ``evaluate()``); ``-1`` means no limit. A sync function
+            runs in that many threads, so use 1 if it isn't thread-safe.
 
     Returns:
         Decorator function that wraps experiment functions
@@ -293,6 +355,7 @@ def experiment(
             return ExperimentDataRow(...)
     """
     _check_backend_kwargs(backend, backend_kwargs)
+    _check_max_workers(max_workers)
 
     def decorator(func: t.Callable) -> ExperimentProtocol:
         wrapper = ExperimentWrapper(
@@ -301,6 +364,7 @@ def experiment(
             default_backend=backend,
             name_prefix=name_prefix,
             default_backend_kwargs=backend_kwargs,
+            max_workers=max_workers,
         )
         return t.cast(ExperimentProtocol, wrapper)
 

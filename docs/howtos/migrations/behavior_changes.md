@@ -365,3 +365,29 @@ await run.arun(dataset, backend="local/csv", backend_kwargs={"root_dir": "./data
 - `backend_kwargs` is keyword-only and reserved, like `name` and `backend`. An
   experiment function with a parameter of that name can't receive it through
   `arun`.
+
+## Experiments: concurrency, threads, order and failures ([#117](https://github.com/arpieb/ragas-ng/issues/117))
+
+`ExperimentWrapper.arun` (`await my_experiment.arun(dataset)`) changed in four ways:
+
+- **At most 16 rows run at once by default.** Before, every row started at
+  once, so a large dataset sent all its LLM calls together and hit provider
+  rate limits. Set `@experiment(max_workers=...)` or
+  `arun(..., max_workers=...)`. `-1` restores the old unlimited behavior.
+  Runs with many fast rows may take longer than before.
+- **Sync experiment functions run in worker threads,** up to `max_workers`
+  at once. Before, they ran one after another on the event loop, blocking
+  it. A function that isn't thread-safe needs `max_workers=1`. Calling the
+  decorated function directly (`await my_experiment(row)`) still runs it
+  inline.
+- **⚠ silent: results are in dataset order.** Before, they were stored in
+  the order rows finished, so row *i* of the results was usually not row *i*
+  of the dataset.
+- **Failed rows are logged.** A row whose function raises is still left out
+  of the results. It's now a warning on the `ragas.experiment` logger, with
+  the row index and error, instead of a `print()`, and a final warning gives
+  "N of M rows failed and were not saved".
+
+`max_workers` is a keyword-only parameter of `arun`, like `name`, `backend`
+and `backend_kwargs`, so an experiment function can't receive a parameter of
+that name through `arun`.
