@@ -77,6 +77,11 @@ def default_transforms(
     def filter_chunks(node):
         return node.type == NodeType.CHUNK
 
+    if len(documents) == 0:
+        raise ValueError(
+            "default_transforms() needs at least one document; got an empty list."
+        )
+
     bin_ranges = [(0, 100), (101, 500), (501, float("inf"))]
     result = count_doc_length_bins(documents, bin_ranges)
     result = {k: v / len(documents) for k, v in result.items()}
@@ -87,7 +92,11 @@ def default_transforms(
         headline_extractor = HeadlinesExtractor(
             llm=llm, filter_nodes=lambda node: filter_doc_with_num_tokens(node)
         )
-        splitter = HeadlineSplitter(min_tokens=500)
+        # every document is split: one over 500 tokens by its headlines, a
+        # shorter one into a single chunk (it has no headlines, #87)
+        splitter = HeadlineSplitter(
+            min_tokens=500, filter_nodes=lambda node: filter_docs(node)
+        )
         summary_extractor = SummaryExtractor(
             llm=llm, filter_nodes=lambda node: filter_doc_with_num_tokens(node)
         )
@@ -128,7 +137,11 @@ def default_transforms(
             Parallel(summary_emb_extractor, theme_extractor, ner_extractor),
             Parallel(cosine_sim_builder, ner_overlap_sim),
         ]
-    elif result["101-500"] >= 0.25:
+    elif result["101-500"] + result["501-inf"] > 0:
+        # Any document over 100 tokens is enough for this pipeline; documents
+        # of 100 tokens or less still get themes and entities. Requiring 25%
+        # in the 101-500 bin rejected corpora with a few long documents and
+        # many short ones (#87).
         summary_extractor = SummaryExtractor(
             llm=llm, filter_nodes=lambda node: filter_doc_with_num_tokens(node, 100)
         )
@@ -161,7 +174,10 @@ def default_transforms(
         ]
     else:
         raise ValueError(
-            "Documents appears to be too short (ie 100 tokens or less). Please provide longer documents."
+            "All documents are 100 tokens or shorter, too short for the default "
+            "transforms. Provide longer documents, or, if they are already "
+            "chunks, use TestsetGenerator.generate_with_chunks(), which skips "
+            "splitting."
         )
 
     return transforms

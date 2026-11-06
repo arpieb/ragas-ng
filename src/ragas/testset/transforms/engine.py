@@ -59,6 +59,13 @@ def apply_transforms(
 ):
     """
     Recursively apply transformations to a knowledge graph in place.
+
+    The steps run in order and stop at the first failure (#86): when a task
+    fails, the step's pending tasks are cancelled, later steps don't run,
+    and the error is raised. There is no rollback, so ``kg`` keeps the
+    changes made before the failure; apply transforms to a fresh graph to
+    retry. ``TestsetGenerator.generate_with_*`` builds a new graph and
+    stores it only once every step has succeeded.
     """
     max_workers = getattr(run_config, "max_workers", -1)
 
@@ -84,13 +91,23 @@ def apply_transforms(
         )
         coros = transforms.generate_execution_plan(kg)
         desc = get_desc(transforms)
-        run_async_tasks(
-            coros,
-            batch_size=None,
-            show_progress=True,
-            progress_bar_desc=desc,
-            max_workers=max_workers,
-        )
+        try:
+            run_async_tasks(
+                coros,
+                batch_size=None,
+                show_progress=True,
+                progress_bar_desc=desc,
+                max_workers=max_workers,
+                fail_fast=True,
+            )
+        except Exception as e:
+            logger.error(
+                "Transform %s failed; stopping: %s: %s",
+                ", ".join(transformation_names),
+                type(e).__name__,
+                e,
+            )
+            raise
     else:
         raise ValueError(
             f"Invalid transforms type: {type(transforms)}. Expects a sequence of BaseGraphTransformations or a Parallel instance."

@@ -132,6 +132,21 @@ trans = default_transforms(
 apply_transforms(kg, trans)
 ```
 
+`apply_transforms` changes `kg` in place and stops at the first failure. If a
+step fails, it raises that error without running the remaining steps, and `kg`
+keeps whatever the completed steps added. To retry, start again from a fresh
+knowledge graph.
+
+`default_transforms` picks its steps by document length:
+
+- If at least a quarter of the documents are over 500 tokens, documents are
+  split into chunks by their headlines.
+- Otherwise, any document over 100 tokens is enough for the steps that work on
+  whole documents.
+- If every document is 100 tokens or shorter, it raises an error. If your
+  input is already chunked, use `generator.generate_with_chunks(...)`, which
+  skips splitting.
+
 Now we have a knowledge graph with additional information. You can save the knowledge graph too.
 
 ```python

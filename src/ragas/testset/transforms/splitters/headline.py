@@ -60,25 +60,33 @@ class HeadlineSplitter(Splitter):
         if text is None:
             raise ValueError("'page_content' property not found in this node")
 
-        headlines = node.get_property("headlines")
-        if headlines is None:
-            raise ValueError("'headlines' property not found in this node")
+        # A document can reach the splitter without headlines: the headline
+        # extractor may skip it (e.g. it is short) or find none. Both mean
+        # "no headlines", not an error.
+        headlines = node.get_property("headlines") or []
 
         if num_tokens_from_string(text) < self.min_tokens:
-            return [node], []
-        # create the chunks for the different sections
-        indices = [0]
-        for headline in headlines:
-            index = text.find(headline)
-            if index != -1:
-                indices.append(index)
-        indices.append(len(text))
-        chunks = [text[indices[i] : indices[i + 1]] for i in range(len(indices) - 1)]
-        chunks = self.adjust_chunks(chunks)
+            chunks = [text]
+        else:
+            # create the chunks for the different sections
+            indices = [0]
+            for headline in headlines:
+                index = text.find(headline)
+                if index != -1:
+                    indices.append(index)
+            indices.append(len(text))
+            chunks = [
+                text[indices[i] : indices[i + 1]] for i in range(len(indices) - 1)
+            ]
+            chunks = self.adjust_chunks(chunks)
 
-        # if there was no headline, return the original node
-        if len(chunks) == 1:
-            return [node], []
+        # A document that isn't split becomes a single chunk. Returning the
+        # node itself re-added it to the graph under the same id (#83), and
+        # left it without a CHUNK for the chunk-based extractors.
+        chunks = [chunk for chunk in chunks if chunk.strip()] or [text]
+        if len(chunks) == 1 and node.type == NodeType.CHUNK:
+            # already a chunk and nothing to split: no change to the graph
+            return [], []
 
         # create the nodes
         nodes = [
