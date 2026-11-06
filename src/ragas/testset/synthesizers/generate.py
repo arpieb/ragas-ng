@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 
 from ragas.callbacks import new_group
 from ragas.cost import TokenUsageParser
-from ragas.dataset_schema import MultiTurnSample, SingleTurnSample
+from ragas.dataset_schema import MultiTurnSample, SingleTurnSample, _json_safe
 from ragas.embeddings.base import (
     BaseRagasEmbeddings,
     LlamaIndexEmbeddingsWrapper,
@@ -18,6 +18,7 @@ from ragas.llms import BaseRagasLLM, LlamaIndexLLMWrapper
 from ragas.run_config import RunConfig, run_scope
 from ragas.testset.document import Document, DocumentLike
 from ragas.testset.graph import KnowledgeGraph, Node, NodeType
+from ragas.testset.graph_queries import get_parent_nodes
 from ragas.testset.persona import Persona, generate_personas_from_kg
 from ragas.testset.synthesizers import default_query_distribution
 from ragas.testset.synthesizers.testset_schema import Testset, TestsetSample
@@ -189,11 +190,10 @@ class TestsetGenerator:
 
         kg = KnowledgeGraph(nodes=nodes)
 
-        # apply transforms and update the knowledge graph
-        apply_transforms(kg, transforms, run_config=run_config or RunConfig())
-        self.knowledge_graph = kg
-
-        return self.generate(
+        # transforms and generation share one run scope (#90)
+        return self._transform_and_generate(
+            kg,
+            transforms,
             testset_size=testset_size,
             query_distribution=query_distribution,
             run_config=run_config,
@@ -238,8 +238,6 @@ class TestsetGenerator:
         """
         Generates an evaluation dataset based on given scenarios and parameters.
         """
-
-        run_config = run_config or RunConfig()
 
         # force the user to provide an llm and embedding client to prevent use of default LLMs
         if not self.llm and not transforms_llm:
@@ -286,11 +284,10 @@ class TestsetGenerator:
 
         kg = KnowledgeGraph(nodes=nodes)
 
-        # apply transforms and update the knowledge graph
-        apply_transforms(kg, transforms, run_config)
-        self.knowledge_graph = kg
-
-        return self.generate(
+        # transforms and generation share one run scope (#90)
+        return self._transform_and_generate(
+            kg,
+            transforms,
             testset_size=testset_size,
             query_distribution=query_distribution,
             run_config=run_config,
@@ -298,7 +295,7 @@ class TestsetGenerator:
             token_usage_parser=token_usage_parser,
             with_debugging_logs=with_debugging_logs,
             raise_exceptions=raise_exceptions,
-            return_executor=False,  # Default value for llamaindex_docs method
+            return_executor=False,
         )
 
     def generate_with_chunks(
@@ -402,11 +399,10 @@ class TestsetGenerator:
 
         kg = KnowledgeGraph(nodes=nodes)
 
-        # apply transforms and update the knowledge graph
-        apply_transforms(kg, transforms, run_config=run_config or RunConfig())
-        self.knowledge_graph = kg
-
-        return self.generate(
+        # transforms and generation share one run scope (#90)
+        return self._transform_and_generate(
+            kg,
+            transforms,
             testset_size=testset_size,
             query_distribution=query_distribution,
             run_config=run_config,
@@ -478,11 +474,7 @@ class TestsetGenerator:
         """
         # Token accounting: run-scoped, like the RunConfig, rather than set on
         # self.llm, which may be shared -- and was never detached (#76).
-        cost_cb = None
-        if token_usage_parser is not None:
-            from ragas.cost import TokenUsageCollector
-
-            cost_cb = TokenUsageCollector(token_usage_parser=token_usage_parser)
+        cost_cb = _usage_collector(token_usage_parser)
 
         with run_scope(run_config=run_config, usage_collector=cost_cb):
             return self._generate(
@@ -491,6 +483,44 @@ class TestsetGenerator:
                 num_personas=num_personas,
                 run_config=run_config,
                 batch_size=batch_size,
+                callbacks=callbacks,
+                cost_cb=cost_cb,
+                with_debugging_logs=with_debugging_logs,
+                raise_exceptions=raise_exceptions,
+                return_executor=return_executor,
+            )
+
+    def _transform_and_generate(
+        self,
+        kg: KnowledgeGraph,
+        transforms: Transforms,
+        *,
+        testset_size: int,
+        query_distribution: t.Optional[QueryDistribution],
+        run_config: t.Optional[RunConfig],
+        callbacks: t.Optional[Callbacks],
+        token_usage_parser: t.Optional[TokenUsageParser],
+        with_debugging_logs: bool,
+        raise_exceptions: bool,
+        return_executor: bool,
+    ) -> t.Union[Testset, Executor]:
+        """Build the knowledge graph, then generate, in one run scope.
+
+        Building the graph is most of the LLM cost, so the token collector
+        and the RunConfig (timeouts, retries) cover the transforms as well
+        as generation (#90). The graph is stored only once every transform
+        has succeeded.
+        """
+        cost_cb = _usage_collector(token_usage_parser)
+        with run_scope(run_config=run_config, usage_collector=cost_cb):
+            apply_transforms(kg, transforms, run_config=run_config or RunConfig())
+            self.knowledge_graph = kg
+            return self._generate(
+                testset_size=testset_size,
+                query_distribution=query_distribution,
+                num_personas=3,
+                run_config=run_config,
+                batch_size=None,
                 callbacks=callbacks,
                 cost_cb=cost_cb,
                 with_debugging_logs=with_debugging_logs,
@@ -621,8 +651,10 @@ class TestsetGenerator:
             batch_size=batch_size,
         )
         additional_testset_info: t.List[t.Dict] = []
+        submitted_scenarios: t.List[BaseScenario] = []
         for (synthesizer, _), scenarios in zip(planned, scenario_sample_list):
             for scenario in scenarios:
+                submitted_scenarios.append(scenario)
                 exec.submit(
                     synthesizer.generate_sample,
                     scenario=scenario,
@@ -651,10 +683,14 @@ class TestsetGenerator:
         # and is left out rather than failing TestsetSample validation (#82)
         testsets = []
         failed_samples = 0
-        for sample, additional_info in zip(eval_samples, additional_testset_info):
+        for sample, scenario, additional_info in zip(
+            eval_samples, submitted_scenarios, additional_testset_info
+        ):
             if not isinstance(sample, (SingleTurnSample, MultiTurnSample)):
                 failed_samples += 1
                 continue
+            if isinstance(sample, SingleTurnSample):
+                _attach_source_metadata(sample, scenario, self.knowledge_graph)
             testsets.append(TestsetSample(eval_sample=sample, **additional_info))
 
         _warn_on_shortfall(
@@ -664,6 +700,52 @@ class TestsetGenerator:
         testset_generation_rm.on_chain_end({"testset": testset})
 
         return testset
+
+
+def _source_metadata(node: Node, kg: KnowledgeGraph) -> t.Dict[str, t.Any]:
+    """The document metadata for ``node``: its own, else its document's."""
+    metadata = node.get_property("document_metadata")
+    if metadata is None:
+        for parent in get_parent_nodes(node, kg, level=3):
+            metadata = parent.get_property("document_metadata")
+            if metadata is not None:
+                break
+    return dict(metadata or {})
+
+
+def _attach_source_metadata(
+    sample: SingleTurnSample, scenario: BaseScenario, kg: KnowledgeGraph
+) -> None:
+    """Record each reference context's source document metadata (#91).
+
+    The built-in synthesizers make one reference context per scenario node,
+    in order. A synthesizer that sets the field itself, or whose contexts
+    don't line up with its nodes, is left alone.
+    """
+    if sample.reference_contexts_metadata is not None:
+        return
+    contexts = sample.reference_contexts or []
+    if len(contexts) != len(scenario.nodes):
+        logger.debug(
+            "Not attaching source metadata: %d reference contexts for %d nodes.",
+            len(contexts),
+            len(scenario.nodes),
+        )
+        return
+    # assignment skips pydantic validation, so make the values JSON-safe here
+    sample.reference_contexts_metadata = [
+        _json_safe(_source_metadata(node, kg)) for node in scenario.nodes
+    ]
+
+
+def _usage_collector(
+    token_usage_parser: t.Optional[TokenUsageParser],
+) -> t.Optional[t.Any]:
+    if token_usage_parser is None:
+        return None
+    from ragas.cost import TokenUsageCollector
+
+    return TokenUsageCollector(token_usage_parser=token_usage_parser)
 
 
 def _warn_on_shortfall(
