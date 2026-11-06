@@ -183,7 +183,7 @@ def test_provider_support(monkeypatch):
     def mock_from_openai(client, mode=None):
         return MockInstructor(client)
 
-    def mock_from_anthropic(client):
+    def mock_from_anthropic(client, mode=None):
         return MockInstructor(client)
 
     def mock_from_gemini(client):

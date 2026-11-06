@@ -279,3 +279,7 @@ ragas no longer sends `temperature` or `top_p` to Claude unless you set them you
 - **Claude judges now run at the provider's default sampling.** Before, the native-client path used `temperature=0.01` with older SDKs and models. Scores from those setups can change, and repeated runs vary more.
 - **`strictness > 1`** still draws several samples. They now differ because of Claude's default sampling, not a ragas-chosen `temperature=0.3`. ragas logs this once per LLM.
 - On the LiteLLM path, a temperature ragas chooses for sampling is sent with LiteLLM's `drop_params`. LiteLLM then drops it for models that reject it, and other providers still get it.
+
+## Claude judges: JSON mode ([#184](https://github.com/arpieb/ragas-ng/issues/184))
+
+Without a `mode`, Claude now returns structured output as JSON, not through a forced tool call (see [Behavior changes](behavior_changes.md#claude-json-mode-by-default-184)). The prompts and output schemas are unchanged, so most scores shouldn't move. Claude models that accepted tool mode (e.g. `claude-haiku-5-5`) may parse a borderline answer differently. `claude-sonnet-5-5` had no scores before: every call failed.

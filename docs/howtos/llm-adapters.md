@@ -304,8 +304,14 @@ llm = llm_factory(
 ```
 
 `mode` reaches every provider (OpenAI, Anthropic, Google, Mistral, Perplexity,
-LiteLLM). Without it, OpenAI-style clients use `Mode.JSON` and other providers keep
-instructor's default for that provider.
+LiteLLM). Without it:
+
+- OpenAI-style clients use `Mode.JSON`.
+- Claude uses JSON too: `Mode.ANTHROPIC_JSON` with an Anthropic client, and
+  `Mode.JSON` through LiteLLM. Instructor's default for Claude forces a tool
+  call, which `claude-sonnet-5-5` rejects (#184). Pass `mode=` to choose
+  another, e.g. `Mode.ANTHROPIC_TOOLS`.
+- Other providers keep instructor's default for that provider.
 
 Available instructor modes:
 - `Mode.JSON` (default) - Uses OpenAI's response_format parameter
