@@ -330,6 +330,20 @@ llm = llm_factory("gpt-4o", client=async_client)
 response = await llm.agenerate(prompt, ResponseModel)
 ```
 
+Sync and async both work with either kind of client. A sync client runs on a
+worker thread under `agenerate()`. An async client's sync calls (`generate()`,
+`metric.score()`, `embed_text()`) run on one shared background event loop. This
+also works inside Jupyter or another running loop, and the client stays bound
+to that one loop across calls.
+
+!!! warning "Don't mix both styles on one async client"
+    An async client keeps its connections tied to the event loop that opened
+    them. Calling it with `await` on your own loop *and* through the sync API
+    (which uses ragas' background loop) makes the two loops share those
+    connections, which can fail with "bound to a different event loop". In
+    async code, use the async methods (`agenerate`, `ascore`, `aembed_text`)
+    throughout.
+
 ### Custom Providers with LiteLLM
 
 LiteLLM supports many providers beyond what Instructor covers. Use the LiteLLM proxy approach:
