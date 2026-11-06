@@ -153,7 +153,7 @@ EvaluationDataset(features=['user_input', 'retrieved_contexts', 'response', 'ref
 
 To evaluate our RAG endpoint, we will use the following metrics:
 
-- [Response Relevancy](../../concepts/metrics/available_metrics/answer_relevance.md#answer-relevancy): Measures how relevant a response is to the user’s input (query).
+- [Answer Relevancy](../../concepts/metrics/available_metrics/answer_relevance.md#answer-relevancy): Measures how relevant a response is to the user’s input (query).
 - [Context Precision](../../concepts/metrics/available_metrics/context_precision.md): Measures how many of the relevant documents (or pieces of information) were successfully retrieved.
 - [Faithfulness](../../concepts/metrics/available_metrics/faithfulness.md): Measures how factually consistent a response is with the retrieved context.
 
