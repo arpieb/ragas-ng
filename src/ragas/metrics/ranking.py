@@ -42,7 +42,7 @@ class RankingMetric(SimpleLLMMetric, RankingValidator):
     >>>
     >>> # Create an LLM instance
     >>> client = OpenAI(api_key="your-api-key")
-    >>> llm = llm_factory("gpt-4o-mini", client=client)
+    >>> llm = llm_factory("gpt-6-luna", client=client)
     >>>
     >>> # Create a ranking metric that returns top 3 items
     >>> metric = RankingMetric(

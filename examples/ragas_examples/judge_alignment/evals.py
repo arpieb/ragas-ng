@@ -171,15 +171,15 @@ async def main():
     logger.info(f"Loaded dataset with {len(dataset)} samples")
     
     # Initialize LLM client
-    logger.info("Initializing LLM client with model: gpt-4o-mini")
+    logger.info("Initializing LLM client with model: gpt-6-luna")
     openai_client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-    llm = llm_factory("gpt-4o-mini", client=openai_client)
+    llm = llm_factory("gpt-6-luna", client=openai_client)
 
     # Run baseline evaluation
     logger.info("Running baseline evaluation...")
     results = await judge_experiment.arun(
         dataset,
-        name="judge_baseline_v1_gpt-4o-mini",
+        name="judge_baseline_v1_gpt-6-luna",
         accuracy_metric=accuracy_metric,
         llm=llm,
     )
@@ -198,15 +198,15 @@ async def main_v2():
     logger.info(f"Loaded dataset with {len(dataset)} samples")
     
     # Initialize LLM client
-    logger.info("Initializing LLM client with model: gpt-4o-mini")
+    logger.info("Initializing LLM client with model: gpt-6-luna")
     openai_client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-    llm = llm_factory("gpt-4o-mini", client=openai_client)
+    llm = llm_factory("gpt-6-luna", client=openai_client)
 
     # Run v2 evaluation with improved prompt
     logger.info("Running v2 evaluation with improved prompt...")
     results = await judge_experiment.arun(
         dataset,
-        name="judge_accuracy_v2_gpt-4o-mini",
+        name="judge_accuracy_v2_gpt-6-luna",
         accuracy_metric=accuracy_metric_v2,
         llm=llm,
     )

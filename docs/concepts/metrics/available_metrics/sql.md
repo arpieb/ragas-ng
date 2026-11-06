@@ -116,7 +116,7 @@ from ragas.metrics.collections import SQLSemanticEquivalence
 
 # Initialize the LLM
 client = AsyncOpenAI()
-llm = llm_factory("gpt-4o-mini", client=client)
+llm = llm_factory("gpt-6-luna", client=client)
 
 # Create the metric
 metric = SQLSemanticEquivalence(llm=llm)

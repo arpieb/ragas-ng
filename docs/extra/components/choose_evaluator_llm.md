@@ -19,7 +19,7 @@
     from openai import OpenAI
     from ragas.llms import llm_factory
 
-    evaluator_llm = llm_factory("gpt-4o", client=OpenAI())
+    evaluator_llm = llm_factory("gpt-6-luna", client=OpenAI())
     ```
 
 === "Anthropic"
@@ -42,7 +42,7 @@
     from ragas.llms import llm_factory
 
     evaluator_llm = llm_factory(
-        "claude-sonnet-4-5",
+        "claude-sonnet-5-5",
         provider="anthropic",
         client=anthropic.Anthropic(),
     )
@@ -66,7 +66,7 @@
     from ragas.llms import llm_factory
 
     evaluator_llm = llm_factory(
-        "gemini-2.0-flash",
+        "gemini-3.6-flash",
         provider="google",
         client=genai.Client(),
     )
@@ -95,10 +95,10 @@
         api_version="2024-02-01",
         azure_endpoint="https://<your-resource>.openai.azure.com",
     )
-    evaluator_llm = llm_factory("gpt-4o", provider="azure", client=client)
+    evaluator_llm = llm_factory("gpt-6-luna", provider="azure", client=client)
     ```
 
-    `gpt-4o` here is your **deployment name**, which need not match the model name.
+    `gpt-6-luna` here is your **deployment name**, which need not match the model name.
 
 === "AWS Bedrock"
     Bedrock is reached through LiteLLM:
@@ -143,6 +143,6 @@
 
 !!! note "Migrating from `LangchainLLMWrapper`"
     ragas no longer depends on LangChain, and `LangchainLLMWrapper` has been
-    removed. Replace `LangchainLLMWrapper(ChatOpenAI(model="gpt-4o"))` with
-    `llm_factory("gpt-4o", client=OpenAI())` as above. See the
+    removed. Replace `LangchainLLMWrapper(ChatOpenAI(model="gpt-6-luna"))` with
+    `llm_factory("gpt-6-luna", client=OpenAI())` as above. See the
     **Migrating off LangChain** guide under How-to Guides > Migrations.

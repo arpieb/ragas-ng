@@ -48,7 +48,7 @@ class TestAnswerRelevancyE2EMigration:
         try:
             from ragas.llms.base import llm_factory
 
-            return llm_factory("gpt-3.5-turbo")
+            return llm_factory("gpt-5.6-terra")
         except ImportError as e:
             pytest.skip(f"LLM factory not available: {e}")
         except Exception as e:
@@ -63,7 +63,7 @@ class TestAnswerRelevancyE2EMigration:
             from ragas.llms import llm_factory
 
             client = openai.AsyncOpenAI()
-            return llm_factory("gpt-3.5-turbo", client=client)
+            return llm_factory("gpt-5.6-terra", client=client)
         except ImportError as e:
             pytest.skip(f"Instructor LLM factory not available: {e}")
         except Exception as e:

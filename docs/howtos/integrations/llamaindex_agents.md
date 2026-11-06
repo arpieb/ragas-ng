@@ -1,5 +1,9 @@
 # Evaluating LlamaIndex Agents
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 Building agents that can intelligently use tools and make decisions is only half the journey; ensuring that these agents are accurate, reliable, and performant is what truly defines their success. [LlamaIndex](https://docs.llamaindex.ai/en/stable/understanding/agent/) provides various ways to create agents including [FunctionAgents](https://docs.llamaindex.ai/en/stable/module_guides/deploying/agents/), [CodeActAgents](https://docs.llamaindex.ai/en/stable/examples/agent/code_act_agent/), and [ReActAgents](https://docs.llamaindex.ai/en/stable/examples/agent/react_agent/). In this tutorial, we will explore how to evaluate these different agent types using both pre-built Ragas metrics and custom evaluation metrics.
 
 Let's get started.
@@ -30,7 +34,7 @@ To demonstrate evaluations using Ragas metrics, we will create a simple workflow
         return f"Successfully sent mail to {to}"
 
 
-    llm = OpenAI(model="gpt-4o-mini")
+    llm = OpenAI(model="gpt-6-luna")
     ```
 
 
@@ -181,7 +185,7 @@ LlamaIndex offers a prebuilt CodeAct Agent that can be used to write and execute
     from llama_index.llms.openai import OpenAI
 
     # Configure the LLM
-    llm = OpenAI(model="gpt-4o-mini")
+    llm = OpenAI(model="gpt-6-luna")
 
 
     # Define a few helper functions
@@ -432,7 +436,7 @@ from ragas.metrics import AspectCritic
 from ragas.dataset_schema import SingleTurnSample
 from ragas.llms import LlamaIndexLLMWrapper
 
-llm = OpenAI(model="gpt-4o-mini")
+llm = OpenAI(model="gpt-6-luna")
 evaluator_llm = LlamaIndexLLMWrapper(llm=llm)
 
 correct_tool_args = AspectCritic(
@@ -469,7 +473,7 @@ We will extract all instances where the query engine tool was called during user
     from llama_index.embeddings.openai import OpenAIEmbedding
     from llama_index.core import Settings
 
-    Settings.llm = OpenAI(model="gpt-4o-mini")
+    Settings.llm = OpenAI(model="gpt-6-luna")
     Settings.embed_model = OpenAIEmbedding(model="text-embedding-3-small")
     ```
 
@@ -557,7 +561,7 @@ We will extract all instances where the query engine tool was called during user
     from llama_index.core.agent.workflow import FunctionAgent, ReActAgent
     from llama_index.core.workflow import Context
 
-    agent = FunctionAgent(tools=query_engine_tools, llm=OpenAI(model="gpt-4o-mini"))
+    agent = FunctionAgent(tools=query_engine_tools, llm=OpenAI(model="gpt-6-luna"))
 
     # context to hold the session/state
     ctx = Context(agent)
@@ -682,7 +686,7 @@ from ragas.metrics import Faithfulness, ContextRelevance
 from ragas.llms import LlamaIndexLLMWrapper
 from llama_index.llms.openai import OpenAI
 
-llm = OpenAI(model="gpt-4o")
+llm = OpenAI(model="gpt-6-luna")
 evaluator_llm = LlamaIndexLLMWrapper(llm=llm)
 
 faithfulness = Faithfulness(llm=evaluator_llm)

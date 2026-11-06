@@ -10,7 +10,7 @@ from .workflow import default_workflow_client
 
 openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 workflow_client = default_workflow_client()
-llm = llm_factory("gpt-4o", client=openai_client)
+llm = llm_factory("gpt-6-luna", client=openai_client)
 
 
 def load_dataset():

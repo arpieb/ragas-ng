@@ -58,7 +58,7 @@ def _patch_for_litellm(
         f"The LiteLLM adapter can't use a {type(client).__name__} client. "
         "Pass an OpenAI-compatible client (e.g. one pointed at a LiteLLM "
         "proxy), a litellm.Router, or no client at all: "
-        "llm_factory('gemini/gemini-2.0-flash') routes through LiteLLM and "
+        "llm_factory('gemini/gemini-3.6-flash') routes through LiteLLM and "
         "reads credentials from the environment."
     )
 

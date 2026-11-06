@@ -28,7 +28,7 @@ from ragas.dataset_schema import SingleTurnSample
 
 # Setup
 client = AsyncOpenAI()
-llm = llm_factory("gpt-4o-mini", client=client)
+llm = llm_factory("gpt-6-luna", client=client)
 
 # Create harmfulness evaluator
 harmfulness_metric = DiscreteMetric(

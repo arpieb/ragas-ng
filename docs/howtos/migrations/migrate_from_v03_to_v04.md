@@ -165,12 +165,12 @@ from openai import AsyncOpenAI
 
 # For metrics that need instructor
 llm = instructor_llm_factory(
-    "openai", model="gpt-4o-mini", client=AsyncOpenAI(api_key="...")
+    "openai", model="gpt-6-luna", client=AsyncOpenAI(api_key="...")
 )
 
 # Or, the old way (not recommended, still supported in 0.3)
 client = AsyncOpenAI(api_key="sk-...")
-llm = llm_factory("openai", model="gpt-4o-mini", client=client)
+llm = llm_factory("openai", model="gpt-6-luna", client=client)
 ```
 
 ### After (v0.4)
@@ -181,7 +181,7 @@ from openai import AsyncOpenAI
 
 # Single unified approach - works everywhere
 client = AsyncOpenAI(api_key="sk-...")
-llm = llm_factory("gpt-4o-mini", client=client)
+llm = llm_factory("gpt-6-luna", client=client)
 ```
 
 **Key differences:**
@@ -210,23 +210,23 @@ llm = llm_factory("gpt-4o-mini", client=client)
 
     ```python
     # Old - v0.3
-    llm = instructor_llm_factory("openai", model="gpt-4o", client=client)
+    llm = instructor_llm_factory("openai", model="gpt-6-luna", client=client)
 
     # New - v0.4
-    llm = llm_factory("gpt-4o", client=client)
+    llm = llm_factory("gpt-6-luna", client=client)
     ```
 
 3. **Update with other providers** (model name detection works automatically):
 
     ```python
     # OpenAI
-    llm = llm_factory("gpt-4o-mini", client=AsyncOpenAI(api_key="..."))
+    llm = llm_factory("gpt-6-luna", client=AsyncOpenAI(api_key="..."))
 
     # Anthropic
     llm = llm_factory("claude-3-sonnet-20240229", client=AsyncAnthropic(api_key="..."))
 
     # Google
-    llm = llm_factory("gemini-2.0-flash", client=...)
+    llm = llm_factory("gemini-3.6-flash", client=...)
     ```
 
 ### LLM Wrapper Classes (Deprecated)
@@ -1221,12 +1221,12 @@ The following features have been completely removed from v0.4 and will cause err
 **Before (v0.3) - No longer works:**
 
 ```python
-llm = instructor_llm_factory("openai", model="gpt-4o", client=client)
+llm = instructor_llm_factory("openai", model="gpt-6-luna", client=client)
 ```
 
 **After (v0.4) - Use this instead:**
 ```python
-llm = llm_factory("gpt-4o", client=client)
+llm = llm_factory("gpt-6-luna", client=client)
 ```
 
 ### Metrics
@@ -1349,7 +1349,7 @@ result = await run(dataset)
 from ragas.llms import LangchainLLMWrapper
 from langchain_openai import ChatOpenAI
 
-langchain_llm = ChatOpenAI(model="gpt-4o")
+langchain_llm = ChatOpenAI(model="gpt-6-luna")
 ragas_llm = LangchainLLMWrapper(langchain_llm)
 ```
 
@@ -1359,7 +1359,7 @@ from ragas.llms import llm_factory
 from openai import AsyncOpenAI
 
 client = AsyncOpenAI(api_key="...")
-ragas_llm = llm_factory("gpt-4o", client=client)
+ragas_llm = llm_factory("gpt-6-luna", client=client)
 ```
 
 #### LlamaIndexLLMWrapper - Deprecated
@@ -1373,7 +1373,7 @@ ragas_llm = llm_factory("gpt-4o", client=client)
 from ragas.llms import LlamaIndexLLMWrapper
 from llama_index.llms.openai import OpenAI
 
-llamaindex_llm = OpenAI(model="gpt-4o")
+llamaindex_llm = OpenAI(model="gpt-6-luna")
 ragas_llm = LlamaIndexLLMWrapper(llamaindex_llm)
 ```
 
@@ -1383,7 +1383,7 @@ from ragas.llms import llm_factory
 from openai import AsyncOpenAI
 
 client = AsyncOpenAI(api_key="...")
-ragas_llm = llm_factory("gpt-4o", client=client)
+ragas_llm = llm_factory("gpt-6-luna", client=client)
 ```
 
 ### Embeddings Migration
@@ -1444,7 +1444,7 @@ embeddings = LangchainEmbeddingsWrapper(
 from ragas.embeddings import GoogleEmbeddings
 
 embeddings = GoogleEmbeddings(
-    model="text-embedding-004", use_vertex=True, project_id="my-project"
+    model="gemini-embedding-2", use_vertex=True, project_id="my-project"
 )
 ```
 

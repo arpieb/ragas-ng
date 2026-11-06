@@ -1,5 +1,9 @@
 ## Context Entities Recall
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 `ContextEntityRecall` metric gives the measure of recall of the retrieved context, based on the number of entities present in both `reference` and `retrieved_contexts` relative to the number of entities present in the `reference` alone. Simply put, it is a measure of what fraction of entities is recalled from `reference`. This metric is useful in fact-based use cases like tourism help desk, historical QA, etc. This metric can help evaluate the retrieval mechanism for entities, based on comparison with entities present in `reference`, because in cases where entities matter, we need the `retrieved_contexts` which cover them.
 
 To compute this metric, we use two sets:
@@ -23,7 +27,7 @@ from ragas.metrics.collections import ContextEntityRecall
 
 # Setup LLM
 client = AsyncOpenAI()
-llm = llm_factory("gpt-4o-mini", client=client)
+llm = llm_factory("gpt-6-luna", client=client)
 
 # Create metric
 scorer = ContextEntityRecall(llm=llm)

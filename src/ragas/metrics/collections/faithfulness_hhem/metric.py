@@ -39,7 +39,7 @@ class FaithfulnesswithHHEM(Faithfulness):
         >>> from ragas.llms import llm_factory
         >>> from ragas.metrics.collections import FaithfulnesswithHHEM
         >>>
-        >>> llm = llm_factory("gpt-4o-mini", client=AsyncOpenAI())
+        >>> llm = llm_factory("gpt-6-luna", client=AsyncOpenAI())
         >>>
         >>> metric = FaithfulnesswithHHEM(llm=llm)
         >>> result = await metric.ascore(

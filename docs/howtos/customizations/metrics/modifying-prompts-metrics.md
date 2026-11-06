@@ -17,7 +17,7 @@ from ragas.llms import llm_factory
 
 # Setup dependencies
 client = AsyncOpenAI()
-llm = llm_factory("gpt-4o-mini", client=client)
+llm = llm_factory("gpt-6-luna", client=client)
 
 # Create metric instance
 scorer = Faithfulness(llm=llm)

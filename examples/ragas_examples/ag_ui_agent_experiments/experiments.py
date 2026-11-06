@@ -333,8 +333,8 @@ async def main():
     parser.add_argument(
         "--evaluator-model",
         type=str,
-        default="gpt-4o-mini",
-        help="OpenAI model to use for experiments (default: gpt-4o-mini)",
+        default="gpt-6-luna",
+        help="OpenAI model to use for experiments (default: gpt-6-luna)",
     )
     parser.add_argument(
         "--skip-factual",

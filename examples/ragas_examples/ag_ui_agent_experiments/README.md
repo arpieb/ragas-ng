@@ -77,7 +77,7 @@ python evals.py --endpoint-url http://localhost:8000/agentic_chat
 python evals.py --endpoint-url http://localhost:8010/chat
 
 # Use a different evaluator model
-python evals.py --evaluator-model gpt-4o
+python evals.py --evaluator-model gpt-6-luna
 
 # Skip the factual correctness evaluation
 python evals.py --skip-factual
@@ -91,7 +91,7 @@ python evals.py --output-dir ./results
 # Combine options
 python evals.py \
     --endpoint-url http://localhost:8000/agentic_chat \
-    --evaluator-model gpt-4o-mini \
+    --evaluator-model gpt-6-luna \
     --output-dir ./my_results
 ```
 

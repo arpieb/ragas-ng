@@ -6,7 +6,7 @@ from openai import AsyncOpenAI
 # Load environment variables
 load_dotenv(".env")
 
-DEFAULT_MODEL = "gpt-4.1-nano-2025-04-14"
+DEFAULT_MODEL = "gpt-5.6-luna"
 
 
 def get_client() -> AsyncOpenAI:

@@ -32,7 +32,7 @@ You need:
 
 1. **Annotated dataset**: Ground truth scores for your metric
 2. **Metric with prompts**: A metric that uses PydanticPrompt (most Ragas metrics)
-3. **LLM**: An LLM for optimization (gpt-4o-mini recommended for cost)
+3. **LLM**: An LLM for optimization (gpt-6-luna recommended for cost)
 
 ### Quick Start
 
@@ -45,7 +45,7 @@ from ragas.config import InstructionConfig
 
 # Setup LLM for optimization
 client = OpenAI()
-llm = llm_factory("gpt-4o-mini", client=client)
+llm = llm_factory("gpt-6-luna", client=client)
 
 # Initialize metric
 metric = Faithfulness(llm=llm)
@@ -141,7 +141,7 @@ budget_optimizer = DSPyOptimizer(
 )
 
 # Use cheaper LLM for optimization
-cheap_llm = llm_factory("gpt-4o-mini", client=client)
+cheap_llm = llm_factory("gpt-6-luna", client=client)
 config = InstructionConfig(llm=cheap_llm, optimizer=budget_optimizer)
 ```
 
@@ -273,7 +273,7 @@ Common causes:
 
 1. **Insufficient data**: Need 20+ high-quality annotations
 2. **Low-quality annotations**: Ensure ground truth scores are accurate
-3. **Wrong LLM**: Use gpt-4o or better for optimization
+3. **Wrong LLM**: Use a capable model, such as gpt-6.1-sol, for optimization
 4. **Bad configuration**: Try default parameters first
 
 ### Memory Issues

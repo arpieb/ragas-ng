@@ -1,5 +1,9 @@
 # Create custom multi-hop queries from your documents
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 In this tutorial you will get to learn how to create custom multi-hop queries from your documents. This is a very powerful feature that allows you to create queries that are not possible with the standard query types. This also helps you to create queries that are more specific to your use case.
 
 ### Load sample documents
@@ -52,7 +56,7 @@ from ragas.llms import llm_factory
 from ragas.embeddings import OpenAIEmbeddings
 
 openai_client = OpenAI()
-llm = llm_factory("gpt-4o-mini", client=openai_client)
+llm = llm_factory("gpt-6-luna", client=openai_client)
 embedding = OpenAIEmbeddings(client=openai_client)
 ```
 

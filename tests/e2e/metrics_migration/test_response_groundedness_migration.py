@@ -60,7 +60,7 @@ class TestResponseGroundednessE2EMigration:
 
             from ragas.llms import llm_factory
 
-            return llm_factory("gpt-4o", client=openai.OpenAI())
+            return llm_factory("gpt-6-luna", client=openai.OpenAI())
         except ImportError as e:
             pytest.skip(f"LLM factory not available: {e}")
         except Exception as e:
@@ -76,7 +76,7 @@ class TestResponseGroundednessE2EMigration:
 
             client = openai.AsyncOpenAI()
             # Use legacy temperature (0.1) for perfect compatibility
-            return llm_factory("gpt-4o", client=client, temperature=0.1)
+            return llm_factory("gpt-6-luna", client=client, temperature=0.1)
         except ImportError as e:
             pytest.skip(f"LLM factory not available: {e}")
         except Exception as e:

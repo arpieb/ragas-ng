@@ -23,7 +23,7 @@ class StructuredOutputAdapter(ABC):
 
         Args:
             client: Pre-initialized client instance
-            model: Model name (e.g., "gpt-4o", "gemini-2.0-flash")
+            model: Model name (e.g., "gpt-6-luna", "gemini-3.6-flash")
             provider: Provider name (e.g., "openai", "google")
             **kwargs: Additional model arguments
 

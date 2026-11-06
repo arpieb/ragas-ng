@@ -16,14 +16,14 @@ from rag import default_rag_client
 # with OpenAI or with any provider's OpenAI-compatible endpoint (Ollama,
 # Anthropic, Gemini, ...): change the client's base_url/api_key and the model.
 app_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-APP_MODEL = "gpt-4o"
+APP_MODEL = "gpt-6-luna"
 rag_client = default_rag_client(
     llm_client=app_client, model=APP_MODEL, logdir="evals/logs"
 )
 
 # The judge LLM that scores the app's answers. Any llm_factory() provider works
 # here, independently of the app above.
-llm = llm_factory("gpt-4o", client=app_client)
+llm = llm_factory("gpt-6-luna", client=app_client)
 
 
 def load_dataset():

@@ -95,7 +95,7 @@ TEST_SIZE = 25
 
 # generator with openai models
 openai_client = openai.OpenAI()
-generator_llm = llm_factory("gpt-4o-mini", client=openai_client)
+generator_llm = llm_factory("gpt-6-luna", client=openai_client)
 embeddings = embedding_factory(
     "openai", model="text-embedding-3-small", client=openai_client
 )
@@ -112,7 +112,7 @@ You are free to change the question type distribution according to your needs. S
 
 ## 5. Build Your RAG Application With LlamaIndex
 
-LlamaIndex is an easy-to-use and flexible framework for building RAG applications. For the sake of simplicity, we use the default LLM (gpt-3.5-turbo) and embedding models (openai-ada-2).
+LlamaIndex is an easy-to-use and flexible framework for building RAG applications. For the sake of simplicity, we use the default LLM (gpt-5.6-terra) and embedding models (openai-ada-2).
 
 Launch Phoenix in the background and instrument your LlamaIndex application so that your OpenInference spans and traces are sent to and collected by Phoenix. [OpenInference](https://github.com/Arize-ai/openinference/tree/main/spec) is an open standard built atop OpenTelemetry that captures and stores LLM application executions. It is designed to be a category of telemetry data that is used to understand the execution of LLMs and the surrounding application context, such as retrieval from vector stores and the usage of external tools such as search engines or APIs.
 

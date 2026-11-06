@@ -1,5 +1,9 @@
 # Getting Started: Ragas with Vertex AI
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 This tutorial is part of a three-part series on how to use Vertex AI models with Ragas. This first tutorial is intended to set up the groundwork; the remaining two can be followed in any order. You can navigate to the other tutorials using the links below:
 
 - [Align LLM Metrics](./vertexai_alignment.md): Train and align your LLM evaluators to better match human judgment.
@@ -97,7 +101,7 @@ from ragas.embeddings import embedding_factory
 from ragas.llms import llm_factory
 
 evaluator_llm = llm_factory("vertex_ai/gemini-pro")
-evaluator_embeddings = embedding_factory("vertex_ai/text-embedding-004")
+evaluator_embeddings = embedding_factory("vertex_ai/gemini-embedding-2")
 ```
 
 ### Build your own model-based point-wise metrics using Ragas

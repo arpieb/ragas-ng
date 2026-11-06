@@ -22,7 +22,7 @@ cache = DiskCacheBackend()
 
 # Use with LLM factory
 client = OpenAI(api_key="...")
-llm = llm_factory("gpt-4o-mini", client=client, cache=cache)
+llm = llm_factory("gpt-6-luna", client=client, cache=cache)
 
 # All LLM calls are now cached!
 from pydantic import BaseModel
@@ -47,7 +47,7 @@ cache = DiskCacheBackend()
 
 # Create LLM with caching
 client = OpenAI(api_key="...")
-llm = llm_factory("gpt-4o-mini", client=client, cache=cache)
+llm = llm_factory("gpt-6-luna", client=client, cache=cache)
 
 # First call - makes API request and caches result
 response1 = llm.generate("Evaluate this text", Response)
@@ -91,7 +91,7 @@ from ragas.metrics.collections import FactualCorrectness
 
 # Setup cached LLM once
 cache = DiskCacheBackend()
-llm = llm_factory("gpt-4o-mini", client=client, cache=cache)
+llm = llm_factory("gpt-6-luna", client=client, cache=cache)
 
 # Use in metric
 metric = FactualCorrectness(llm=llm)

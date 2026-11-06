@@ -23,14 +23,14 @@ from openai import OpenAI
 
 # For OpenAI - automatically uses Instructor adapter
 client = OpenAI(api_key="...")
-llm = llm_factory("gpt-4o-mini", client=client)
+llm = llm_factory("gpt-6-luna", client=client)
 ```
 
 ```python
 from ragas.llms import llm_factory
 
 # No client - routed through LiteLLM, reads GEMINI_API_KEY
-llm = llm_factory("gemini/gemini-2.0-flash")
+llm = llm_factory("gemini/gemini-3.6-flash")
 ```
 
 ### Explicit Adapter Selection
@@ -41,10 +41,10 @@ Choose a specific adapter if you need more control:
 from ragas.llms import llm_factory
 
 # Force using Instructor adapter
-llm = llm_factory("gpt-4o", client=client, adapter="instructor")
+llm = llm_factory("gpt-6-luna", client=client, adapter="instructor")
 
 # Force using LiteLLM adapter
-llm = llm_factory("gemini-2.0-flash", client=client, adapter="litellm")
+llm = llm_factory("gemini-3.6-flash", client=client, adapter="litellm")
 ```
 
 ## Auto-Detection Logic
@@ -81,7 +81,7 @@ from openai import OpenAI
 from ragas.llms import llm_factory
 
 client = OpenAI(api_key="your-key")
-llm = llm_factory("gpt-4o", client=client)
+llm = llm_factory("gpt-6-luna", client=client)
 # Uses Instructor adapter automatically
 ```
 
@@ -92,7 +92,7 @@ from anthropic import Anthropic
 from ragas.llms import llm_factory
 
 client = Anthropic(api_key="your-key")
-llm = llm_factory("claude-3-sonnet", provider="anthropic", client=client)
+llm = llm_factory("claude-sonnet-5-5", provider="anthropic", client=client)
 # Uses Instructor adapter automatically
 ```
 
@@ -103,11 +103,11 @@ from google import genai
 from ragas.llms import llm_factory
 
 client = genai.Client(api_key="your-key")
-llm = llm_factory("gemini-2.0-flash", provider="google", client=client)
+llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
 # Uses the Instructor adapter (instructor.from_genai)
 
 # Or with no client, through LiteLLM (reads GEMINI_API_KEY)
-llm = llm_factory("gemini/gemini-2.0-flash")
+llm = llm_factory("gemini/gemini-3.6-flash")
 ```
 
 ### Google Gemini (with LiteLLM Proxy - Advanced)
@@ -116,12 +116,12 @@ llm = llm_factory("gemini/gemini-2.0-flash")
 from openai import OpenAI
 from ragas.llms import llm_factory
 
-# Requires running: litellm --model gemini-2.0-flash
+# Requires running: litellm --model gemini-3.6-flash
 client = OpenAI(
     api_key="anything",
     base_url="http://0.0.0.0:4000",  # LiteLLM proxy endpoint
 )
-llm = llm_factory("gemini-2.0-flash", client=client, adapter="litellm")
+llm = llm_factory("gemini-3.6-flash", client=client, adapter="litellm")
 # Uses LiteLLM adapter explicitly
 ```
 
@@ -149,7 +149,7 @@ client = OpenAI(
     api_key="",  # Bedrock uses IAM auth
     base_url="http://0.0.0.0:4000",  # LiteLLM proxy endpoint
 )
-llm = llm_factory("claude-3-sonnet", client=client, adapter="litellm")
+llm = llm_factory("claude-sonnet-5-5", client=client, adapter="litellm")
 ```
 
 ### Groq
@@ -225,7 +225,7 @@ instructor = get_adapter("instructor")
 litellm = get_adapter("litellm")
 
 # Create LLM using adapter directly
-llm = instructor.create_llm(client, "gpt-4o", "openai")
+llm = instructor.create_llm(client, "gpt-6-luna", "openai")
 ```
 
 ## Advanced Usage
@@ -236,7 +236,7 @@ All adapters support the same model arguments:
 
 ```python
 llm = llm_factory(
-    "gpt-4o",
+    "gpt-6-luna",
     client=client,
     temperature=0.7,
     max_tokens=2048,
@@ -271,7 +271,7 @@ Both adapters support system prompts for models that require specific instructio
 
 ```python
 llm = llm_factory(
-    "gpt-4o",
+    "gpt-6-luna",
     client=client,
     system_prompt="You are a helpful assistant that evaluates RAG systems.",
 )
@@ -324,7 +324,7 @@ from openai import AsyncOpenAI
 from ragas.llms import llm_factory
 
 async_client = AsyncOpenAI(api_key="...")
-llm = llm_factory("gpt-4o", client=async_client)
+llm = llm_factory("gpt-6-luna", client=async_client)
 
 # Async generation
 response = await llm.agenerate(prompt, ResponseModel)
@@ -389,8 +389,8 @@ from ragas.metrics import (
 import google.generativeai as genai
 
 genai.configure(api_key="...")
-client = genai.GenerativeModel("gemini-2.0-flash")
-llm = llm_factory("gemini-2.0-flash", provider="google", client=client)
+client = genai.GenerativeModel("gemini-3.6-flash")
+llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
 
 # Create evaluation dataset
 data = {
@@ -471,7 +471,7 @@ If you're upgrading from text-only LLM usage:
 # After (new way)
 from ragas.llms import llm_factory
 
-llm = llm_factory("gpt-4o", client=client)
+llm = llm_factory("gpt-6-luna", client=client)
 ```
 
 ### Switching Providers
@@ -483,14 +483,14 @@ To switch from OpenAI to Gemini:
 from openai import OpenAI
 
 client = OpenAI(api_key="...")
-llm = llm_factory("gpt-4o", client=client)
+llm = llm_factory("gpt-6-luna", client=client)
 
 # After: Gemini (similar code pattern!)
 import google.generativeai as genai
 
 genai.configure(api_key="...")
-client = genai.GenerativeModel("gemini-2.0-flash")
-llm = llm_factory("gemini-2.0-flash", provider="google", client=client)
+client = genai.GenerativeModel("gemini-3.6-flash")
+llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
 # Adapter automatically switches to LiteLLM for google provider
 ```
 

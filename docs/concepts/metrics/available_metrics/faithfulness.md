@@ -1,5 +1,9 @@
 ## Faithfulness
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 The **Faithfulness** metric measures how factually consistent a `response` is with the `retrieved context`. It ranges from 0 to 1, with higher scores indicating better consistency.
 
 A response is considered **faithful** if all its claims can be supported by the retrieved context.
@@ -23,7 +27,7 @@ from ragas.metrics.collections import Faithfulness
 
 # Setup LLM
 client = AsyncOpenAI()
-llm = llm_factory("gpt-4o-mini", client=client)
+llm = llm_factory("gpt-6-luna", client=client)
 
 # Create metric
 scorer = Faithfulness(llm=llm)

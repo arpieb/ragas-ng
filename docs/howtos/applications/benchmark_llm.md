@@ -1,5 +1,9 @@
 # How to Evaluate a New LLM For Your Use Case
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 When a new LLM is released, you might want to determine if it outperforms your current model for your specific use case. This guide shows you how to run an accuracy comparison between two models using Ragas framework.
 
 ## What you'll accomplish
@@ -203,8 +207,8 @@ async def benchmark_experiment(row, model_name: str):
 
 Run evaluation experiments with both baseline and candidate models. We'll compare these example models:
 
-- Baseline: "gpt-4.1-nano-2025-04-14"
-- Candidate: "gpt-5-nano-2025-08-07"
+- Baseline: "gpt-5.6-luna"
+- Candidate: "gpt-6-luna"
 
 ```python
 from ragas_examples.benchmark_llm.evals import benchmark_experiment, load_dataset
@@ -215,7 +219,7 @@ print(f"Dataset loaded with {len(dataset)} samples")
 
 # Run baseline experiment
 baseline_results = await benchmark_experiment.arun(
-    dataset, name="gpt-4.1-nano-2025-04-14", model_name="gpt-4.1-nano-2025-04-14"
+    dataset, name="gpt-5.6-luna", model_name="gpt-5.6-luna"
 )
 
 # Calculate and display accuracy
@@ -226,7 +230,7 @@ print(f"Baseline Accuracy: {baseline_accuracy:.2%}")
 
 # Run candidate experiment
 candidate_results = await benchmark_experiment.arun(
-    dataset, name="gpt-5-nano-2025-08-07", model_name="gpt-5-nano-2025-08-07"
+    dataset, name="gpt-6-luna", model_name="gpt-6-luna"
 )
 
 # Calculate and display accuracy
@@ -251,7 +255,7 @@ Each experiment saves a CSV under `experiments/` with per-row results, including
 
 
 !!! note
-    When possible, pin and record the exact model snapshot/version (for example, "gpt-4o-2024-08-06" instead of just "gpt-4o"). Providers regularly update alias names, and performance can change between snapshots. You can find available snapshots in the provider's model documentation (see OpenAI's [model catalog](https://platform.openai.com/docs/models) as an example). Including the snapshot in your results makes future comparisons fair and reproducible.
+    When possible, pin and record the exact model snapshot/version: a dated snapshot ID rather than an alias, where the provider publishes one. Providers regularly update alias names, and performance can change between snapshots. You can find available snapshots in the provider's model documentation (see OpenAI's [model catalog](https://platform.openai.com/docs/models) as an example). Including the snapshot in your results makes future comparisons fair and reproducible.
 
 
 ## Compare results
@@ -265,8 +269,8 @@ from ragas_examples.benchmark_llm.evals import compare_inputs_to_output
 # Update these paths to match your actual experiment output files
 output_path = compare_inputs_to_output(
     inputs=[
-        "experiments/gpt-4.1-nano-2025-04-14.csv",
-        "experiments/gpt-5-nano-2025-08-07.csv",
+        "experiments/gpt-5.6-luna.csv",
+        "experiments/gpt-6-luna.csv",
     ]
 )
 
@@ -312,7 +316,7 @@ In this example run:
 
 ### What to look at
 - **Baseline accuracy** vs **Candidate accuracy** and the **difference**.
-  - Example from this run: baseline 50% (5/10), candidate 90% (9/10), difference +40%.
+  - Example from an earlier run of this guide, with an older baseline and candidate model pair: baseline 50% (5/10), candidate 90% (9/10), difference +40%.
 
 ### How to read the rows
 - Skim rows where the two models disagree.
@@ -327,7 +331,7 @@ In this example run:
 - Stay if gains are small, failures hit critical cases, or cost/latency are not acceptable.
 
 In this example:
-- We would switch to "gpt-5-nano-2025-08-07". It improves accuracy from 50% to 90% (+40%) and fixes the key failure modes (missed rule stacking, boundary conditions). If its latency/cost fits your constraints, it's the better default.
+- We would switch to the candidate. In that earlier run it improved accuracy from 50% to 90% (+40%) and fixes the key failure modes (missed rule stacking, boundary conditions). If its latency/cost fits your constraints, it's the better default.
 
 ## Adapting to your use case
 

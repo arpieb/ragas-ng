@@ -39,7 +39,7 @@ client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 # Initialize generator with your preferred models
 generator = TestsetGenerator(
-    llm=llm_factory("gpt-4o-mini", client=client),
+    llm=llm_factory("gpt-6-luna", client=client),
     embedding_model=OpenAIEmbeddings(client=client),
 )
 
@@ -101,7 +101,7 @@ from openai import OpenAI
 # Initialize models
 client = OpenAI()
 generator = TestsetGenerator(
-    llm=llm_factory("gpt-4o-mini", client=client),
+    llm=llm_factory("gpt-6-luna", client=client),
     embedding_model=OpenAIEmbeddings(client=client),
 )
 

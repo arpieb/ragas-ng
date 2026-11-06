@@ -1,5 +1,9 @@
 ## Persona's in Testset Generation
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 You can add different persona's to the testset generation process by defining the [Persona][ragas.testset.persona.Persona] class with the name and role description of the different persona's that might be relevant to your use case, and you want to generate testset for.
 
 For example, for the [GitLab handbook](https://about.gitlab.com/handbook/) we might want to generate testset for different persona's like a new joinee, a manager, a senior manager, etc. And hence we will define them as follows:
@@ -53,7 +57,7 @@ from ragas.llms import llm_factory
 kg = KnowledgeGraph.load("../../../../experiments/gitlab_kg.json")
 # Initialize the Generator LLM
 openai_client = OpenAI()
-llm = llm_factory("gpt-4o-mini", client=openai_client)
+llm = llm_factory("gpt-6-luna", client=openai_client)
 
 # Initialize the Testset Generator
 testset_generator = TestsetGenerator(knowledge_graph=kg, persona_list=personas, llm=llm)
@@ -148,7 +152,7 @@ from ragas.testset.graph import KnowledgeGraph
 from ragas.llms import llm_factory
 
 kg = KnowledgeGraph.load("../../../../experiments/gitlab_kg.json")
-llm = llm_factory("gpt-4o-mini")
+llm = llm_factory("gpt-6-luna")
 
 personas = generate_personas_from_kg(kg=kg, llm=llm, num_personas=5)
 ```

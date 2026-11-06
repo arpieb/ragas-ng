@@ -32,7 +32,7 @@ class SimpleCriteriaScore(BaseMetric):
         >>> from ragas.llms import llm_factory
         >>> from ragas.metrics.collections import SimpleCriteriaScore
         >>>
-        >>> llm = llm_factory("gpt-4o-mini", client=AsyncOpenAI())
+        >>> llm = llm_factory("gpt-6-luna", client=AsyncOpenAI())
         >>>
         >>> metric = SimpleCriteriaScore(
         ...     llm=llm,

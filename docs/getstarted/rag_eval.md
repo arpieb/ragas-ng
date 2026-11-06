@@ -1,5 +1,9 @@
 # Evaluate a simple RAG system
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 The purpose of this guide is to illustrate a simple workflow for testing and evaluating a RAG system with `ragas`. It assumes minimum knowledge in building RAG system and evaluation. Please refer to our [installation instruction](./install.md) for installing `ragas`.
 
 ## Basic Setup
@@ -36,7 +40,7 @@ To build a simple RAG system, we need to define the following components:
 
 
     class RAG:
-        def __init__(self, model="gpt-4o"):
+        def __init__(self, model="gpt-6-luna"):
             import openai
 
             self.llm = openai_client
@@ -175,7 +179,7 @@ from ragas import evaluate
 from ragas.llms import llm_factory
 
 
-evaluator_llm = llm_factory("gpt-4o", client=openai_client)
+evaluator_llm = llm_factory("gpt-6-luna", client=openai_client)
 from ragas.metrics import LLMContextRecall, Faithfulness, FactualCorrectness
 
 result = evaluate(

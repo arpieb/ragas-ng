@@ -30,7 +30,7 @@ class Text2SQLAgent:
     def __init__(
         self,
         client,
-        model_name: str = "gpt-5-mini",
+        model_name: str = "gpt-5.6-terra",
         prompt_file: Optional[str] = None,
     ):
         """
@@ -38,7 +38,7 @@ class Text2SQLAgent:
 
         Args:
             client: AsyncOpenAI client instance
-            model_name: Name of the model to use (default: gpt-5-mini)
+            model_name: Name of the model to use (default: gpt-5.6-terra)
             prompt_file: Path to prompt file (default: prompt.txt)
         """
         self.client = client
@@ -119,7 +119,7 @@ async def main():
     # Create agent
     logger.info("Creating Text-to-SQL agent...")
     openai_client = AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"])
-    agent = Text2SQLAgent(client=openai_client, model_name="gpt-5-mini")
+    agent = Text2SQLAgent(client=openai_client, model_name="gpt-5.6-terra")
     
     # Generate SQL
     logger.info(f"Query: {test_query}")

@@ -1,5 +1,9 @@
 # Evaluating Multi-Turn Conversations
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 This tutorial is inspired by Hamel’s notes on evaluating multi-turn conversations for LLM-based applications. The goal is to create a simple and actionable evaluation framework using Ragas metrics that clearly defines what makes a conversation successful. By the end of this tutorial, you will be able to perform multi-turn evaluations based on insights gathered from the error analysis of your AI application.
 
 ### Ragas Metrics
@@ -31,7 +35,7 @@ from openai import OpenAI
 
 load_dotenv()
 
-evaluator_llm = llm_factory("gpt-4o-mini", client=OpenAI())
+evaluator_llm = llm_factory("gpt-6-luna", client=OpenAI())
 ```
 
 

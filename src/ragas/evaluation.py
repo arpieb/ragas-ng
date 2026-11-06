@@ -555,7 +555,7 @@ def _check_models(llm: t.Any, embeddings: t.Any) -> None:
             f"llm must be a ragas LLM, got {type(llm).__module__}."
             f"{type(llm).__name__}. Wrap your client or model name with "
             "llm_factory: from ragas.llms import llm_factory; "
-            "llm = llm_factory('gpt-4o-mini', client=client)"
+            "llm = llm_factory('gpt-6-luna', client=client)"
         )
     if embeddings is not None and not isinstance(
         embeddings, (BaseRagasEmbeddings, BaseRagasEmbedding)

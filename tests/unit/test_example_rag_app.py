@@ -50,12 +50,12 @@ def test_default_client_sends_the_given_model(rag, tmp_path):
     assert result["answer"] == "an answer"
 
 
-def test_model_defaults_to_gpt_4o(rag, tmp_path):
+def test_model_defaults_to_gpt_6_luna(rag, tmp_path):
     client = FakeChatClient()
     rag.default_rag_client(client, logdir=str(tmp_path)).query(
         "What are the main features of Ragas?"
     )
-    assert client.models == ["gpt-4o"]
+    assert client.models == ["gpt-6-luna"]
 
 
 def test_traces_record_the_model_used(rag, tmp_path):

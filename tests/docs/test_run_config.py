@@ -21,7 +21,7 @@ def test_openai_client_configuration():
         max_retries=5,  # Retry up to 5 times on failures
     )
 
-    llm = llm_factory("gpt-4o-mini", client=client)
+    llm = llm_factory("gpt-6-luna", client=client)
 
     # Use with metrics
     scorer = Faithfulness(llm=llm)
@@ -54,7 +54,7 @@ def test_fine_grained_timeout_control():
         max_retries=3,
     )
 
-    llm = llm_factory("gpt-4o-mini", client=client)
+    llm = llm_factory("gpt-6-luna", client=client)
     assert llm is not None
     print(f"✓ LLM with httpx timeout created: {llm}")
 

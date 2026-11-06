@@ -23,7 +23,7 @@ at most 60 seconds between them. Change them for one LLM:
 from ragas.llms import llm_factory
 from ragas.run_config import RunConfig
 
-llm = llm_factory("gpt-4o-mini")
+llm = llm_factory("gpt-6-luna")
 llm.set_run_config(RunConfig(max_retries=5, max_wait=30))
 ```
 
@@ -83,7 +83,7 @@ client = AsyncOpenAI(
     ),
     max_retries=0,  # leave retries to ragas
 )
-llm = llm_factory("gpt-4o-mini", client=client)
+llm = llm_factory("gpt-6-luna", client=client)
 ```
 
 !!! tip "Provider Documentation"

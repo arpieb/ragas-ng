@@ -41,7 +41,7 @@ Four reasons, in the order they bite:
     from langchain_openai import ChatOpenAI
     from ragas.llms import LangchainLLMWrapper
 
-    evaluator_llm = LangchainLLMWrapper(ChatOpenAI(model="gpt-4o"))
+    evaluator_llm = LangchainLLMWrapper(ChatOpenAI(model="gpt-6-luna"))
     ```
 
 === "After"
@@ -49,7 +49,7 @@ Four reasons, in the order they bite:
     from openai import OpenAI
     from ragas.llms import llm_factory
 
-    evaluator_llm = llm_factory("gpt-4o", client=OpenAI())
+    evaluator_llm = llm_factory("gpt-6-luna", client=OpenAI())
     ```
 
 Passing a client is optional. Omit it and `llm_factory` routes through LiteLLM,
@@ -60,7 +60,7 @@ does:
 from ragas.llms import llm_factory
 
 evaluator_llm = llm_factory("ollama/llama3")  # LiteLLM
-evaluator_llm = llm_factory("claude-sonnet-4-5", provider="anthropic")
+evaluator_llm = llm_factory("claude-sonnet-5-5", provider="anthropic")
 ```
 
 That covers 100+ providers, including Bedrock, Vertex AI, Groq, Mistral and

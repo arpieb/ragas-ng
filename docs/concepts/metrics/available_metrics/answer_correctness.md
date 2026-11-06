@@ -1,5 +1,9 @@
 ## Answer Correctness
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 The assessment of Answer Correctness involves gauging the accuracy of the generated answer when compared to the ground truth. This evaluation relies on the `ground truth` and the `answer`, with scores ranging from 0 to 1. A higher score indicates a closer alignment between the generated answer and the ground truth, signifying better correctness.
 
 Answer correctness encompasses two critical aspects: semantic similarity between the generated answer and the ground truth, as well as factual similarity. These aspects are combined using a weighted scheme to formulate the answer correctness score. Users also have the option to employ a 'threshold' value to round the resulting score to binary, if desired.
@@ -26,7 +30,7 @@ from ragas.metrics.collections import AnswerCorrectness
 
 # Setup LLM and embeddings
 client = AsyncOpenAI()
-llm = llm_factory("gpt-4o-mini", client=client)
+llm = llm_factory("gpt-6-luna", client=client)
 embeddings = embedding_factory("openai", model="text-embedding-3-small", client=client)
 
 # Create metric

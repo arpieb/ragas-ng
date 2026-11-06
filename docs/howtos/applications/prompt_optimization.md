@@ -1,5 +1,9 @@
 # A systematic approach for prompt optimization
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 Creating reliable and consistent prompts remains a significant challenge. As requirements multiply and prompt structures grow more complex, even minor modifications can lead to unexpected failures. This often turns traditional prompt engineering into a frustrating game of “whack-a-mole”—fix one issue, and two more seem to emerge.
 
 This tutorial demonstrates how to implement a systematic, data-driven approach to prompt engineering through functional testing with Ragas.
@@ -210,9 +214,9 @@ def create_ragas_evaluation_dataset(df: pd.DataFrame, prompt: str) -> Evaluation
             try:
                 # Call the OpenAI API
                 response = client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model="gpt-6-luna",
                     messages=[{"role": "user", "content": formatted_prompt}],
-                    temperature=0,
+                    reasoning_effort="none",  # a reasoning model: no temperature
                 )
                 sample["response"] = response.choices[0].message.content
                 break  # Exit the retry loop if successful
@@ -282,7 +286,7 @@ from ragas.metrics import (
     ResponseGroundedness,
 )
 
-evaluator_llm = llm_factory("gpt-4o-mini", client=OpenAI())
+evaluator_llm = llm_factory("gpt-6-luna", client=OpenAI())
 
 metrics = [
     AnswerAccuracy(llm=evaluator_llm),
@@ -391,7 +395,7 @@ no_answer_metric = AspectCritic(
     llm=evaluator_llm,
 )
 
-evaluator_llm = llm_factory("gpt-4o-mini", client=OpenAI())
+evaluator_llm = llm_factory("gpt-6-luna", client=OpenAI())
 
 metrics = [
     AnswerAccuracy(llm=evaluator_llm),

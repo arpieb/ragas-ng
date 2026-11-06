@@ -1,5 +1,9 @@
 # Create custom single-hop queries from your documents
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 ### Load sample documents
 I am using documents from [sample of GitLab handbook](https://huggingface.co/datasets/vibrantlabsai/Sample_Docs_Markdown). You can download it by running the below command.
 
@@ -49,7 +53,7 @@ from ragas.llms import llm_factory
 from ragas.embeddings import OpenAIEmbeddings
 
 openai_client = OpenAI()
-llm = llm_factory("gpt-4o-mini", client=openai_client)
+llm = llm_factory("gpt-6-luna", client=openai_client)
 embedding = OpenAIEmbeddings(client=openai_client)
 ```
 

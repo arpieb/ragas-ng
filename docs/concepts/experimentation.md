@@ -56,7 +56,7 @@ async def my_experiment(row):
         "response": response,
         "experiment_name": "baseline_v1",
         # Add any additional metadata
-        "model_version": "gpt-4o",
+        "model_version": "gpt-6-luna",
         "timestamp": datetime.now().isoformat(),
     }
 ```
@@ -97,28 +97,28 @@ You can create parameterized experiments to test different configurations:
 
 ```python
 @experiment()
-async def model_comparison_experiment(row, model_name: str, temperature: float):
+async def model_comparison_experiment(row, model_name: str, prompt_version: str):
     # Configure your system with the parameters
     response = await my_system_function(
-        row["input"], model=model_name, temperature=temperature
+        row["input"], model=model_name, prompt_version=prompt_version
     )
 
     return {
         **row,
         "response": response,
-        "experiment_name": f"{model_name}_temp_{temperature}",
+        "experiment_name": f"{model_name}_{prompt_version}",
         "model_name": model_name,
-        "temperature": temperature,
+        "prompt_version": prompt_version,
     }
 
 
 # Run with different parameters
-results_gpt4 = await model_comparison_experiment.arun(
-    dataset, model_name="gpt-4o", temperature=0.1
+results_luna = await model_comparison_experiment.arun(
+    dataset, model_name="gpt-6-luna", prompt_version="v2"
 )
 
-results_gpt35 = await model_comparison_experiment.arun(
-    dataset, model_name="gpt-3.5-turbo", temperature=0.1
+results_terra = await model_comparison_experiment.arun(
+    dataset, model_name="gpt-5.6-terra", prompt_version="v2"
 )
 ```
 
@@ -157,7 +157,7 @@ return {
     "experiment_name": "baseline_v1",
     "git_commit": "a1b2c3d",
     "environment": "staging",
-    "model_version": "gpt-4o-2024-08-06",
+    "model_version": "gpt-6-luna",
     "total_tokens": response.usage.total_tokens,
     "response_time_ms": response_time,
 }

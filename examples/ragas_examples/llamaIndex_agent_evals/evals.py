@@ -22,11 +22,11 @@ from llamaindex_agent import add_item, list_items, llm, remove_item
 
 evaluator_llm = InstructorLLM(
     client=instructor.from_provider(
-        "google/gemini-2.0-flash",
+        "google/gemini-3.6-flash",
         async_client=True,
         api_key=os.environ["GOOGLE_API_KEY"],
     ),
-    model="gemini-2.0-flash",
+    model="gemini-3.6-flash",
     provider="google",
 )
 

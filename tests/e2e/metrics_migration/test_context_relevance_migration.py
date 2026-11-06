@@ -18,7 +18,7 @@ def nvidia_legacy_llm():
         from ragas.llms import llm_factory
 
         # Legacy sets temperature=0.1 in the metric calls, so use default here
-        return llm_factory("gpt-4o", client=openai.OpenAI())
+        return llm_factory("gpt-6-luna", client=openai.OpenAI())
     except Exception as e:
         pytest.skip(str(e))
 
@@ -34,7 +34,7 @@ def nvidia_modern_llm():
         client = openai.AsyncOpenAI()
         # Set temperature=0.1 to match legacy NVIDIA calls exactly
         return llm_factory(
-            model="gpt-4o", provider="openai", client=client, temperature=0.1
+            model="gpt-6-luna", provider="openai", client=client, temperature=0.1
         )
     except Exception as e:
         pytest.skip(str(e))
@@ -86,7 +86,7 @@ class TestContextRelevanceE2EMigration:
         try:
             from ragas.llms.base import llm_factory
 
-            return llm_factory("gpt-4o")
+            return llm_factory("gpt-6-luna")
         except ImportError as e:
             pytest.skip(f"LLM factory not available: {e}")
         except Exception as e:
@@ -102,7 +102,7 @@ class TestContextRelevanceE2EMigration:
 
             client = openai.AsyncOpenAI()
             return llm_factory(
-                model="gpt-4o",
+                model="gpt-6-luna",
                 provider="openai",
                 client=client,
             )

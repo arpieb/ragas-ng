@@ -19,7 +19,7 @@ LlamaIndexLLMWrapper = DeprecationHelper(
     "Use llm_factory instead: "
     "from openai import OpenAI; "
     "from ragas.llms import llm_factory; "
-    "llm = llm_factory('gpt-4o-mini', client=OpenAI(api_key='...'))",
+    "llm = llm_factory('gpt-6-luna', client=OpenAI(api_key='...'))",
 )
 
 __all__ = [

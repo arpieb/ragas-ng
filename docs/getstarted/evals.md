@@ -95,7 +95,7 @@ Your quickstart project initializes the OpenAI LLM by default in the `_init_clie
     from ragas.llms import llm_factory
 
     client = OpenAI()
-    llm = llm_factory("gpt-4o", client=client)
+    llm = llm_factory("gpt-6-luna", client=client)
     ```
 
     This is already set up in your quickstart project!
@@ -115,7 +115,7 @@ Your quickstart project initializes the OpenAI LLM by default in the `_init_clie
     from ragas.llms import llm_factory
 
     client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-    llm = llm_factory("claude-3-5-sonnet-20241022", provider="anthropic", client=client)
+    llm = llm_factory("claude-sonnet-5-5", provider="anthropic", client=client)
     ```
 
 === "Google Gemini"
@@ -133,8 +133,8 @@ Your quickstart project initializes the OpenAI LLM by default in the `_init_clie
     from ragas.llms import llm_factory
 
     genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
-    client = genai.GenerativeModel("gemini-2.0-flash")
-    llm = llm_factory("gemini-2.0-flash", provider="google", client=client)
+    client = genai.GenerativeModel("gemini-3.6-flash")
+    llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
     ```
 
 === "Local Models (Ollama)"
@@ -176,7 +176,7 @@ from ragas.llms import llm_factory
 
 # Setup your evaluator LLM
 client = AsyncOpenAI()
-evaluator_llm = llm_factory("gpt-4o", client=client)
+evaluator_llm = llm_factory("gpt-6-luna", client=client)
 
 # Create a custom aspect evaluator
 metric = DiscreteMetric(

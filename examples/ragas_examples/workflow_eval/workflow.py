@@ -165,10 +165,12 @@ class LLMExtractor(BaseExtractor):
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0,
-                max_tokens=200,
+                # a reasoning model: no temperature, and no hidden reasoning
+                # tokens eating the short output budget
+                reasoning_effort="none",
+                max_completion_tokens=200,
             )
 
             # Parse JSON response
@@ -324,7 +326,7 @@ class ConfigurableSupportTriageAgent:
                 component="openai_api",
                 data={
                     "operation": "classification",
-                    "model": "gpt-3.5-turbo",
+                    "model": "gpt-5.6-terra",
                     "prompt_length": len(prompt),
                     "email_length": len(email_content),
                 },
@@ -333,10 +335,12 @@ class ConfigurableSupportTriageAgent:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0,
-                max_tokens=10,
+                # a reasoning model: no temperature, and no hidden reasoning
+                # tokens eating the short output budget
+                reasoning_effort="none",
+                max_completion_tokens=10,
             )
 
             category = (
@@ -453,7 +457,7 @@ class ConfigurableSupportTriageAgent:
                 component="openai_api",
                 data={
                     "operation": "response_generation",
-                    "model": "gpt-3.5-turbo",
+                    "model": "gpt-5.6-terra",
                     "category": category,
                     "extracted_fields": list(extracted_info.keys()),
                 },
@@ -462,10 +466,12 @@ class ConfigurableSupportTriageAgent:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.3,
-                max_tokens=300,
+                # a reasoning model: no temperature, and no hidden reasoning
+                # tokens eating the short output budget
+                reasoning_effort="none",
+                max_completion_tokens=300,
             )
 
             response_text = (

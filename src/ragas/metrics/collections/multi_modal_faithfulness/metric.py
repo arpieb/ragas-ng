@@ -40,7 +40,7 @@ class MultiModalFaithfulness(BaseMetric):
         >>>
         >>> # Setup dependencies (use a vision-capable model)
         >>> client = AsyncOpenAI()
-        >>> llm = llm_factory("gpt-4o", client=client)  # Vision-capable model
+        >>> llm = llm_factory("gpt-6-luna", client=client)  # Vision-capable model
         >>>
         >>> # Create metric instance
         >>> metric = MultiModalFaithfulness(llm=llm)
@@ -58,8 +58,8 @@ class MultiModalFaithfulness(BaseMetric):
         allowed_values: Score range (0.0 or 1.0)
 
     Note:
-        This metric requires a vision-capable LLM (e.g., gpt-4o, gpt-4-vision,
-        claude-3-opus, gemini-pro-vision) to evaluate image contexts.
+        This metric requires an LLM that accepts image input to evaluate image
+        contexts. Check the model's page on your provider's site.
     """
 
     # Type hints for linter (attributes are set in __init__)

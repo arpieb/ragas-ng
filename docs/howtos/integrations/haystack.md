@@ -1,5 +1,9 @@
 # Haystack Integration
 
+--8<--
+earlier_run_outputs.md
+--8<--
+
 Haystack is an LLM orchestration framework to build customizable, production-ready LLM applications.
 
 The underlying concept of Haystack is that all individual tasks, such as storing documents, retrieving relevant data, and generating responses, are handled by modular components like Document Stores, Retrievers, and Generators, which are seamlessly connected and orchestrated using Pipelines.
@@ -105,7 +109,7 @@ prompt_builder = ChatPromptBuilder(template=template)
 ```python
 from haystack.components.generators.chat import OpenAIChatGenerator
 
-chat_generator = OpenAIChatGenerator(model="gpt-4o-mini")
+chat_generator = OpenAIChatGenerator(model="gpt-6-luna")
 ```
 
 #### Setting up the RagasEvaluator
@@ -128,7 +132,7 @@ from openai import OpenAI
 from ragas.llms import llm_factory
 from ragas.metrics import AnswerRelevancy, ContextPrecision, Faithfulness
 
-evaluator_llm = llm_factory("gpt-4o-mini", client=OpenAI())
+evaluator_llm = llm_factory("gpt-6-luna", client=OpenAI())
 
 ragas_evaluator = RagasEvaluator(
     ragas_metrics=[AnswerRelevancy(), ContextPrecision(), Faithfulness()],
