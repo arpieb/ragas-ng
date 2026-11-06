@@ -2,6 +2,9 @@
 
 When evaluating LLM applications in languages other than English, adapt your metrics to the target language. Ragas uses an LLM to translate the few-shot examples in prompts.
 
+!!! note "What adaptation changes"
+    Adapting a metric translates its few-shot examples, and its instruction too if you pass `adapt_instruction=True`. It doesn't tell the model which language to write in. Intermediate output, such as extracted statements and reasons, usually follows the language of your data. Testset generation is different: its query and answer prompts do state the target language (see [Behavior changes](../../migrations/behavior_changes.md#adapted-testset-prompts-write-in-the-target-language-106)).
+
 ## Setup
 
 ```python

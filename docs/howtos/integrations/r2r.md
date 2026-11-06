@@ -7,7 +7,7 @@ In this tutorial, we will:
 
 - Leverage the `/rag` endpoint from R2R to perform Retrieval-Augmented Generation (RAG) on a small dataset.
 - Evaluate the generated responses.
-- Analyze the traces of evaluation.
+- Inspect why each response got its scores.
 
 ## R2R Setup
 
@@ -22,7 +22,7 @@ To begin, install the necessary packages:
 
 #### Setting up the local environment
 
-Configure the `R2R_API_KEY`, `OPENAI_API_KEY` and `RAGAS_APP_TOKEN`(Optional).
+Configure the `R2R_API_KEY` and `OPENAI_API_KEY`.
 
 
 ```python
@@ -159,27 +159,30 @@ To evaluate our RAG endpoint, we will use the following metrics:
 
 
 ```python
-from ragas.metrics import AnswerRelevancy, ContextPrecision, Faithfulness
-from ragas import evaluate
-from openai import OpenAI
-from ragas.llms import llm_factory
+from openai import AsyncOpenAI
 
-evaluator_llm = llm_factory("gpt-4o-mini", client=OpenAI())
+from ragas import evaluate
+from ragas.embeddings import embedding_factory
+from ragas.llms import llm_factory
+from ragas.metrics.collections import AnswerRelevancy, ContextPrecision, Faithfulness
+
+client = AsyncOpenAI()
+evaluator_llm = llm_factory("gpt-4o-mini", client=client)
+evaluator_embeddings = embedding_factory(
+    "openai", model="text-embedding-3-small", client=client
+)
 
 ragas_metrics = [
-    AnswerRelevancy(llm=evaluator_llm),
+    AnswerRelevancy(llm=evaluator_llm, embeddings=evaluator_embeddings),
     ContextPrecision(llm=evaluator_llm),
     Faithfulness(llm=evaluator_llm),
 ]
 
 results = evaluate(dataset=ragas_eval_dataset, metrics=ragas_metrics)
+results.to_pandas()
 ```
-Output
-```
-Querying Client: 100%|██████████| 3/3 [00:00<?, ?it/s]
 
-Evaluating: 100%|██████████| 9/9 [00:00<?, ?it/s]
-```
+Example output from an earlier run (your scores will differ):
 
 <div>
 <style scoped>
@@ -245,14 +248,16 @@ Evaluating: 100%|██████████| 9/9 [00:00<?, ?it/s]
 
 
 
-#### Tracing the Evaluations
+#### Understanding the Scores
 
-To gain a better understanding of the scores from the evaluation, we can obtain the traces and reasons for the verdicts using the code below.
-
+To see why each response got its scores, ask for the metrics' explanations alongside the scores:
 
 ```python
-results.upload()
+results.to_pandas(include_reasons=True)
 ```
-![](../../_static/r2r_integration_ragas_app.png)
+
+This adds a `<metric>_reason` column after each metric that explains its score, for example which statements in a response the retrieved context didn't support. `results.reasons` gives the same explanations as a dict, keyed by metric name.
+
+`results.traces` holds the full run tree: every prompt sent to the evaluator LLM and its output. To view these runs in an observability tool, export ragas' OpenTelemetry spans to it (Langfuse, Phoenix and others ingest them; see the [Langfuse guide](./_langfuse.md) for an example set-up).
 
 Happy Coding
