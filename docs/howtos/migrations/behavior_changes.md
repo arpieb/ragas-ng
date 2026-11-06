@@ -423,3 +423,15 @@ They now use each provider's listed replacement:
 - A `temperature` or `top_p` **you** pass (`llm_factory(..., temperature=0.2)`) is still sent. On current Claude models it fails, and the provider's error says why: only `temperature=1` is accepted on older API versions, and none on API `2026-10-21`.
 - A per-call temperature ragas chooses for sampling (`strictness`, legacy prompts with `n > 1`) is not sent to Claude. Through LiteLLM it is sent with `drop_params=True`, so LiteLLM drops it where a model rejects it.
 - The planned move of every call onto LiteLLM's parameter handling is #182.
+
+## Claude: JSON mode by default ([#184](https://github.com/arpieb/ragas-ng/issues/184))
+
+Without a `mode`, `llm_factory()` now asks Claude for structured output as JSON:
+- `Mode.ANTHROPIC_JSON` with an Anthropic client (`provider="anthropic", client=Anthropic()`);
+- `Mode.JSON` for Claude through LiteLLM (`"anthropic/claude-..."`, including Bedrock's `anthropic.claude-...` IDs).
+
+Instructor's defaults (`ANTHROPIC_TOOLS` / `TOOLS`) force a tool call. `claude-sonnet-5-5` rejects that with `400 tool_choice: type "tool" and "any" are not supported for this model`, so every structured call failed on both paths.
+
+- Verified live with `claude-sonnet-5-5` and `claude-haiku-5-5` on both paths: generation, `AspectCritic` (with and without `strictness`), and `AnswerAccuracy`.
+- A `mode` you pass is kept, so `mode=instructor.Mode.ANTHROPIC_TOOLS` restores the old behavior for models that accept it.
+- A LiteLLM `Router` or module passed as `client` keeps instructor's default, because the model isn't known when it's wrapped. Pass `mode=` there.

@@ -106,7 +106,6 @@ def test_mode_reaches_the_provider_factory(record, provider, factory, client, ad
 @pytest.mark.parametrize(
     "provider, factory, client",
     [
-        ("anthropic", "from_anthropic", FakeAnthropic()),
         ("google", "from_genai", FakeGenaiClient()),
         ("mistral", "from_mistral", FakeMistral()),
     ],
@@ -118,6 +117,57 @@ def test_without_mode_each_provider_keeps_its_own_default(
     rec = record(factory)
     llm_factory("m", provider=provider, client=client)
     assert all("mode" not in c for c in rec.calls)
+
+
+def test_anthropic_defaults_to_anthropic_json(record):
+    # instructor's default ANTHROPIC_TOOLS forces a tool call, which
+    # claude-sonnet-5-5 rejects (#184)
+    rec = record("from_anthropic")
+    llm_factory("claude-sonnet-5-5", provider="anthropic", client=FakeAnthropic())
+    assert rec.calls
+    assert all(c["mode"] is instructor.Mode.ANTHROPIC_JSON for c in rec.calls)
+
+
+def test_anthropic_callers_mode_is_kept(record):
+    rec = record("from_anthropic")
+    llm_factory(
+        "claude-haiku-5-5",
+        provider="anthropic",
+        client=FakeAnthropic(),
+        mode=instructor.Mode.ANTHROPIC_TOOLS,
+    )
+    assert all(c["mode"] is instructor.Mode.ANTHROPIC_TOOLS for c in rec.calls)
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        "anthropic/claude-sonnet-5-5",
+        "claude-haiku-5-5",
+        "bedrock/anthropic.claude-sonnet-5-5",
+    ],
+)
+def test_litellm_claude_defaults_to_json(record, monkeypatch, model):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    rec = record("from_litellm")
+    llm_factory(model, provider="anthropic" if "/" not in model else "openai")
+    assert rec.calls
+    assert all(c["mode"] is instructor.Mode.JSON for c in rec.calls)
+
+
+def test_litellm_other_models_keep_instructors_default(record, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    rec = record("from_litellm")
+    llm_factory("gpt-6-luna")
+    assert rec.calls
+    assert all("mode" not in c for c in rec.calls)
+
+
+def test_litellm_claude_callers_mode_is_kept(record, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    rec = record("from_litellm")
+    llm_factory("anthropic/claude-haiku-5-5", mode=instructor.Mode.MD_JSON)
+    assert all(c["mode"] is instructor.Mode.MD_JSON for c in rec.calls)
 
 
 def test_openai_still_defaults_to_json(record):
