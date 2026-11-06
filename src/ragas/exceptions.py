@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import typing as t
+
 
 class RagasException(Exception):
     """
@@ -26,8 +28,10 @@ class RagasOutputParserException(RagasException):
     Exception raised when the output parser fails to parse the output.
     """
 
-    def __init__(self):
+    def __init__(self, detail: t.Optional[str] = None):
         msg = "The output parser failed to parse the output including retries."
+        if detail:
+            msg = f"{msg} Last error: {detail}"
         super().__init__(msg)
 
 

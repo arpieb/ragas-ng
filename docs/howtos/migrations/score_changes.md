@@ -242,3 +242,24 @@ examples in that case, which matches `FewShotPydanticPrompt`. **Who sees a
 difference:** aligned metrics with an embedding model, on inputs unlike any of
 their stored examples. The judge now sees no examples for those inputs, so its
 verdicts can change. Lower `similarity_threshold` to include more examples.
+
+## Legacy prompts with llm_factory() LLMs: n and temperature apply ([#94](https://github.com/arpieb/ragas-ng/issues/94))
+
+`ragas.prompt.PydanticPrompt` with an `InstructorBaseRagasLLM`
+
+The legacy prompt path made one call whatever `n` asked for, and ignored the
+`temperature` it was given. It now makes `n` concurrent calls at a sampling
+temperature (0.3 unless given), each with its own cache entry, matching the
+collections metrics' [strictness fix](#strictness-actually-samples-55). A
+temperature passed to a prompt is used.
+
+**Who sees a difference:** only metrics that run on the legacy implementation
+with an `llm_factory()` LLM. That means the private modules, such as
+`from ragas.metrics._answer_relevance import AnswerRelevancy`, or a metric
+whose prompts were customised, where the hand-off falls back to legacy (see
+[above](#the-short-imports-score-through-collections)).
+
+- `AnswerRelevancy(strictness=N)` now averages over N generated questions
+  instead of one.
+- The NVIDIA metrics' fixed `temperature=0.1` judge calls now run at 0.1
+  rather than the LLM's configured temperature.

@@ -127,3 +127,40 @@ run, including jobs from `return_executor=True`.
   `SimpleExampleStore.get_examples` now take `threshold`. A store without that
   parameter still works, but the threshold is ignored and a warning says so
   once. Add `threshold: float = 0.7` to your store to use it.
+
+## Prompt output handling ([#94](https://github.com/arpieb/ragas-ng/issues/94))
+
+This applies to `PydanticPrompt` and `ImageTextPrompt`: the prompt classes
+behind testset generation, the private legacy metric modules, and metrics with
+customised prompts.
+
+- **Error type: parse failures raise `RagasOutputParserException`.** This
+  covers a `ValidationError` or `JSONDecodeError`, and instructor's
+  retries-exhausted errors with an `llm_factory()` LLM. Some of these used to
+  escape as their raw types. The original is kept as `__cause__`, and the
+  message includes it. If you caught `pydantic.ValidationError` around a
+  prompt call, catch `RagasOutputParserException` instead. Provider errors
+  such as timeouts, rate limits and connection errors still pass through
+  unchanged.
+- Every failure is reported to callbacks with `on_chain_error`, so traces no
+  longer leave a failed prompt run open.
+- **`retries_left` is the number of fix attempts.** When the LLM's output
+  doesn't parse, ragas asks the LLM to fix it up to `retries_left` times
+  (default 3). Each fixed output is parsed like the original, including JSON
+  inside code fences or surrounding text. Before, there was one fix attempt,
+  and its result failed if it came back fenced.
+- Output that is already valid JSON is parsed as is. JSON with a fenced block
+  inside one of its string values used to be cut down to that inner block.
+- **⚠ silent: `llm_factory()` LLMs run prompts concurrently.** The prompt
+  called the blocking `generate()` for an LLM on a sync client, so
+  concurrent prompts, such as every testset transform, ran one at a time. It
+  now awaits `agenerate()`, which runs sync clients in a thread. Expect
+  faster testset generation and more parallel requests to your provider. Set
+  `RunConfig(max_workers=...)` if you need to limit them.
+- **⚠ silent: `n` and `temperature` apply with `llm_factory()` LLMs.**
+  - `generate_multiple(n=3)` makes three calls at a sampling temperature,
+    0.3 unless you pass one. It used to make one call and warn.
+  - A `temperature=` passed to a prompt is now used. It used to be ignored.
+    For example, testset persona generation asks for 1.0, so generated
+    personas vary more between runs.
+  - See [Metric score changes](score_changes.md#legacy-prompts-with-llm_factory-llms-n-and-temperature-apply-94).
