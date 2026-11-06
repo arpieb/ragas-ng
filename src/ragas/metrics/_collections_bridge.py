@@ -119,7 +119,14 @@ class _CollectionsMetricAdapter(Metric):
         return f"{type(self.metric).__name__}(name={self.name!r}) [via evaluate()]"
 
     def init(self, run_config: RunConfig) -> None:
-        """No-op: a collections metric takes its LLM at construction."""
+        """Hand ``evaluate()``'s retry/backoff settings to the metric's LLM (#73).
+
+        A collections metric takes its LLM at construction; only the
+        ``RunConfig`` is applied here.
+        """
+        llm = getattr(self.metric, "llm", None)
+        if hasattr(llm, "set_run_config"):
+            llm.set_run_config(run_config)  # type: ignore[union-attr]
 
     async def _ascore_from_sample(self, sample: t.Any) -> float:
         kwargs = {}
