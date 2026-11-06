@@ -86,9 +86,11 @@ class LocalCSVBackend(BaseBackend):
                 pass
             return
 
+        # Preserve first-seen field order while including fields from every row.
+        fieldnames = list(dict.fromkeys(key for row in data for key in row))
+
         # Write data to CSV
         with open(file_path, "w", newline="", encoding="utf-8") as f:
-            fieldnames = data[0].keys()
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(data)

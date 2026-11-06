@@ -101,6 +101,23 @@ def nested_data():
 class TestBasicFunctionality:
     """Test basic LocalCSVBackend functionality."""
 
+    @pytest.mark.parametrize("kind", ["dataset", "experiment"])
+    def test_save_heterogeneous_rows(self, backend, kind):
+        rows = [
+            {"name": "Alice", "score": 1},
+            {"name": "Bob", "extra": "present"},
+            {"score": 3, "last": "value"},
+        ]
+        getattr(backend, f"save_{kind}")("mixed", rows)
+        loaded = getattr(backend, f"load_{kind}")("mixed")
+
+        assert list(loaded[0]) == ["name", "score", "extra", "last"]
+        assert loaded == [
+            {"name": "Alice", "score": "1", "extra": "", "last": ""},
+            {"name": "Bob", "score": "", "extra": "present", "last": ""},
+            {"name": "", "score": "3", "extra": "", "last": "value"},
+        ]
+
     def test_initialization(self, temp_dir):
         """Test backend initialization."""
         backend = LocalCSVBackend(temp_dir)
