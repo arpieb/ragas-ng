@@ -76,6 +76,83 @@ document for each reference context, in the same order, e.g.
 `result.to_pandas()`, so you can group scores by source file. Dates and other
 values that JSON can't hold are stored as strings.
 
+### What the columns are for
+
+A generated sample holds the question and its ground truth. It doesn't hold
+your system's output.
+
+| Column | What it is | Used by |
+|---|---|---|
+| `user_input` | The generated query. | Your app, as its input. |
+| `reference` | The reference answer, written from the reference contexts. | `ContextRecall`, `ContextPrecision`, `FactualCorrectness` and other reference-based metrics. |
+| `reference_contexts` | The chunks the query and answer were written from: one chunk for single-hop queries, several for multi-hop. These are the contexts a perfect retriever would return. | `NonLLMContextRecall`, `NonLLMContextPrecisionWithReference`. |
+| `reference_contexts_metadata` | The source document's metadata for each reference context. | Grouping scores by source. |
+| `persona_name`, `query_style`, `query_length`, `synthesizer_name` | How the query was generated. | Filtering and analysis. |
+
+To evaluate, run your app on each `user_input` and fill in `response` and
+`retrieved_contexts` with what it returns.
+
+`reference_contexts` is ground truth for **retrieval**. The non-LLM context
+metrics compare your retrieved contexts with it by string similarity, so a
+retriever that returns the source chunk scores well and one that misses it
+scores 0. The LLM-based `ContextRecall` and `ContextPrecision` judge the
+retrieved contexts against `reference` instead, and don't read
+`reference_contexts`.
+
+--8<--
+running_async.md
+--8<--
+
+```python
+import asyncio
+
+from ragas.metrics.collections import NonLLMContextRecall
+
+# reference_contexts: the chunk a generated query was written from
+reference_contexts = [
+    "The Eiffel Tower was completed in 1889 for the World's Fair in Paris."
+]
+# retrieved_contexts: what your retriever returned for that query
+retrieved_contexts = [
+    "The Eiffel Tower was completed in 1889 for the World's Fair, in Paris.",
+    "Paris is the capital and most populous city of France.",
+]
+
+
+async def main():
+    metric = NonLLMContextRecall()
+    result = await metric.ascore(
+        retrieved_contexts=retrieved_contexts,
+        reference_contexts=reference_contexts,
+    )
+    print("Context recall:", result.value)
+
+    missed = await metric.ascore(
+        retrieved_contexts=retrieved_contexts[1:],
+        reference_contexts=reference_contexts,
+    )
+    print("Without the source chunk:", missed.value)
+
+
+asyncio.run(main())
+```
+
+Output:
+
+```
+Context recall: 1.0
+Without the source chunk: 0.0
+```
+
+!!! note "Chunking"
+    The reference contexts are the generator's chunks, made by its transforms
+    (such as `HeadlineSplitter`), not your retriever's. If your retriever splits
+    documents differently, its contexts won't equal the reference contexts
+    exactly. The similarity-based metrics above tolerate small differences;
+    for very different chunking, use the LLM-based metrics with `reference`.
+    ID-based metrics (`IDBasedContextRecall`) work only if you map the
+    generator's chunks to your own chunk IDs.
+
 ## A Deeper Look
 
 Now that we have a seen how to generate a testset, let's take a closer look at the main components of the testset generation pipeline and how you can quickly customize it.

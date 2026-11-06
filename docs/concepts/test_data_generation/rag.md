@@ -281,3 +281,5 @@ class EntityQuerySynthesizer(BaseSynthesizer):
             user_input=query, reference_contexts=contexts, reference=reference
         )
 ```
+
+`reference_contexts` are the chunks the sample was generated from, the retrieval ground truth. See [What the columns are for](../../getstarted/rag_testset_generation.md#what-the-columns-are-for).
