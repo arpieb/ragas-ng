@@ -270,3 +270,27 @@ load with.
   `MetricAnnotation.from_json()` and `SingleMetricAnnotation.from_json()` read
   and write UTF-8 and close their files. They used the platform encoding,
   which breaks non-ASCII text on Windows. `from_jsonl()` ignores blank lines.
+
+## Message converters: AG-UI snapshots and OpenAI-format histories ([#96](https://github.com/arpieb/ragas-ng/issues/96), [#98](https://github.com/arpieb/ragas-ng/issues/98))
+
+- **⚠ silent: AG-UI `MessagesSnapshotEvent` tool calls keep their name and
+  arguments.** `convert_messages_snapshot()` read `name` / `args` from the
+  wrong place: AG-UI nests them under `function`, with arguments as a JSON
+  string. So every snapshot tool call came out as `unknown_tool` with `{}`,
+  and tool-call metrics such as `ToolCallAccuracy` scored those calls as
+  wrong. Scores for snapshot-based samples change. Arguments that aren't
+  valid JSON are kept as `{"raw_args": "..."}`, as in the streaming path.
+- AG-UI message content: `None` is `""`. It used to be the text `"None"`. A
+  list of content parts keeps its text parts, joined by newlines; image,
+  audio, video, document and binary parts are skipped. It used to be the
+  pydantic repr of the whole list.
+- `ragas.integrations.swarm.convert_to_ragas_messages()` takes any
+  OpenAI-format chat history, not only Swarm's:
+    - An assistant message without `tool_calls` (or with `None`) no longer
+      raises `KeyError`.
+    - Arguments that aren't a JSON object are kept as `raw_args` instead of
+      raising.
+    - List-of-parts content keeps its text parts.
+    - `system` and `developer` messages are skipped instead of raising
+      `ValueError`.
+    - An unknown or missing role still raises.

@@ -100,6 +100,7 @@ from ragas.dataset_schema import (
     MultiTurnSample,
     SingleTurnSample,
 )
+from ragas.integrations._messages import parse_tool_arguments, text_from_content
 from ragas.messages import AIMessage, HumanMessage, ToolCall, ToolMessage
 
 logger = logging.getLogger(__name__)
@@ -617,7 +618,8 @@ class AGUIEventCollector:
             ) from e
 
         for msg in event.messages:
-            content = str(getattr(msg, "content", ""))
+            # None and multimodal part lists used to go through str() (#96)
+            content = text_from_content(getattr(msg, "content", None))
 
             metadata = None
             if self.include_metadata:
@@ -632,17 +634,15 @@ class AGUIEventCollector:
                 if hasattr(msg, "tool_calls") and msg.tool_calls:
                     tool_calls = []
                     for tc in msg.tool_calls:
-                        tc_obj = t.cast(Any, tc)
-                        name = t.cast(str, getattr(tc_obj, "name", "unknown_tool"))
-                        raw_args = getattr(tc_obj, "args", {})
-                        if not isinstance(raw_args, dict):
-                            raw_args = {"raw_args": raw_args}
-                        tool_calls.append(
-                            ToolCall(
-                                name=name,
-                                args=t.cast(Dict[str, Any], raw_args),
-                            )
+                        # AG-UI nests name and JSON-string arguments under
+                        # .function; reading flat .name/.args always gave
+                        # unknown_tool / {} (#96)
+                        function = getattr(tc, "function", None)
+                        name = getattr(function, "name", None) or "unknown_tool"
+                        args = parse_tool_arguments(
+                            getattr(function, "arguments", None)
                         )
+                        tool_calls.append(ToolCall(name=name, args=args))
                 self.messages.append(
                     AIMessage(content=content, tool_calls=tool_calls, metadata=metadata)
                 )
