@@ -1,8 +1,8 @@
 site_name: Ragas
 site_description: Evaluation framework for your AI Application
-# ReadTheDocs injects READTHEDOCS_CANONICAL_URL; the fallback keeps local and CI
-# builds working, since the llmstxt plugin hard-requires site_url to be set.
-site_url: !ENV [READTHEDOCS_CANONICAL_URL, "https://docs.ragas.io/"]
+# Hosted on GitHub Pages. The llmstxt plugin hard-requires site_url and builds
+# every link in llms.txt from it.
+site_url: "https://arpieb.github.io/ragas-ng/"
 repo_name: arpieb/ragas-ng
 repo_url: https://github.com/arpieb/ragas-ng
 watch:
@@ -306,9 +306,11 @@ plugins:
         open_in_claude: true
   - llmstxt:
       markdown_description: |
-        Ragas is an open-source evaluation framework for LLM applications including RAG pipelines,
-        AI agents, and workflows. It provides objective metrics for evaluation, test data generation
-        capabilities, and integrations with popular LLM frameworks like LangChain and LlamaIndex.
+        ragas-ng is a hard fork of vibrantlabsai/ragas, an open-source evaluation framework for LLM
+        applications including RAG pipelines, AI agents, and workflows. The package and import name
+        are still `ragas`. The fork has no LangChain dependency and `llm_factory()` routes through
+        LiteLLM. It provides objective metrics for evaluation, test data generation, and
+        integrations such as LlamaIndex. See the migration notes for differences from upstream.
       full_output: llms-full.txt
       sections:
         Getting Started:
@@ -323,6 +325,8 @@ plugins:
           - concepts/metrics/available_metrics/*.md
         Test Data Generation:
           - concepts/test_data_generation/*.md
+        Migrating from Upstream Ragas:
+          - howtos/migrations/*.md
         Customization Guides:
           - howtos/customizations/*.md
           - howtos/customizations/metrics/*.md
@@ -330,6 +334,7 @@ plugins:
           - howtos/customizations/optimizers/*.md
         Application Guides:
           - howtos/applications/*.md
+          - howtos/*.md
         CLI:
           - howtos/cli/*.md
         Integrations:
