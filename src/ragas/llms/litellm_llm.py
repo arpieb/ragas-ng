@@ -5,7 +5,11 @@ import threading
 import typing as t
 
 from ragas.cache import CacheInterface, cache_identity, cacher
-from ragas.llms.base import InstructorBaseRagasLLM, InstructorTypeVar
+from ragas.llms.base import (
+    InstructorBaseRagasLLM,
+    InstructorTypeVar,
+    is_reasoning_model,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +32,7 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
         cache: t.Optional[CacheInterface] = None,
         system_prompt: t.Optional[str] = None,
         sync_client: t.Optional[t.Any] = None,
+        reasoning: t.Optional[bool] = None,
         **kwargs,
     ):
         """
@@ -42,10 +47,13 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
             sync_client: Optional sync counterpart of an async ``client``;
                 ``generate()`` calls it directly instead of running the async
                 client on a worker thread with its own event loop.
+            reasoning: Whether the model is an OpenAI reasoning model; None
+                detects it from the model ID (see ``is_reasoning_model``).
             **kwargs: Additional model arguments (temperature, max_tokens, etc.)
         """
         self.client = client
         self.sync_client = sync_client
+        self.reasoning = reasoning
         self.model = model
         self.provider = provider
         self.system_prompt = system_prompt
@@ -187,6 +195,21 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
         messages.append({"role": "user", "content": prompt})
         return messages
 
+    def _request_args(self, temperature: t.Optional[float]) -> t.Dict[str, t.Any]:
+        """``model_args`` for one call.
+
+        OpenAI reasoning models reject any temperature but 1 and ``top_p``, so
+        both are left out for them, including the per-call temperature that
+        ``strictness`` sampling sets (#67). LiteLLM maps ``max_tokens`` itself.
+        """
+        args = self._with_sampling(self.model_args, temperature)
+        reasoning = (
+            is_reasoning_model(self.model) if self.reasoning is None else self.reasoning
+        )
+        if reasoning:
+            args = {k: v for k, v in args.items() if k not in ("temperature", "top_p")}
+        return args
+
     def _call_sync(
         self,
         client: t.Any,
@@ -198,7 +221,7 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
             model=self.model,
             messages=self._messages(prompt),
             response_model=response_model,
-            **self._with_sampling(self.model_args, temperature),
+            **self._request_args(temperature),
         )
 
     def generate(
@@ -242,7 +265,7 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
             model=self.model,
             messages=self._messages(prompt),
             response_model=response_model,
-            **self._with_sampling(self.model_args, temperature),
+            **self._request_args(temperature),
         )
 
     async def agenerate(

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
+import re
 import threading
 import typing as t
 from abc import ABC, abstractmethod
@@ -440,6 +441,9 @@ def llm_factory(
               Options: Mode.JSON, Mode.MD_JSON, Mode.TOOLS, Mode.JSON_SCHEMA, etc.
               Use Mode.MD_JSON for backends that don't support response_format parameter.
         **kwargs: Additional model arguments (temperature, max_tokens, top_p, etc).
+                 ``reasoning=True/False`` is not sent to the model: it marks the
+                 model as an OpenAI reasoning model (or not) where the name
+                 doesn't say, e.g. an Azure deployment. See ``is_reasoning_model``.
 
     Returns:
         InstructorBaseRagasLLM: Instance with generate() and agenerate() methods.
@@ -557,14 +561,51 @@ def llm_factory(
     return llm
 
 
+# Bedrock-style vendor prefix on OpenAI model IDs: "openai.gpt-6-sol",
+# "us.openai.gpt-5" (cross-region inference profile).
+_VENDOR_PREFIX = re.compile(r"^(?:[a-z]{2,6}\.)?openai\.")
+_O_SERIES = re.compile(r"^o\d+(?:$|[-_.])")
+_GPT_VERSION = re.compile(r"^gpt-(\d+)(?:\.\d+)?(?:$|[-_.])")
+
+
+def _bare_model_id(model: str) -> str:
+    """``model`` without routing prefixes: LiteLLM's ``provider/`` and
+    Bedrock's ``[region.]openai.``."""
+    bare = model.lower().rsplit("/", 1)[-1]
+    return _VENDOR_PREFIX.sub("", bare)
+
+
+def is_reasoning_model(model: str) -> bool:
+    """Whether ``model`` is an OpenAI reasoning model (o-series, GPT-5+, codex-mini).
+
+    These reject ``max_tokens`` (they take ``max_completion_tokens``), any
+    temperature but 1, and ``top_p``. Matches dotted versions (gpt-5.1,
+    gpt-5.2-mini), o10+, and IDs behind LiteLLM or Bedrock prefixes
+    (``openai/gpt-5``, ``openai.gpt-6-sol``) (#67).
+
+    Azure deployment names are arbitrary, so no name check can be complete;
+    pass ``reasoning=True`` to ``llm_factory`` for such deployments.
+    """
+    bare = _bare_model_id(model)
+    if _O_SERIES.match(bare) or bare.startswith("codex-mini"):
+        return True
+    m = _GPT_VERSION.match(bare)
+    return bool(m and int(m.group(1)) >= 5)
+
+
+def _is_anthropic_model(provider: str, model: str) -> bool:
+    return provider.lower() == "anthropic" or "claude" in model.lower()
+
+
 # Experimental LLM classes migrated from ragas.experimental.llms
 
 
 class InstructorModelArgs(BaseModel):
     """Simple model arguments configuration for instructor LLMs
 
-    Note: For GPT-5 and o-series models, you may need to increase max_tokens
-    to 4096+ for structured output to work properly. See documentation for details.
+    These are defaults: where a provider rejects one (``top_p`` on Anthropic,
+    ``max_tokens``/``temperature``/``top_p`` on OpenAI reasoning models) it is
+    dropped or mapped, while a value the caller sets explicitly is sent.
     """
 
     temperature: float = 0.01
@@ -636,6 +677,7 @@ class InstructorLLM(InstructorBaseRagasLLM):
         model_args: t.Optional[InstructorModelArgs] = None,
         cache: t.Optional[CacheInterface] = None,
         sync_client: t.Optional[t.Any] = None,
+        reasoning: t.Optional[bool] = None,
         **kwargs,
     ):
         self.client = client
@@ -650,6 +692,14 @@ class InstructorLLM(InstructorBaseRagasLLM):
         # Use deterministic defaults if no model_args provided
         if model_args is None:
             model_args = InstructorModelArgs()
+
+        # None: detect from the model ID. True/False: the caller knows better,
+        # e.g. an Azure deployment whose name says nothing about the model.
+        self.reasoning = reasoning
+        # Arguments the caller chose, as opposed to InstructorModelArgs
+        # defaults: a default may be dropped where a provider rejects it, a
+        # caller's choice is sent as given.
+        self._explicit_args = set(model_args.model_fields_set) | set(kwargs)
 
         # Convert to dict and merge with any additional kwargs
         self.model_args = {**model_args.model_dump(), **kwargs}
@@ -684,103 +734,74 @@ class InstructorLLM(InstructorBaseRagasLLM):
         ``args`` defaults to ``self.model_args``; pass a per-call variant (e.g.
         from ``_with_sampling``) to map that instead.
 
-        Each provider may have different parameter requirements:
         - Google: Wraps parameters in generation_config and renames max_tokens
-        - OpenAI/Azure: Maps max_tokens to max_completion_tokens for o-series models
-        - Anthropic: No special handling required (pass-through)
-        - LiteLLM: No special handling required (routes internally, pass-through)
+        - OpenAI reasoning models (any provider, e.g. OpenAI, Azure, Bedrock):
+          see ``_map_openai_params``
+        - Anthropic: see ``_map_anthropic_params``
+        - Others: pass through unchanged
         """
         if args is None:
             args = self.model_args
-        provider_lower = self.provider.lower()
 
-        if provider_lower == "google":
+        if self.provider.lower() == "google":
             return self._map_google_params(args)
-        elif provider_lower in ("openai", "azure"):
-            return self._map_openai_params(args)
-        else:
-            # Anthropic, LiteLLM, and other providers - pass through unchanged
-            return args.copy()
+        if _is_anthropic_model(self.provider, self.model):
+            return self._map_anthropic_params(args)
+        return self._map_openai_params(args)
+
+    def _map_anthropic_params(
+        self, args: t.Optional[t.Dict[str, t.Any]] = None
+    ) -> t.Dict[str, t.Any]:
+        """Current Claude models reject ``temperature`` and ``top_p`` together (#69).
+
+        The default ``top_p`` is never sent. A caller who sets ``top_p``
+        themselves gets it, and the *default* temperature is dropped instead.
+        """
+        mapped = dict(self.model_args if args is None else args)
+        if "top_p" not in self._explicit_args:
+            mapped.pop("top_p", None)
+        elif "temperature" not in self._explicit_args:
+            mapped.pop("temperature", None)
+        return mapped
 
     def _map_openai_params(
         self, args: t.Optional[t.Dict[str, t.Any]] = None
     ) -> t.Dict[str, t.Any]:
-        """Map parameters for OpenAI/Azure reasoning models with special constraints.
+        """Map parameters for OpenAI reasoning models, which have special constraints.
 
-        Reasoning models (o-series and gpt-5 series) have unique requirements:
-        1. max_tokens must be mapped to max_completion_tokens
-        2. temperature must be set to 1.0 (only supported value)
-        3. top_p parameter must be removed (not supported)
+        Applies to any provider serving them (OpenAI, Azure, Bedrock, ...);
+        detection is ``is_reasoning_model``, overridden by ``reasoning=``.
+        Reasoning models (o-series, GPT-5+, codex-mini):
+        1. take max_completion_tokens instead of max_tokens. The default cap
+           is not sent, since it also counts the hidden reasoning tokens; a
+           caller's ``max_tokens`` is sent as max_completion_tokens.
+        2. only accept temperature 1.0
+        3. reject top_p
 
-        Legacy OpenAI/Azure models (gpt-4, gpt-4o, etc.) continue to use max_tokens unchanged.
+        Other models are passed through unchanged.
 
-        Note on Azure deployments: Some Azure deployments restrict temperature to 1.0.
-        If your Azure deployment has this constraint, pass temperature=1.0 explicitly:
-        llm_factory("gpt-4o-mini", provider="azure", client=client, temperature=1.0)
-
-        For GPT-5 and o-series models with structured output (Pydantic models):
-        - Default max_tokens=1024 may not be sufficient
-        - Consider increasing to 4096+ via: llm_factory(..., max_tokens=4096)
-        - If structured output is truncated, increase max_tokens further
-
-        Pattern-based matching for future-proof coverage:
-        - O-series: o1, o2, o3, o4, o5, ... (all reasoning versions)
-        - GPT-5 series: gpt-5, gpt-5-*, gpt-6, gpt-7, ... (all GPT-5+ models)
-        - Other: codex-mini
+        Note on Azure deployments: deployment names are arbitrary, so pass
+        ``reasoning=True`` for a reasoning deployment whose name doesn't say so.
         """
         mapped_args = (self.model_args if args is None else args).copy()
 
-        model_lower = self.model.lower()
+        requires_max_completion_tokens = (
+            is_reasoning_model(self.model) if self.reasoning is None else self.reasoning
+        )
+        if not requires_max_completion_tokens:
+            return mapped_args
 
-        # Pattern-based detection for reasoning models that require max_completion_tokens
-        # Uses prefix matching to cover current and future model variants
-        def is_reasoning_model(model_str: str) -> bool:
-            """Check if model is a reasoning model requiring max_completion_tokens."""
-            # O-series reasoning models (o1, o1-mini, o1-2024-12-17, o2, o3, o4, o5, o6, o7, o8, o9)
-            # Pattern: "o" followed by single digit 1-9, then optional "-" or end of string
-            # TODO: Update to support o10+ when OpenAI releases models beyond o9
-            if (
-                len(model_str) >= 2
-                and model_str[0] == "o"
-                and model_str[1] in "123456789"
-            ):
-                # Allow single digit o-series: o1, o2, ..., o9
-                if len(model_str) == 2 or model_str[2] in ("-", "_"):
-                    return True
+        if "max_tokens" in mapped_args:
+            max_tokens = mapped_args.pop("max_tokens")
+            # max_completion_tokens also counts the hidden reasoning tokens, so
+            # the 1024 default truncated structured output. Only a caller's
+            # own cap is sent; otherwise the provider default applies.
+            if "max_tokens" in self._explicit_args:
+                mapped_args["max_completion_tokens"] = max_tokens
 
-            # GPT-5 and newer generation models (gpt-5, gpt-5-*, gpt-6, gpt-7, ..., gpt-19)
-            # Pattern: "gpt-" followed by single or double digit >= 5, max 19
-            # TODO: Update to support gpt-20+ when OpenAI releases models beyond gpt-19
-            if model_str.startswith("gpt-"):
-                version_str = (
-                    model_str[4:].split("-")[0].split("_")[0]
-                )  # Get version number
-                try:
-                    version = int(version_str)
-                    if 5 <= version <= 19:
-                        return True
-                except ValueError:
-                    pass
-
-            # Other specific reasoning models
-            if model_str == "codex-mini":
-                return True
-
-            return False
-
-        requires_max_completion_tokens = is_reasoning_model(model_lower)
-
-        # If max_tokens is provided and model requires max_completion_tokens, map it
-        if requires_max_completion_tokens and "max_tokens" in mapped_args:
-            mapped_args["max_completion_tokens"] = mapped_args.pop("max_tokens")
-
-        # Handle parameter constraints for reasoning models (GPT-5 and o-series)
-        if requires_max_completion_tokens:
-            # GPT-5 and o-series models have strict parameter requirements:
-            # 1. Temperature must be exactly 1.0 (only supported value)
-            # 2. top_p parameter is not supported and must be removed
-            mapped_args["temperature"] = 1.0
-            mapped_args.pop("top_p", None)
+        # Reasoning models only accept temperature 1 and reject top_p.
+        mapped_args["temperature"] = 1.0
+        mapped_args.pop("top_p", None)
 
         return mapped_args
 

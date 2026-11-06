@@ -239,6 +239,27 @@ llm = llm_factory(
 )
 ```
 
+Without them, ragas uses near-deterministic defaults (`temperature=0.01`,
+`top_p=0.1`, `max_tokens=1024`). A default that a provider rejects is dropped;
+a value you set yourself is always sent:
+
+- **OpenAI reasoning models** (o-series, GPT-5 and later, `codex-mini`, including
+  dotted versions such as `gpt-5.2` and IDs like `openai/gpt-5` or Bedrock's
+  `openai.gpt-6-sol`): `temperature` is sent as 1, `top_p` is dropped, and no
+  token cap is sent unless you set `max_tokens`, which is sent as
+  `max_completion_tokens`. The cap counts the model's hidden reasoning tokens
+  too, so set it generously.
+- **Anthropic** (Claude on any provider): the default `top_p` is never sent,
+  since current Claude models reject `temperature` and `top_p` together. If you
+  set `top_p` yourself, the default `temperature` is dropped instead.
+
+Reasoning models are detected from the model name. For an Azure deployment (or
+proxy alias) whose name doesn't say what it serves, tell ragas:
+
+```python
+llm = llm_factory("eval-deployment", provider="azure", client=client, reasoning=True)
+```
+
 ### System Prompts
 
 Both adapters support system prompts for models that require specific instructions:
