@@ -102,6 +102,9 @@ class BaseSynthesizer(ABC, t.Generic[Scenario], PromptMixin):
         scenarios = await self._generate_scenarios(
             n, knowledge_graph, persona_list, scenario_generation_group
         )
+        # n is a ceiling: implementations sample per node or cluster and can
+        # return more than asked (#81)
+        scenarios = list(scenarios)[:n]
         scenario_generation_rm.on_chain_end(outputs={"scenarios": scenarios})
         return scenarios
 

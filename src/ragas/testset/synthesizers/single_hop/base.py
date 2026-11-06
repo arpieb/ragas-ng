@@ -60,8 +60,13 @@ class SingleHopQuerySynthesizer(BaseSynthesizer[Scenario]):
         for persona, concepts in persona_concepts.items():
             concepts = [concept.lower() for concept in concepts]
             if any(term.lower() in concepts for term in terms):
-                if persona_list[persona]:
-                    valid_personas.append(persona_list[persona])
+                # the name came back from the LLM and may not match exactly;
+                # skip one that matches no persona instead of raising (#84)
+                matched = persona_list.get(persona)
+                if matched is None:
+                    logger.debug("No persona named %r; skipping it.", persona)
+                elif matched not in valid_personas:
+                    valid_personas.append(matched)
         sample["personas"] = valid_personas
         sample["styles"] = list(QueryStyle)
         sample["lengths"] = list(QueryLength)

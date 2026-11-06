@@ -51,6 +51,12 @@ generator = TestsetGenerator(llm=generator_llm, embedding_model=generator_embedd
 dataset = generator.generate_with_docs(docs, testset_size=10)
 ```
 
+`testset_size` is an upper bound. The samples are split across the query
+synthesizers in proportion to their weights and add up to exactly
+`testset_size`. If the knowledge graph can't supply that many scenarios, or
+some samples fail with `raise_exceptions=False`, you get fewer samples and a
+warning that says why.
+
 ### Analyzing the testset
 
 Once you have generated a testset, you would want to view it and select the queries you see fit to include in your final testset. You can export the testset to a pandas DataFrame and do various analysis on it.
