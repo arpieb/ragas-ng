@@ -69,6 +69,25 @@ run, including jobs from `return_executor=True`.
 - Personas generated on the first `generate()` call are still saved on the
   generator as `persona_list` and reused, but a list you supplied is no longer
   shuffled in place. New: `testset.personas` holds the personas used.
+- **Repeatable personas across runs.** Persona generation runs at
+  temperature 1.0 by design, so each new generator or script run gets a
+  different set (see [Prompt output handling](#prompt-output-handling-94)). To
+  get the same personas, and so the same mix of questions, every time, save
+  them once and pass them back:
+
+    ```python
+    import json
+    from ragas.testset.persona import Persona
+
+    # first run
+    with open("personas.json", "w") as f:
+        json.dump([p.model_dump() for p in testset.personas], f)
+
+    # later runs
+    with open("personas.json") as f:
+        personas = [Persona(**p) for p in json.load(f)]
+    generator = TestsetGenerator(llm=llm, embedding_model=emb, persona_list=personas)
+    ```
 - `with_debugging_logs=True` now turns on the `ragas.testset.*` loggers. It
   had no effect before.
 
@@ -161,8 +180,15 @@ customised prompts.
   - `generate_multiple(n=3)` makes three calls at a sampling temperature,
     0.3 unless you pass one. It used to make one call and warn.
   - A `temperature=` passed to a prompt is now used. It used to be ignored.
-    For example, testset persona generation asks for 1.0, so generated
-    personas vary more between runs.
+  - **Testset personas vary between runs again.** Persona generation has
+    asked for temperature 1.0 since it was added, so that personas come out
+    varied. That worked with the legacy LangChain-style LLM wrappers, which
+    honour the temperature. The code path for `llm_factory()` LLMs, added
+    later, dropped it, so those users got nearly the same personas every
+    time without anyone choosing that. The original design applies again: a
+    new generator or script run gets a different set of personas. To keep
+    them fixed, see
+    [Repeatable personas across runs](#testset-generation-size-failures-and-personas-81-82-84).
   - See [Metric score changes](score_changes.md#legacy-prompts-with-llm_factory-llms-n-and-temperature-apply-94).
 
 ## `@metric` function arguments ([#95](https://github.com/arpieb/ragas-ng/issues/95))
@@ -188,3 +214,29 @@ This applies to metrics created with `@discrete_metric`, `@numeric_metric`,
   warning is issued once. Before, it either crashed `score()` or called the
   function with no arguments, and the error was returned as
   `MetricResult(value=None)`.
+
+## CSV files: every row's columns, JSON cells, typed loads ([#100](https://github.com/arpieb/ragas-ng/issues/100))
+
+This applies to `LocalCSVBackend` (`"local/csv"`) and
+`EvaluationDataset.to_csv()`.
+
+- **Rows may differ.** The header is the union of every row's keys, in
+  first-seen order, and a missing value is an empty cell. Before, any row with
+  a key the first row lacked raised `ValueError: dict contains fields not in
+  fieldnames`. Because `@experiment` saves its results at the end, that lost
+  the whole run's results.
+- **⚠ silent: lists and dicts are JSON text.** Cells used to hold Python
+  `repr`, such as `['a', 'b']`. They now hold JSON, such as `["a", "b"]`. If
+  you parse these cells yourself with `ast.literal_eval`, use `json.loads`.
+- **Typed loads restore types.** `Dataset.load(..., data_model=Row)`,
+  `reload()` and `validate_with(Row)` decode each cell using the field's type
+  before validation, so lists, dicts, nested models, numbers, booleans, dates
+  and empty optional fields load back. Before, any list, dict or
+  `Optional[...] = None` field failed validation.
+- `str` fields are never changed. CSV can't tell `""` from `None`, so an
+  `Optional[str]` saved as `None` loads as `""`. Without a `data_model`, CSV
+  loads still return strings. Use `"local/jsonl"` to keep types without a
+  model.
+- `Dataset.save()` writes model rows with `model_dump(mode="json")`, so
+  values such as UUIDs, enums and paths are saved as strings, and the model
+  parses them back. Before, they could fail to save to JSONL.

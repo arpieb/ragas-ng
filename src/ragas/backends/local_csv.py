@@ -7,6 +7,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from .base import BaseBackend, resolve_resource_path
+from .flat import encode_flat_rows
 
 
 class LocalCSVBackend(BaseBackend):
@@ -28,10 +29,13 @@ class LocalCSVBackend(BaseBackend):
         root_dir: Directory path for storing CSV files
 
     Limitations:
-        - Flattens complex data structures to strings
-        - Limited data type preservation (everything becomes strings)
-        - Not suitable for nested objects, lists, or complex data
-        - Use LocalJSONLBackend for complex data structures
+        - Every value is stored as text. Lists, dicts and nested models are
+          written as JSON text; ``None`` is an empty cell.
+        - Loading with a ``data_model`` restores the types (lists, dicts,
+          nested models, numbers, booleans, dates). Loading without one
+          returns strings.
+        - A ``str`` field can't tell ``""`` from ``None``: both load as ``""``.
+        - Use LocalJSONLBackend to keep types without a model.
 
     Best For:
         - Simple tabular data with basic types (str, int, float)
@@ -86,12 +90,13 @@ class LocalCSVBackend(BaseBackend):
                 pass
             return
 
-        # Write data to CSV
+        # Every row's keys make the header, and lists/dicts are JSON text,
+        # so rows may differ and typed loads can parse them back (#100).
+        fieldnames, rows = encode_flat_rows(data)
         with open(file_path, "w", newline="", encoding="utf-8") as f:
-            fieldnames = data[0].keys()
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
-            writer.writerows(data)
+            writer.writerows(rows)
 
     def _list(self, data_type: str) -> t.List[str]:
         """List all available datasets or experiments."""
