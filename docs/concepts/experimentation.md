@@ -73,6 +73,24 @@ dataset = Dataset.load(name="test_data", backend="local/csv", root_dir="./data")
 results = await my_experiment.arun(dataset)
 ```
 
+### Concurrency and rate limits
+
+`arun` runs the rows concurrently, at most `max_workers` at a time. The default is 16, the same as `evaluate()`. Set it on the decorator, or for one run:
+
+```python
+@experiment(max_workers=4)  # every run of this experiment
+async def my_experiment(row): ...
+
+
+results = await my_experiment.arun(dataset, max_workers=2)  # this run only
+results = await my_experiment.arun(dataset, max_workers=-1)  # no limit
+```
+
+- **It limits how many rows run at once, not requests per minute.** A row that calls an LLM three times still counts as one. If your provider still returns rate-limit errors (HTTP 429), lower `max_workers`. The LLM client's own retries and backoff handle short bursts, such as the OpenAI client's `max_retries`.
+- **Sync experiment functions run in worker threads,** up to `max_workers` at once, so they don't block the event loop. If your function isn't thread-safe, use `max_workers=1`. Threads come from asyncio's default thread pool, which also caps them, at `min(32, CPU count + 4)`.
+- **Results are saved in dataset order,** whatever order the rows finish in, so row *i* of the results comes from row *i* of the dataset.
+- **A row whose function raises is left out of the results.** It is logged as a warning on the `ragas.experiment` logger, with its index and the error, and a final warning gives the number of failed rows. To keep failed rows, catch the error in your function; see [Error handling](#error-handling-in-experiments).
+
 ### Parameterized Experiments
 
 You can create parameterized experiments to test different configurations:
@@ -196,7 +214,7 @@ async def multi_stage_experiment(row):
 
 ### Error Handling in Experiments
 
-Handle errors gracefully to avoid losing partial results:
+A row whose function raises is logged and left out of the results. To keep it, with the error recorded, catch the error in the function:
 
 ```python
 @experiment()
