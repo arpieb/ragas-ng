@@ -271,3 +271,11 @@ whose prompts were customised, where the hand-off falls back to legacy (see
 - **Scores change** for any run that relied on the default. It's a different judge.
 - `gpt-6-luna` is a reasoning model, so ragas doesn't send it the low default `temperature` or `top_p`. The default goes through LiteLLM, which sends no sampling parameters, so the provider's default applies. With an OpenAI client, ragas sends `temperature=1`. Output is capped only if you set `max_tokens` (see [LLM adapters](../llm-adapters.md)). The default judge is therefore no longer near-deterministic at `temperature=0.01`, and runs vary more from one to the next.
 - OpenAI publishes no dated snapshot of `gpt-6-luna`, so the default can't be pinned. To keep scores comparable across runs and upgrades, pass your own `llm=llm_factory("<model>", ...)` with the exact model you want, and record it with your results.
+
+## Claude judges: no sampling parameters ([#177](https://github.com/arpieb/ragas-ng/issues/177))
+
+ragas no longer sends `temperature` or `top_p` to Claude unless you set them yourself. Current Claude models (verified with `claude-haiku-5-5` and `claude-sonnet-5-5`) reject both, and anthropic SDK 2.6 removed them from `messages.create()`. So `llm_factory(model, provider="anthropic", client=Anthropic())` failed on every call, and `strictness` sampling failed through LiteLLM.
+
+- **Claude judges now run at the provider's default sampling.** Before, the native-client path used `temperature=0.01` with older SDKs and models. Scores from those setups can change, and repeated runs vary more.
+- **`strictness > 1`** still draws several samples. They now differ because of Claude's default sampling, not a ragas-chosen `temperature=0.3`. ragas logs this once per LLM.
+- On the LiteLLM path, a temperature ragas chooses for sampling is sent with LiteLLM's `drop_params`. LiteLLM then drops it for models that reject it, and other providers still get it.

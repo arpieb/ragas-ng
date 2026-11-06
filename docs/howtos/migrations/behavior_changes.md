@@ -416,3 +416,10 @@ They now use each provider's listed replacement:
 - **The new OpenAI models are all reasoning models.** `llm_factory()` already maps parameters for them. Code that calls the OpenAI client directly can't send `temperature` (other than 1) or `max_tokens` (use `max_completion_tokens`). On Chat Completions, `gpt-6-luna` supports tool calls only with `reasoning_effort="none"`. The `workflow_eval` and `agent_evals` templates were updated accordingly.
 - **Docs output:** pages that show LLM output from earlier runs say so at the top. That output was produced with the old models.
 - **Your own code:** if it names any of the old IDs, switch it as well. See your provider's deprecations page.
+
+## Claude: sampling parameters ([#177](https://github.com/arpieb/ragas-ng/issues/177))
+
+- `llm_factory(..., provider="anthropic", client=Anthropic())` no longer sends ragas' default `temperature` / `top_p`. Every call with anthropic SDK 2.6 used to fail with `TypeError: ... unexpected keyword argument 'temperature'`.
+- A `temperature` or `top_p` **you** pass (`llm_factory(..., temperature=0.2)`) is still sent. On current Claude models it fails, and the provider's error says why: only `temperature=1` is accepted on older API versions, and none on API `2026-10-21`.
+- A per-call temperature ragas chooses for sampling (`strictness`, legacy prompts with `n > 1`) is not sent to Claude. Through LiteLLM it is sent with `drop_params=True`, so LiteLLM drops it where a model rejects it.
+- The planned move of every call onto LiteLLM's parameter handling is #182.
