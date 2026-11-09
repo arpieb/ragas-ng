@@ -157,6 +157,22 @@ class TestScoring:
             await metric.ascore(**kwargs)
 
 
+class TestReason:
+    @pytest.mark.asyncio
+    async def test_one_statement_reads_as_singular(self):
+        # #200: was "1 of 1 statement in the response are entailed ..."
+        metric = FaithfulnesswithHHEM(
+            llm=llm_yielding(["a"]), classifier=StubClassifier([1.0])
+        )
+        result = await metric.ascore(
+            user_input="q", response="r", retrieved_contexts=["ctx"]
+        )
+        assert result.reason.splitlines()[0] == (
+            "1 of 1 statement in the response is entailed by the retrieved "
+            "context (HHEM classifier)."
+        )
+
+
 class TestLazyModelLoading:
     """The behaviour change from legacy, which downloaded at construction."""
 

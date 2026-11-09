@@ -6,6 +6,7 @@ from typing import List
 from ragas.metrics.collections._reasons import (
     UNMATCHED_VERDICTS,
     count_phrase,
+    count_verb,
     itemized,
 )
 from ragas.metrics.collections._verdicts import judge_each
@@ -157,7 +158,8 @@ class Faithfulness(BaseMetric):
         supported = sum(1 for v in aligned if v.verdict)
         reason = itemized(
             f"{count_phrase(supported, len(aligned), 'statement')} in the response "
-            f"are supported by the retrieved context.",
+            f"{count_verb(supported, len(aligned))} supported by the retrieved "
+            f"context.",
             ((s, bool(v.verdict), v.reason) for s, v in zip(statements, aligned)),
         )
         return MetricResult(value=float(score), reason=reason)

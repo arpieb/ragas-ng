@@ -7,7 +7,7 @@ from typing import Dict, List, Literal
 import numpy as np
 
 from ragas.metrics.collections._concurrency import gather_bounded
-from ragas.metrics.collections._reasons import count_phrase, itemized
+from ragas.metrics.collections._reasons import count_phrase, count_verb, itemized
 from ragas.metrics.collections._verdicts import judge_each
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
@@ -191,7 +191,8 @@ class NoiseSensitivity(BaseMetric):
         score = float(np.mean(noisy))
         reason = itemized(
             f"{count_phrase(int(noisy.sum()), len(noisy), 'response statement')} "
-            f"are incorrect (not supported by the reference) yet supported by "
+            f"{count_verb(int(noisy.sum()), len(noisy))} incorrect (not supported "
+            f"by the reference) yet supported by "
             f"{'a relevant' if self.mode == 'relevant' else 'an irrelevant'} "
             f"retrieved context; lower is better.",
             ((stmt, not bool(flag), None) for stmt, flag in zip(ans_statements, noisy)),

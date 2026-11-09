@@ -8,6 +8,7 @@ import numpy as np
 from ragas.metrics.collections._reasons import (
     UNMATCHED_VERDICTS,
     count_phrase,
+    count_verb,
     itemized,
 )
 from ragas.metrics.collections._verdicts import judge_each
@@ -240,6 +241,7 @@ def _direction_reason(
     supported = sum(1 for v in verdicts if v.verdict)
     return itemized(
         f"{label}: {count_phrase(supported, len(verdicts), 'claim')} in the "
-        f"{source} are supported by the {against}.",
+        f"{source} {count_verb(supported, len(verdicts))} supported by the "
+        f"{against}.",
         ((v.statement, bool(v.verdict), v.reason) for v in verdicts),
     )

@@ -41,3 +41,12 @@ def count_phrase(k: int, n: int, noun: str) -> str:
     else:
         plural = noun + "s"
     return f"{k} of {n} {plural}"
+
+
+def count_verb(k: int, n: int) -> str:
+    """The verb after ``count_phrase(k, n, ...)``, agreeing with the count (#200).
+
+    ``"1 of 3 statements is"``, ``"0 of 1 statement is"``, ``"2 of 3 statements
+    are"``: singular when one item is counted or there is only one.
+    """
+    return "is" if k == 1 or n == 1 else "are"
