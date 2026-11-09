@@ -34,6 +34,7 @@ import contextlib
 import contextvars
 import json
 import logging
+import os
 import typing as t
 import uuid
 from dataclasses import dataclass, field
@@ -56,9 +57,30 @@ _OUTPUT_VALUE = "output.value"
 _RAGAS_CHAIN_TYPE = "ragas.chain.type"
 _RAGAS_RUN_ID = "ragas.run.id"
 
-# Rendered input/output is truncated before it becomes a span attribute. Traces
-# are for navigation, not for carrying a full evaluation payload over the wire.
+# Text on a span (rendered input/output, LLM messages) is truncated before it
+# becomes an attribute: traces are for navigation, not for carrying a full
+# evaluation payload -- often private data -- to a tracing service. Set
+# RAGAS_TRACE_FULL_CONTENT=true to send it in full.
 _MAX_ATTRIBUTE_CHARS = 4096
+_TRUNCATED_SUFFIX = "...[truncated]"
+TRACE_FULL_CONTENT_ENV_VAR = "RAGAS_TRACE_FULL_CONTENT"
+
+
+def trace_full_content() -> bool:
+    """Whether spans carry prompts, outputs and payloads in full (opt-in).
+
+    Read on every call, so setting ``RAGAS_TRACE_FULL_CONTENT`` in a running
+    process (a notebook) takes effect immediately.
+    """
+    value = os.environ.get(TRACE_FULL_CONTENT_ENV_VAR, "")
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def clip_for_span(text: str) -> str:
+    """``text`` as a span attribute: cut to 4096 characters unless opted in."""
+    if len(text) <= _MAX_ATTRIBUTE_CHARS or trace_full_content():
+        return text
+    return text[:_MAX_ATTRIBUTE_CHARS] + _TRUNCATED_SUFFIX
 
 
 class ChainType(Enum):
@@ -209,9 +231,7 @@ def _render(payload: t.Any) -> str:
         rendered = json.dumps(payload, cls=ChainRunEncoder, default=repr)
     except Exception:
         rendered = repr(payload)
-    if len(rendered) > _MAX_ATTRIBUTE_CHARS:
-        rendered = rendered[:_MAX_ATTRIBUTE_CHARS] + "...[truncated]"
-    return rendered
+    return clip_for_span(rendered)
 
 
 def _set_payload_attribute(span: Span, key: str, payload: t.Any) -> None:

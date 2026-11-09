@@ -17,7 +17,7 @@ from pydantic import BaseModel
 
 from ragas.async_utils import run_sync
 from ragas.cache import CacheInterface, cache_identity, cacher
-from ragas.callbacks import ChainType, current_group, traced
+from ragas.callbacks import ChainType, clip_for_span, current_group, traced
 from ragas.exceptions import LLMDidNotFinishException
 from ragas.llms._retry import acall_with_retry, call_with_retry
 from ragas.llms.output import Generation, LLMResult
@@ -982,7 +982,9 @@ class InstructorLLM(InstructorBaseRagasLLM):
                 for i, message in enumerate(self._messages(prompt)):
                     prefix = f"llm.input_messages.{i}.message"
                     span.set_attribute(f"{prefix}.role", message["role"])
-                    span.set_attribute(f"{prefix}.content", message["content"])
+                    span.set_attribute(
+                        f"{prefix}.content", clip_for_span(message["content"])
+                    )
             yield run
 
     @staticmethod
@@ -999,7 +1001,9 @@ class InstructorLLM(InstructorBaseRagasLLM):
             except Exception:
                 content = repr(result)
             span.set_attribute("llm.output_messages.0.message.role", "assistant")
-            span.set_attribute("llm.output_messages.0.message.content", content)
+            span.set_attribute(
+                "llm.output_messages.0.message.content", clip_for_span(content)
+            )
 
     def _active_usage_collector(self) -> t.Optional[t.Any]:
         """The enclosing run's collector, else one attached to this LLM."""

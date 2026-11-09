@@ -40,6 +40,7 @@ VERDICT = '{"reason": "It answers the question.", "verdict": 1}'
 @pytest.fixture(autouse=True)
 def keys(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.delenv("RAGAS_TRACE_FULL_CONTENT", raising=False)
 
 
 @pytest.fixture
@@ -118,6 +119,34 @@ def test_llm_span_carries_openinference_llm_attributes(spans):
         attrs["llm.token_count.prompt"] + attrs["llm.token_count.completion"]
     )
     assert "llm.invocation_parameters" in attrs
+
+
+LONG_ANSWER = "Paris. " * 2_000  # 14,000 characters
+
+
+def _llm_text_attributes(exporter):
+    attrs = named(exporter, "AspectCriticOutput")[0].attributes
+    return [
+        attrs["llm.input_messages.0.message.content"],
+        attrs["input.value"],
+    ]
+
+
+def test_llm_span_text_is_truncated_by_default(spans):
+    # prompts carry the eval data; it goes to the tracing service only in part
+    asyncio.run(critic().ascore(user_input="Capital?", response=LONG_ANSWER))
+    for value in _llm_text_attributes(spans):
+        assert value.endswith("...[truncated]")
+        assert len(value) <= 4096 + len("...[truncated]")
+
+
+@pytest.mark.parametrize("value", ["true", "1"])
+def test_full_llm_span_text_is_opt_in(spans, monkeypatch, value):
+    monkeypatch.setenv("RAGAS_TRACE_FULL_CONTENT", value)
+    asyncio.run(critic().ascore(user_input="Capital?", response=LONG_ANSWER))
+    for text in _llm_text_attributes(spans):
+        assert LONG_ANSWER.strip() in text
+        assert not text.endswith("...[truncated]")
 
 
 def test_sync_score_is_one_metric_span_not_two(spans):

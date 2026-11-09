@@ -19,7 +19,7 @@ Spans use the instrumentation scope `ragas` and follow the [OpenInference](https
 
 Spans nest the way the work does. An `evaluate()` run is `ragas evaluation` → `row N` → metric → LLM call. An experiment is `experiment <name>` → `row N`, with any metric scored inside your experiment function under its row. A metric scored on its own is a root span, or a child of your application's active span if there is one. Concurrent rows and calls each get their own branch.
 
-Each span carries `input.value` and `output.value` as JSON (cut to 4,096 characters) and `ragas.run.id`:
+Each span carries `input.value` and `output.value` as JSON and `ragas.run.id`:
 
 - **metric spans:** the input is the metric's arguments, and the output is its score plus the reason, for example `{"output": 1.0, "reason": "..."}`;
 - **LLM spans:** the input is the prompt, and the output is the validated response.
@@ -32,6 +32,18 @@ LLM spans also carry:
 - token counts as `llm.token_count.prompt` / `completion` / `total`.
 
 A cache hit makes no LLM call, so it has no LLM span.
+
+### What leaves your process
+
+LLM spans carry the judge's prompt, which holds your evaluation data: the question, the retrieved contexts, the response and any reference. By default, every text attribute (`input.value`, `output.value` and each message's content) is cut to its first 4,096 characters, ending in `...[truncated]`. That keeps spans under backend size limits, but what's left is still your data: if it can't go to your tracing service at all, don't configure an exporter for these runs.
+
+To send prompts and outputs in full, opt in:
+
+```bash
+export RAGAS_TRACE_FULL_CONTENT=true
+```
+
+It is read on each span, so setting `os.environ["RAGAS_TRACE_FULL_CONTENT"] = "true"` in a running notebook works too. `result.traces` stays in your process and is never truncated.
 
 LLMs that don't come from `llm_factory()` (the Haystack, OCI and LlamaIndex wrappers) emit no LLM spans of their own; their prompts still have prompt spans.
 
