@@ -94,7 +94,10 @@ Let's examine how faithfulness was calculated using the low faithfulness answer:
 
 [Vectara's HHEM-2.1-Open](https://vectara.com/blog/hhem-2-1-a-better-hallucination-detection-model/) is a classifier model (T5) that is trained to detect hallucinations from LLM generated text. This model can be used in the second step of calculating faithfulness, i.e. when claims are cross-checked with the given context to determine if it can be inferred from the context. The model is free, small, and open-source, making it very efficient in production use cases.
 
-It needs `transformers`, which ragas does not install by default (`pip install transformers`). The model is loaded with `trust_remote_code=True`, so loading it runs code published on the HuggingFace Hub. The LLM is still used for the first step, breaking the response into statements.
+It needs `transformers`, which ragas does not install by default (`pip install transformers`). The model is loaded with `trust_remote_code=True`, so loading it runs code published on the HuggingFace Hub. ragas pins that code to a reviewed commit of the model repo, so a new push there doesn't change what runs; pass `revision=` to load a different one. The LLM is still used for the first step, breaking the response into statements.
+
+!!! note "HHEM checks only what the context states"
+    HHEM is a strict entailment model: a statement counts as supported only if the context says it. The LLM-judged `Faithfulness` above also credits statements the context implies through outside knowledge. Against a context that names only the "First AFL–NFL World Championship Game", "The first Super Bowl was held on January 15, 1967" scores 1 with `Faithfulness` but 0 with HHEM (classifier probability 0.03), because the context never says that game was the Super Bowl. Add "later known as Super Bowl I" to the context and HHEM gives it 0.93.
 
 ```python
 from openai import AsyncOpenAI
@@ -109,10 +112,16 @@ result = await scorer.ascore(
     user_input="When was the first super bowl?",
     response="The first superbowl was held on Jan 15, 1967",
     retrieved_contexts=[
-        "The First AFL–NFL World Championship Game was an American football game played on January 15, 1967, at the Los Angeles Memorial Coliseum in Los Angeles."
+        "The First AFL–NFL World Championship Game, later known as Super Bowl I, was an American football game played on January 15, 1967, at the Los Angeles Memorial Coliseum in Los Angeles."
     ],
 )
 print(f"Faithfulness (HHEM) Score: {result.value}")
+```
+
+Output:
+
+```
+Faithfulness (HHEM) Score: 1.0
 ```
 
 You can load the model onto a specific device with `device`, and set the inference batch size with `batch_size`. By default the model runs on the CPU with a batch size of 10:
@@ -167,7 +176,7 @@ sample = SingleTurnSample(
     user_input="When was the first super bowl?",
     response="The first superbowl was held on Jan 15, 1967",
     retrieved_contexts=[
-        "The First AFL–NFL World Championship Game was an American football game played on January 15, 1967, at the Los Angeles Memorial Coliseum in Los Angeles."
+        "The First AFL–NFL World Championship Game, later known as Super Bowl I, was an American football game played on January 15, 1967, at the Los Angeles Memorial Coliseum in Los Angeles."
     ],
 )
 scorer = FaithfulnesswithHHEM(llm=evaluator_llm)

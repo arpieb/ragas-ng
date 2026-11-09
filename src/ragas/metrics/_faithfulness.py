@@ -227,8 +227,13 @@ class FaithfulnesswithHHEM(Faithfulness):
             raise ImportError(
                 "Huggingface transformers must be installed to use this feature, try `pip install transformers`"
             )
+        from ragas.metrics.collections.faithfulness_hhem.metric import (
+            HHEM_MODEL,
+            HHEM_REVISION,
+        )
+
         self.nli_classifier = AutoModelForSequenceClassification.from_pretrained(
-            "vectara/hallucination_evaluation_model", trust_remote_code=True
+            HHEM_MODEL, trust_remote_code=True, revision=HHEM_REVISION
         )
         self.nli_classifier.to(self.device)
         super().__post_init__()

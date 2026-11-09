@@ -13,6 +13,8 @@ legacy, where the model was fetched at construction.
 
 from __future__ import annotations
 
+import sys
+import types
 import typing as t
 from unittest.mock import MagicMock
 
@@ -172,6 +174,56 @@ class TestLazyModelLoading:
         metric = FaithfulnesswithHHEM(llm=llm_yielding(["a"]))
         with pytest.raises(ImportError, match="pip install transformers"):
             _ = metric.classifier
+
+
+class FakeAutoModel:
+    """Records from_pretrained(...) calls in place of transformers' loader."""
+
+    calls: t.List[t.Dict[str, t.Any]] = []
+
+    @classmethod
+    def from_pretrained(cls, name, **kwargs):
+        cls.calls.append({"name": name, **kwargs})
+        return MagicMock()
+
+
+@pytest.fixture
+def fake_transformers(monkeypatch):
+    module = types.ModuleType("transformers")
+    module.AutoModelForSequenceClassification = FakeAutoModel  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "transformers", module)
+    FakeAutoModel.calls = []
+    return FakeAutoModel.calls
+
+
+class TestPinnedRemoteCode:
+    """trust_remote_code runs the Hub's modeling file: load a reviewed commit (#195)."""
+
+    def test_the_default_load_is_pinned_to_a_commit(self, fake_transformers):
+        from ragas.metrics.collections.faithfulness_hhem.metric import HHEM_REVISION
+
+        _ = FaithfulnesswithHHEM(llm=llm_yielding(["a"])).classifier
+        assert fake_transformers == [
+            {
+                "name": "vectara/hallucination_evaluation_model",
+                "trust_remote_code": True,
+                "revision": HHEM_REVISION,
+            }
+        ]
+        assert len(HHEM_REVISION) == 40  # a full commit SHA, not a branch
+
+    def test_another_revision_can_be_chosen(self, fake_transformers):
+        metric = FaithfulnesswithHHEM(llm=llm_yielding(["a"]), revision="abc123")
+        _ = metric.classifier
+        assert fake_transformers[0]["revision"] == "abc123"
+
+    def test_the_legacy_metric_loads_the_same_commit(self, fake_transformers):
+        from ragas.metrics import FaithfulnesswithHHEM as LegacyHHEM
+        from ragas.metrics.collections.faithfulness_hhem.metric import HHEM_REVISION
+
+        LegacyHHEM()
+        assert fake_transformers[0]["revision"] == HHEM_REVISION
+        assert fake_transformers[0]["trust_remote_code"] is True
 
 
 class TestRunsThroughEvaluate:

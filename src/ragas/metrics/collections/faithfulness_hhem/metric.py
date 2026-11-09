@@ -10,6 +10,10 @@ if t.TYPE_CHECKING:
     from ragas.llms.base import InstructorBaseRagasLLM
 
 HHEM_MODEL = "vectara/hallucination_evaluation_model"
+# The Hub commit whose remote code (modeling_hhem_v2.py) was reviewed: "Support
+# transformers 5", 2026-10-06. Loading with trust_remote_code runs that file, so
+# it is pinned rather than fetched fresh from main on every load (#195).
+HHEM_REVISION = "de9a5e6ba9ba49531a022dba17e35ffeb2a6fad8"
 
 
 class FaithfulnesswithHHEM(Faithfulness):
@@ -26,7 +30,16 @@ class FaithfulnesswithHHEM(Faithfulness):
         The model is loaded with ``trust_remote_code=True``, so importing it
         executes code published on the HuggingFace Hub. That is required by this
         model's architecture, and it is what the legacy metric always did, but
-        it is worth knowing before adding this to a pipeline.
+        it is worth knowing before adding this to a pipeline. The code is pinned
+        to a reviewed commit (``revision``), so a new push to the model repo does
+        not change what runs.
+
+    !!! note "Checks only what the context states"
+        HHEM is a strict entailment model: a statement is supported only if the
+        context says it. The LLM-judged :class:`Faithfulness` also credits a
+        statement the context implies through outside knowledge, e.g. that the
+        "First AFL-NFL World Championship Game" was the first Super Bowl; HHEM
+        scores that 0.
 
     Requires ``transformers``, which ragas does not install by default:
 
@@ -69,6 +82,7 @@ class FaithfulnesswithHHEM(Faithfulness):
         device: str = "cpu",
         batch_size: int = 10,
         classifier: t.Optional[t.Any] = None,
+        revision: str = HHEM_REVISION,
         **kwargs,
     ):
         """
@@ -79,11 +93,14 @@ class FaithfulnesswithHHEM(Faithfulness):
             batch_size: Statements per forward pass
             classifier: A pre-built model. Supplying one skips the download --
                 useful for tests and for pinning a local copy.
+            revision: The Hub commit of the model (and of the remote code it
+                runs) to load. Defaults to the reviewed ``HHEM_REVISION``.
         """
         super().__init__(llm=llm, name=name, **kwargs)
         self.device = device
         self.batch_size = batch_size
         self._classifier = classifier
+        self.revision = revision
 
     @property
     def classifier(self) -> t.Any:
@@ -100,7 +117,7 @@ class FaithfulnesswithHHEM(Faithfulness):
                 ) from e
 
             model = AutoModelForSequenceClassification.from_pretrained(
-                HHEM_MODEL, trust_remote_code=True
+                HHEM_MODEL, trust_remote_code=True, revision=self.revision
             )
             model.to(self.device)
             self._classifier = model

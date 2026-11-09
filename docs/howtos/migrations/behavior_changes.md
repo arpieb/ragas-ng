@@ -508,3 +508,9 @@ Collections metrics, `llm_factory()` LLMs and `@experiment` take no `callbacks`,
 - Span payloads render pydantic models as JSON fields instead of `repr()`.
 
 Without an OpenTelemetry SDK, spans are still no-ops. The LLM call is unchanged unless a usage collector or a recording span needs the provider's raw response for token counts.
+
+## `FaithfulnesswithHHEM` loads a pinned model commit ([#195](https://github.com/arpieb/ragas-ng/issues/195))
+
+The HHEM model is loaded with `trust_remote_code=True`, which runs the model repo's `modeling_hhem_v2.py`. Both `FaithfulnesswithHHEM` metrics (collections and legacy) used to load it from the repo's `main`, so a new push there changed the code ragas ran with no ragas change. They now load commit `de9a5e6` ("Support transformers 5", 2026-10-06), which was reviewed. The collections metric takes `revision=` to load another. Scores are unchanged: on the model card's examples, this commit gives the card's published scores under both transformers 4.57 and 5.17.
+
+The reported 0.0 for "The first superbowl was held on Jan 15, 1967" is HHEM working as designed. The example's context names only the "First AFL–NFL World Championship Game", and HHEM, a strict entailment model, does not credit what the context leaves to outside knowledge. The docs example now uses a context that states it.
