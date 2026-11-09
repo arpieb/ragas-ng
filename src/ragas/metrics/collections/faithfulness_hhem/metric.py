@@ -2,7 +2,7 @@
 
 import typing as t
 
-from ragas.metrics.collections._reasons import count_phrase, itemized
+from ragas.metrics.collections._reasons import count_phrase, count_verb, itemized
 from ragas.metrics.collections.faithfulness import Faithfulness
 from ragas.metrics.result import MetricResult
 
@@ -179,7 +179,8 @@ class FaithfulnesswithHHEM(Faithfulness):
         supported = sum(1 for sc in scores if sc)
         reason = itemized(
             f"{count_phrase(supported, len(scores), 'statement')} in the response "
-            f"are entailed by the retrieved context (HHEM classifier).",
+            f"{count_verb(supported, len(scores))} entailed by the retrieved "
+            f"context (HHEM classifier).",
             ((st, bool(sc), None) for st, sc in zip(statements, scores)),
         )
         return MetricResult(value=sum(scores) / len(scores), reason=reason)

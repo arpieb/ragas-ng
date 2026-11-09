@@ -146,7 +146,7 @@ async def test_faithfulness_reason_lists_each_statement():
     )
     assert r.value == 0.5
     assert r.reason.splitlines() == [
-        "1 of 2 statements in the response are supported by the retrieved context.",
+        "1 of 2 statements in the response is supported by the retrieved context.",
         "- [supported] Paris is in France.: stated",
         "- [not supported] Paris has 90 million people.: population not mentioned",
     ]
@@ -175,8 +175,8 @@ async def test_factual_correctness_reason_covers_both_directions():
     llm = scripted({fc.ClaimDecompositionOutput: decompose, fc.NLIStatementOutput: nli})
     r = await C.FactualCorrectness(llm=llm).ascore(response="RESPONSE", reference="REF")
     assert r.value == 1.0
-    assert "Precision: 2 of 2 claims in the response" in r.reason
-    assert "Recall: 2 of 2 claims in the reference" in r.reason
+    assert "Precision: 2 of 2 claims in the response are supported" in r.reason
+    assert "Recall: 2 of 2 claims in the reference are supported" in r.reason
     assert "- [supported] ref claim 1: why ref claim 1" in r.reason
 
 
@@ -198,7 +198,9 @@ async def test_context_recall_reason():
         user_input="q", retrieved_contexts=["ctx"], reference="A is B. C is D."
     )
     assert r.value == 0.5
-    assert "1 of 2 sentences of the reference" in r.reason
+    assert r.reason.splitlines()[0] == (
+        "1 of 2 sentences of the reference is attributable to the retrieved context."
+    )
     assert "- [not attributed] C is D.: absent" in r.reason
 
 
@@ -352,3 +354,20 @@ async def test_topic_adherence_reason():
 )
 def test_count_phrase(k, n, noun, expected):
     assert count_phrase(k, n, noun) == expected
+
+
+@pytest.mark.parametrize(
+    "k, n, expected",
+    [
+        (1, 1, "is"),  # 1 of 1 statement is
+        (0, 1, "is"),  # 0 of 1 statement is
+        (1, 3, "is"),  # 1 of 3 statements is
+        (0, 2, "are"),  # 0 of 2 statements are
+        (2, 3, "are"),  # 2 of 3 statements are
+    ],
+)
+def test_count_verb_agrees_with_the_count(k, n, expected):
+    # #200: the reasons used to say "1 of 1 statement ... are"
+    from ragas.metrics.collections._reasons import count_verb
+
+    assert count_verb(k, n) == expected

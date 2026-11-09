@@ -8,6 +8,7 @@ import numpy as np
 from ragas.metrics.collections._reasons import (
     UNMATCHED_VERDICTS,
     count_phrase,
+    count_verb,
     itemized,
 )
 from ragas.metrics.collections._text import split_sentences
@@ -151,7 +152,8 @@ class ContextRecall(BaseMetric):
         score = attributed / len(aligned)
         reason = itemized(
             f"{count_phrase(attributed, len(aligned), 'sentence')} of the reference "
-            f"are attributable to the retrieved context.",
+            f"{count_verb(attributed, len(aligned))} attributable to the retrieved "
+            f"context.",
             ((s, bool(c.attributed), c.reason) for s, c in zip(statements, aligned)),
             yes="attributed",
             no="not attributed",

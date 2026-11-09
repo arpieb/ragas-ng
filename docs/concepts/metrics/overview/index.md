@@ -160,7 +160,7 @@ result = await Faithfulness(llm=llm).ascore(
 )
 print(result.value)  # 0.5
 print(result.reason)
-# 1 of 2 statements in the response are supported by the retrieved context.
+# 1 of 2 statements in the response is supported by the retrieved context.
 # - [supported] The Eiffel Tower is in Paris.: the context places it in Paris
 # - [not supported] The Eiffel Tower is 500 m tall.: the context says 330 m
 ```
