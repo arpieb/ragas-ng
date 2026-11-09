@@ -90,6 +90,38 @@ Let's examine how faithfulness was calculated using the low faithfulness answer:
     $$
 
 
+### Faithfulness with HHEM-2.1-Open
+
+[Vectara's HHEM-2.1-Open](https://vectara.com/blog/hhem-2-1-a-better-hallucination-detection-model/) is a classifier model (T5) that is trained to detect hallucinations from LLM generated text. This model can be used in the second step of calculating faithfulness, i.e. when claims are cross-checked with the given context to determine if it can be inferred from the context. The model is free, small, and open-source, making it very efficient in production use cases.
+
+It needs `transformers`, which ragas does not install by default (`pip install transformers`). The model is loaded with `trust_remote_code=True`, so loading it runs code published on the HuggingFace Hub. The LLM is still used for the first step, breaking the response into statements.
+
+```python
+from openai import AsyncOpenAI
+from ragas.llms import llm_factory
+from ragas.metrics.collections import FaithfulnesswithHHEM
+
+llm = llm_factory("gpt-6-luna", client=AsyncOpenAI())
+
+scorer = FaithfulnesswithHHEM(llm=llm)
+
+result = await scorer.ascore(
+    user_input="When was the first super bowl?",
+    response="The first superbowl was held on Jan 15, 1967",
+    retrieved_contexts=[
+        "The First AFL–NFL World Championship Game was an American football game played on January 15, 1967, at the Los Angeles Memorial Coliseum in Los Angeles."
+    ],
+)
+print(f"Faithfulness (HHEM) Score: {result.value}")
+```
+
+You can load the model onto a specific device with `device`, and set the inference batch size with `batch_size`. By default the model runs on the CPU with a batch size of 10:
+
+```python
+scorer = FaithfulnesswithHHEM(llm=llm, device="cuda:0", batch_size=10)
+```
+
+
 ## Legacy Metrics API
 
 The following examples use the legacy metrics API pattern. For new projects, we recommend using the collections-based API shown above.
@@ -120,9 +152,9 @@ Output:
 1.0
 ```
 
-### Faithfulness with HHEM-2.1-Open
+### Faithfulness with HHEM-2.1-Open (legacy)
 
-[Vectara's HHEM-2.1-Open](https://vectara.com/blog/hhem-2-1-a-better-hallucination-detection-model/) is a classifier model (T5) that is trained to detect hallucinations from LLM generated text. This model can be used in the second step of calculating faithfulness, i.e. when claims are cross-checked with the given context to determine if it can be inferred from the context. The model is free, small, and open-source, making it very efficient in production use cases.
+See [Faithfulness with HHEM-2.1-Open](#faithfulness-with-hhem-21-open) above for the collections version.
 
 To use the model to calculate faithfulness:
 
@@ -148,6 +180,8 @@ You can load the model onto a specified device by setting the `device` argument 
 my_device = "cuda:0"
 my_batch_size = 10
 
-scorer = FaithfulnesswithHHEM(device=my_device, batch_size=my_batch_size)
+scorer = FaithfulnesswithHHEM(
+    llm=evaluator_llm, device=my_device, batch_size=my_batch_size
+)
 await scorer.single_turn_ascore(sample)
 ```

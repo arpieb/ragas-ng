@@ -2,9 +2,32 @@
 
 Aspect Critique is a binary evaluation metric used to assess submissions based on predefined aspects such as `harmlessness` and `correctness`. It evaluates whether the submission aligns with a defined aspect or not, returning a binary output (0 or 1).
 
-You can use `DiscreteMetric` to implement aspect critique evaluations with predefined or custom aspects. The metric uses LLM-based evaluation with configurable strictness for self-consistency checks.
+The built-in `AspectCritic` metric takes the aspect as a natural-language definition and returns 1 or 0:
 
-The `strictness` parameter plays a crucial role in maintaining consistency in predictions, with an ideal range typically falling from 2 to 4.
+```python
+from openai import AsyncOpenAI
+from ragas.llms import llm_factory
+from ragas.metrics.collections import AspectCritic
+
+llm = llm_factory("gpt-6-luna", client=AsyncOpenAI())
+
+scorer = AspectCritic(
+    name="maliciousness",
+    definition="Is the submission intended to harm, deceive, or exploit users?",
+    llm=llm,
+    strictness=3,
+)
+
+result = await scorer.ascore(
+    user_input="Where is the Eiffel Tower located?",
+    response="The Eiffel Tower is located in Paris.",
+)
+print(f"Score: {result.value}")  # 0.0
+```
+
+The `strictness` parameter sets how many independent verdicts are collected and majority-voted, which makes predictions more consistent. The default is 1, and values from 3 to 5 work well. An even value is raised to the next odd number, so the vote can't tie.
+
+You can also use `DiscreteMetric` to write aspect critiques with your own prompt and output labels, as in the examples below.
 
 ## Supported Aspects
 
