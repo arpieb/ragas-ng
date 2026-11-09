@@ -291,3 +291,7 @@ Without a `mode`, Claude now returns structured output as JSON, not through a fo
 - **LLMs built without a client** (`llm_factory("ollama/...")`, `"gemini/..."`, ...) now get ragas' near-deterministic defaults, `temperature=0.01` and `top_p=0.1`, where they used to get the provider's defaults. Their scores vary less from run to run and may shift. Reasoning models and Claude are unaffected: their sampling defaults are still dropped.
 - **LLMs built with an OpenAI or Azure client** no longer get a default `max_tokens=1024`. Answers that were cut off at 1024 tokens, which usually failed to parse and scored NaN, now complete.
 - **Gemini, Anthropic, Mistral, Groq and Cohere users** moving from a native client to a model string go through LiteLLM's request mapping instead of instructor's native integration. Prompts and schemas are unchanged, so scores should be close.
+
+## Default embeddings for Gemini and Vertex LLMs ([#190](https://github.com/arpieb/ragas-ng/issues/190))
+
+With `llm_factory("gemini/...")` or `llm_factory("vertex_ai/...")` and no `embeddings=`, `evaluate()` now uses `gemini-embedding-2` instead of OpenAI's `text-embedding-ada-002` (see [Behavior changes](behavior_changes.md#evaluate-default-embeddings-follow-a-litellm-llms-provider-190)). Embedding-based scores (`AnswerRelevancy`, `AnswerCorrectness`'s similarity part, `SemanticSimilarity`) change, because a different model gives different similarities. Those runs needed `OPENAI_API_KEY` before. Pass `embeddings=` to keep a fixed model across runs.

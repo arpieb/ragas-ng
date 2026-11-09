@@ -660,7 +660,7 @@ def embedding_factory(
         model_name = (
             provider
             if _looks_like_model_name(provider)
-            else (model or "text-embedding-ada-002")
+            else (model or DEFAULT_OPENAI_EMBEDDING_MODEL)
         )
         if base_url is not None:
             kwargs["api_base"] = base_url
@@ -676,6 +676,69 @@ def embedding_factory(
     result = _create_modern_embedding(provider, model, client, **kwargs)
 
     return result
+
+
+# Default embedding models for an llm_factory() LLM with no client, by its
+# LiteLLM prefix (#190). Only providers whose own embedding model is the
+# obvious match are listed; checked 2026-11-09 against Google's model pages
+# (both GA) and scripts/model_registry.toml.
+DEFAULT_OPENAI_EMBEDDING_MODEL = "text-embedding-ada-002"
+_LITELLM_EMBEDDING_DEFAULTS = {
+    "gemini": "gemini/gemini-embedding-2",
+    "vertex_ai": "vertex_ai/gemini-embedding-2",
+}
+# llm_factory() arguments that address the provider rather than tune the
+# completion; the default embeddings reuse them (a Vertex project, a key).
+_SHARED_PROVIDER_ARGS = (
+    "api_key",
+    "api_base",
+    "vertex_project",
+    "vertex_location",
+    "vertex_credentials",
+)
+
+
+def _default_embedding_model_for(model: str) -> t.Optional[str]:
+    """The default embedding model for a LiteLLM model string, if there is one.
+
+    Bare names and ``openai/`` are OpenAI models: OpenAI's default. Providers
+    in ``_LITELLM_EMBEDDING_DEFAULTS`` get their own. Anything else (``ollama/``,
+    ``anthropic/``, ...) has no default: ``None``.
+    """
+    prefix, sep, _ = model.partition("/")
+    if not sep or prefix == "openai":
+        return DEFAULT_OPENAI_EMBEDDING_MODEL
+    return _LITELLM_EMBEDDING_DEFAULTS.get(prefix)
+
+
+def default_embeddings_for_litellm_llm(llm: t.Any) -> BaseRagasEmbedding:
+    """Embeddings for ``evaluate()`` to use with a client-less LiteLLM LLM (#190).
+
+    ``llm_factory("gemini/...")`` gets Gemini embeddings and
+    ``llm_factory("vertex_ai/...")`` Vertex ones, with the LLM's key / project
+    arguments, so a Gemini-only setup needs no ``OPENAI_API_KEY``. A provider
+    with no default (Ollama, Anthropic, ...) falls back to OpenAI's model, as
+    before, with a warning to pass ``embeddings=``.
+    """
+    from ragas.embeddings.litellm_provider import LiteLLMEmbeddings
+
+    model = str(getattr(llm, "model", "") or "")
+    embedding_model = _default_embedding_model_for(model)
+    if embedding_model is None:
+        warnings.warn(
+            f"No default embedding model for {model!r}, so evaluate() is using "
+            f"OpenAI's {DEFAULT_OPENAI_EMBEDDING_MODEL}, which needs "
+            "OPENAI_API_KEY. Pass your own: evaluate(..., embeddings="
+            "embedding_factory('litellm', model='<provider>/<embedding model>')).",
+            UserWarning,
+            stacklevel=3,
+        )
+        return LiteLLMEmbeddings(model=DEFAULT_OPENAI_EMBEDDING_MODEL)
+    model_args = getattr(llm, "model_args", None) or {}
+    shared = {k: model_args[k] for k in _SHARED_PROVIDER_ARGS if k in model_args}
+    if embedding_model == DEFAULT_OPENAI_EMBEDDING_MODEL:
+        shared = {}  # as before: OpenAI credentials come from the environment
+    return LiteLLMEmbeddings(model=embedding_model, **shared)
 
 
 # Model name patterns for backward compatibility detection

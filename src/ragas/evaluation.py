@@ -27,6 +27,7 @@ from ragas.embeddings.base import (
     BaseRagasEmbedding,
     BaseRagasEmbeddings,
     _infer_embedding_provider_from_llm,
+    default_embeddings_for_litellm_llm,
     embedding_factory,
 )
 from ragas.exceptions import ExceptionInRunner
@@ -235,10 +236,9 @@ async def _aevaluate(
                 inferred_provider = _infer_embedding_provider_from_llm(llm)
                 if inferred_provider == "litellm":
                     # A litellm-backed LLM's `.client` is an instructor-wrapped
-                    # completion function, not an embeddings client, and litellm
-                    # needs an embedding model name that the LLM cannot supply.
-                    # Fall back to the provider-neutral default.
-                    embeddings = embedding_factory()
+                    # completion function, not an embeddings client. Pick the
+                    # embedding model from the LLM's provider prefix (#190).
+                    embeddings = default_embeddings_for_litellm_llm(llm)
                 else:
                     # the caller's own client (llm_factory keeps it as
                     # source_client), not the instructor wrapper around it

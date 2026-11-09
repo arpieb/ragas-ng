@@ -518,3 +518,14 @@ The reported 0.0 for "The first superbowl was held on Jan 15, 1967" is HHEM work
 ## Metric reasons: the verb agrees with the count ([#200](https://github.com/arpieb/ragas-ng/issues/200))
 
 The first line of `MetricResult.reason` for `Faithfulness`, `FaithfulnesswithHHEM`, `FactualCorrectness`, `NoiseSensitivity` and `ContextRecall` always said "are" after the count, as in "1 of 1 statement in the response are entailed". The verb is now "is" when one item is counted or there is only one ("1 of 2 statements … is supported", "0 of 1 statement … is"), and "are" otherwise. Scores are unchanged. Code that matches on the exact reason text may need updating.
+
+## `evaluate()`: default embeddings follow a LiteLLM LLM's provider ([#190](https://github.com/arpieb/ragas-ng/issues/190))
+
+When a metric needs embeddings and none are passed, `evaluate()` used to give every client-less `llm_factory()` LLM OpenAI's `text-embedding-ada-002`, so `llm_factory("gemini/...")` with `AnswerRelevancy` or `AnswerCorrectness` needed `OPENAI_API_KEY`. The embedding model now comes from the LLM's prefix:
+
+- `gemini/...` gets `gemini/gemini-embedding-2`, using the LLM's `api_key` if it was given one.
+- `vertex_ai/...` gets `vertex_ai/gemini-embedding-2`, with the LLM's `vertex_project`, `vertex_location` and `vertex_credentials`.
+- Bare and `openai/` names keep `text-embedding-ada-002`.
+- Other providers (`ollama/`, `anthropic/`, `bedrock/`, ...) also keep it, but now with a `UserWarning` that says to pass `embeddings=`.
+
+**⚠ Scores change** for Gemini and Vertex users of embedding metrics who relied on the default, since a different embedding model gives different similarities. Pass `embeddings=` to keep the old model. LLMs built with an OpenAI or Azure client are unchanged: they still take embeddings from that client.
