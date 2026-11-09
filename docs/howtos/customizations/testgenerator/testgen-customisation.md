@@ -119,7 +119,7 @@ Applying KeyphrasesExtractor:  89%|███████████████
 
 ### Configure personas
 
-You can also do this automatically by using the [automatic persona generator](./_persona_generator.md)
+You can also do this automatically by using the [automatic persona generator](./persona_generator.md)
 
 
 ```python
