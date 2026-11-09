@@ -72,11 +72,16 @@ embeddings = GoogleEmbeddings(model="gemini-embedding-001")  # pip install googl
 # embeddings = GoogleEmbeddings(client=genai.Client(), model="gemini-embedding-001")
 ```
 
-!!! warning "Pass embeddings explicitly"
-    With no `embeddings`, `evaluate()` falls back to ragas' default, OpenAI's
-    `text-embedding-ada-002` through LiteLLM, which needs `OPENAI_API_KEY`. For
-    a Gemini-only setup, pass Google embeddings to `evaluate(..., embeddings=...)`
-    or to each metric.
+!!! note "evaluate()'s default embeddings follow the LLM"
+    When a metric needs embeddings and you pass none, `evaluate()` picks them
+    from the LLM. For `llm_factory("gemini/...")` that's
+    `gemini/gemini-embedding-2` through LiteLLM, with the same `GEMINI_API_KEY`
+    (or `api_key=`), so a Gemini-only setup needs no `OPENAI_API_KEY`.
+    `llm_factory("vertex_ai/...")` gets `vertex_ai/gemini-embedding-2` with the
+    LLM's `vertex_project` / `vertex_location`. An LLM built on an OpenAI
+    client pointed at Gemini's endpoint, as above, still asks that client for
+    an OpenAI embedding model, which Gemini's endpoint doesn't serve, so pass
+    `embeddings=` there.
 
 ## Example
 

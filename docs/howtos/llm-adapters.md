@@ -24,6 +24,19 @@ llm = llm_factory("ollama/qwen3.8:27b", api_base="http://gpu-box:11434")
 
 `provider=` prefixes a bare model name: `llm_factory("llama3", provider="ollama")` is `"ollama/llama3"`. `"openai"`, the default, adds no prefix.
 
+### Default embeddings in `evaluate()`
+
+When a metric needs embeddings and you pass none, `evaluate()` picks them from the LLM's prefix:
+
+| LLM | Default embeddings (through LiteLLM) |
+|---|---|
+| bare name or `openai/...` | `text-embedding-ada-002` (`OPENAI_API_KEY`) |
+| `gemini/...` | `gemini/gemini-embedding-2`, with the LLM's `api_key` if given |
+| `vertex_ai/...` | `vertex_ai/gemini-embedding-2`, with the LLM's `vertex_project` / `vertex_location` |
+| anything else (`ollama/`, `anthropic/`, `bedrock/`, ...) | `text-embedding-ada-002`, with a warning to pass `embeddings=` |
+
+Pass `embeddings=embedding_factory("litellm", model="<provider>/<embedding model>")` to choose your own.
+
 ## Bringing your own client
 
 Two kinds of client are accepted:
