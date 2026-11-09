@@ -97,7 +97,7 @@ Let's examine how faithfulness was calculated using the low faithfulness answer:
 It needs `transformers`, which ragas does not install by default (`pip install transformers`). The model is loaded with `trust_remote_code=True`, so loading it runs code published on the HuggingFace Hub. ragas pins that code to a reviewed commit of the model repo, so a new push there doesn't change what runs; pass `revision=` to load a different one. The LLM is still used for the first step, breaking the response into statements.
 
 !!! note "HHEM checks only what the context states"
-    HHEM is a strict entailment model: a statement counts as supported only if the context says it. The LLM-judged `Faithfulness` above also credits statements the context implies through outside knowledge. Against a context that names only the "First AFL–NFL World Championship Game", "The first Super Bowl was held on January 15, 1967" scores 1 with `Faithfulness` but 0 with HHEM, because the context never says that game was the Super Bowl.
+    HHEM is a strict entailment model: a statement counts as supported only if the context says it. The LLM-judged `Faithfulness` above also credits statements the context implies through outside knowledge. Against a context that names only the "First AFL–NFL World Championship Game", "The first Super Bowl was held on January 15, 1967" scores 1 with `Faithfulness` but 0 with HHEM (classifier probability 0.03), because the context never says that game was the Super Bowl. Add "later known as Super Bowl I" to the context and HHEM gives it 0.93.
 
 ```python
 from openai import AsyncOpenAI
