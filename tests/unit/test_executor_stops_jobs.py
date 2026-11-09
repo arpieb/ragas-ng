@@ -29,6 +29,21 @@ class Boom(Exception):
     pass
 
 
+def _unawaited_during(run) -> list:
+    """The "never awaited" warnings raised while ``run()`` runs.
+
+    Collects garbage first, so a coroutine another test leaked warns before
+    the window opens rather than inside it (CI on #209 caught one from
+    test_async_evaluation's mocked run_sync).
+    """
+    gc.collect()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        run()
+        gc.collect()
+    return [str(w.message) for w in caught if "never awaited" in str(w.message)]
+
+
 def _jobs(log, slow=0.3):
     async def job(i):
         if i == 0:
@@ -133,11 +148,7 @@ def test_cancelling_leaves_no_coroutine_unawaited():
         asyncio.create_task(cancel_soon())
         await executor.aresults()
 
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        asyncio.run(main())
-        gc.collect()
-    assert not [w for w in caught if "never awaited" in str(w.message)]
+    assert not _unawaited_during(lambda: asyncio.run(main()))
 
 
 def test_as_completed_cancel_path_leaves_no_coroutine_unawaited():
@@ -153,13 +164,9 @@ def test_as_completed_cancel_path_leaves_no_coroutine_unawaited():
         ):
             seen.append(await future)
         await asyncio.sleep(0)
-        return seen
+        assert seen == [0]
 
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        assert asyncio.run(main()) == [0]
-        gc.collect()
-    assert not [w for w in caught if "never awaited" in str(w.message)]
+    assert not _unawaited_during(lambda: asyncio.run(main()))
 
 
 @pytest.mark.parametrize("batch_size", [None, 2])
