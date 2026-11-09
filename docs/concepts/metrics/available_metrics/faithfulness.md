@@ -118,6 +118,12 @@ result = await scorer.ascore(
 print(f"Faithfulness (HHEM) Score: {result.value}")
 ```
 
+Output:
+
+```
+Faithfulness (HHEM) Score: 1.0
+```
+
 You can load the model onto a specific device with `device`, and set the inference batch size with `batch_size`. By default the model runs on the CPU with a batch size of 10:
 
 ```python
