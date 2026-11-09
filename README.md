@@ -27,7 +27,7 @@
 Changes so far:
 
 - **No LangChain.** `import ragas` loads no LangChain modules, and nothing LangChain-related is installed as a dependency. The LangChain, LangSmith, LangGraph and Opik integrations are gone. See the [LangChain migration guide](docs/howtos/migrations/migrate_off_langchain.md).
-- **Provider-neutral by default.** `openai` is no longer a declared dependency. `llm_factory()` and `embedding_factory()` work without a client and route through [LiteLLM](https://github.com/BerriAI/litellm), so any provider LiteLLM supports works out of the box.
+- **Provider-neutral by default.** `openai` is no longer a declared dependency. Every `llm_factory()` call goes through [LiteLLM](https://github.com/BerriAI/litellm), addressed by model name (`"anthropic/claude-sonnet-5-5"`, `"gemini/gemini-3.6-flash"`, `"ollama/..."`), so any provider LiteLLM supports works without its SDK. `embedding_factory()` works without a client too.
 - **Native tracing.** The LangChain callback system has been replaced by a native run tree plus the OpenTelemetry API. Spans cost nothing until you configure an OpenTelemetry SDK.
 - **Collections metrics everywhere.** Metrics have been ported to `ragas.metrics.collections`, including the non-LLM context metrics, AspectCritic, SimpleCriteriaScore and FaithfulnesswithHHEM, and `evaluate()` accepts them directly. The legacy metric singletons in `ragas.metrics` still work, but they are deprecated.
 - **Upstream bugs fixed, with migration notes.** Fixes that change behavior or scores are listed in [Behavior changes](docs/howtos/migrations/behavior_changes.md) and [Score changes](docs/howtos/migrations/score_changes.md), so you can see what differs from upstream before upgrading.

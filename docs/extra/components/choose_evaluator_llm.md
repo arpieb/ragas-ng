@@ -23,12 +23,6 @@
     ```
 
 === "Anthropic"
-    Install the Anthropic SDK:
-
-    ```bash
-    pip install anthropic
-    ```
-
     Set your API key:
 
     ```python
@@ -38,23 +32,14 @@
     ```
 
     ```python
-    import anthropic
     from ragas.llms import llm_factory
 
-    evaluator_llm = llm_factory(
-        "claude-sonnet-5-5",
-        provider="anthropic",
-        client=anthropic.Anthropic(),
-    )
+    evaluator_llm = llm_factory("anthropic/claude-sonnet-5-5")
     ```
+
+    No Anthropic SDK is needed: the call goes through LiteLLM.
 
 === "Google"
-    Install the Google GenAI SDK:
-
-    ```bash
-    pip install google-genai
-    ```
-
     ```python
     import os
 
@@ -62,17 +47,14 @@
     ```
 
     ```python
-    from google import genai
     from ragas.llms import llm_factory
 
-    evaluator_llm = llm_factory(
-        "gemini-3.6-flash",
-        provider="google",
-        client=genai.Client(),
-    )
+    evaluator_llm = llm_factory("gemini/gemini-3.6-flash")
     ```
 
-    For Vertex AI, or to avoid the Google SDK entirely, use the LiteLLM tab.
+    For Vertex AI, use `llm_factory("vertex_ai/gemini-3.6-flash")` with your
+    Google Cloud credentials (Application Default Credentials, or
+    `vertex_project=` / `vertex_location=`). No Google SDK is needed.
 
 === "Azure"
     Install the OpenAI SDK, which ships the Azure client:
@@ -95,7 +77,7 @@
         api_version="2024-02-01",
         azure_endpoint="https://<your-resource>.openai.azure.com",
     )
-    evaluator_llm = llm_factory("gpt-6-luna", provider="azure", client=client)
+    evaluator_llm = llm_factory("gpt-6-luna", client=client)
     ```
 
     `gpt-6-luna` here is your **deployment name**, which need not match the model name.
@@ -118,7 +100,8 @@
     ```python
     from ragas.llms import llm_factory
 
-    evaluator_llm = llm_factory("bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0")
+    # the model ID from the Bedrock console, e.g. an Anthropic Claude model
+    evaluator_llm = llm_factory("bedrock/<bedrock-model-id>")
     ```
 
 === "Others (LiteLLM)"

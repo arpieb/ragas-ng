@@ -343,6 +343,13 @@ source = "https://platform.claude.com/docs/en/about-claude/models/overview"
 
 # --- google ------------------------------------------------------
 [[model]]
+id = "gemini-pro"
+provider = "google"
+retired = true  # alias of gemini-1.0-pro; shut down
+replacement = "gemini-3.8-flash"
+source = "https://aistudio.google.com/docs/deprecations"
+
+[[model]]
 id = "gemini-1.0-pro"
 provider = "google"
 retired = true  # shut down; no date on the provider's current pages

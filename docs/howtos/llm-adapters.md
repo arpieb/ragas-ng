@@ -1,349 +1,119 @@
-# LLM Adapters: Using Multiple Structured Output Backends
+# LLMs: `llm_factory()` and LiteLLM
 
-Ragas supports multiple structured output backends through an adapter pattern. This guide explains how to use different adapters for different LLM providers.
-
-## Overview
-
-Ragas uses adapters to handle structured output from different LLM providers:
-
-- **Instructor Adapter**: Works with OpenAI, Anthropic, Azure, Groq, Mistral, Cohere, and many others
-- **LiteLLM Adapter**: Works with all 100+ LiteLLM-supported providers (Gemini, Ollama, vLLM, Bedrock, etc.)
-
-The framework automatically selects the best adapter for your provider, but you can also choose explicitly.
-
-## Quick Start
-
-### Automatic Adapter Selection (Recommended)
-
-Let Ragas auto-detect the best adapter:
-
-```python
-from ragas.llms import llm_factory
-from openai import OpenAI
-
-# For OpenAI - automatically uses Instructor adapter
-client = OpenAI(api_key="...")
-llm = llm_factory("gpt-6-luna", client=client)
-```
+Every ragas LLM is created with `llm_factory()`, and every call goes through [LiteLLM](https://docs.litellm.ai/docs/providers), with [instructor](https://python.useinstructor.com/) for structured output. You name the model with LiteLLM's `provider/model` string, and the credentials come from the environment.
 
 ```python
 from ragas.llms import llm_factory
 
-# No client - routed through LiteLLM, reads GEMINI_API_KEY
-llm = llm_factory("gemini/gemini-3.6-flash")
+llm = llm_factory("gpt-6-luna")  # OPENAI_API_KEY
+llm = llm_factory("anthropic/claude-sonnet-5-5")  # ANTHROPIC_API_KEY
+llm = llm_factory("gemini/gemini-3.6-flash")  # GOOGLE_API_KEY or GEMINI_API_KEY
+llm = llm_factory("vertex_ai/gemini-3.6-flash")  # Google Cloud credentials
+llm = llm_factory("bedrock/<bedrock-model-id>")  # AWS credentials and region
+llm = llm_factory("ollama/qwen3.8:27b")  # a local Ollama server
+llm = llm_factory("groq/<model>")  # GROQ_API_KEY
+llm = llm_factory("mistral/<model>")  # MISTRAL_API_KEY
 ```
 
-### Explicit Adapter Selection
-
-Choose a specific adapter if you need more control:
+No provider SDK is needed. See [LiteLLM's provider list](https://docs.litellm.ai/docs/providers) for each provider's prefix and environment variables. Pass credentials explicitly with `api_key=` / `api_base=` if you prefer:
 
 ```python
-from ragas.llms import llm_factory
-
-# Force using Instructor adapter
-llm = llm_factory("gpt-6-luna", client=client, adapter="instructor")
-
-# Force using LiteLLM adapter
-llm = llm_factory("gemini-3.6-flash", client=client, adapter="litellm")
+llm = llm_factory("anthropic/claude-haiku-5-5", api_key="sk-ant-...")
+llm = llm_factory("ollama/qwen3.8:27b", api_base="http://gpu-box:11434")
 ```
 
-## Auto-Detection Logic
+`provider=` prefixes a bare model name: `llm_factory("llama3", provider="ollama")` is `"ollama/llama3"`. `"openai"`, the default, adds no prefix.
 
-When `adapter="auto"` (default), Ragas uses this logic:
+## Bringing your own client
 
-1. **No client**: always the LiteLLM adapter, which reads credentials from the environment
-2. **Check client type**: If client is from `litellm` module → use LiteLLM adapter
-3. **Check provider**: If provider is `google` or `gemini` and the client is not a
-   `google-genai` `Client` → use LiteLLM adapter
-4. **Default**: Use Instructor adapter for all other cases
+Two kinds of client are accepted:
 
-The LiteLLM adapter accepts an OpenAI-compatible client (such as one pointed at a
-LiteLLM proxy), a `litellm.Router`, or an instructor-patched client. Other clients
-are rejected with a pointer to the no-client form.
+- **`OpenAI` / `AsyncOpenAI`**, pointed at OpenAI or at any OpenAI-compatible endpoint (vLLM, Ollama, a LiteLLM proxy, Anthropic's or Gemini's OpenAI-compatible endpoints, ...), and **`AzureOpenAI` / `AsyncAzureOpenAI`**. Their settings (base URL, headers, timeout, proxy, `http_client`) carry over. ragas hands LiteLLM a copy of the client, because LiteLLM changes the object it is given. The model becomes `openai/<model>` or `azure/<deployment>`.
 
-```python
-from ragas.llms.adapters import auto_detect_adapter
+    ```python
+    from openai import OpenAI
 
-# See which adapter will be used
-adapter_name = auto_detect_adapter(client, "google")
-print(adapter_name)  # Output: "litellm"
+    client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+    llm = llm_factory("qwen3.8:27b", client=client)
+    ```
 
-adapter_name = auto_detect_adapter(client, "openai")
-print(adapter_name)  # Output: "instructor"
-```
+    `evaluate()` also builds its default embeddings from this client, so a proxy or custom base URL applies to both.
 
-## Provider-Specific Examples
+- **A `litellm.Router`**, for load balancing or fallbacks across deployments.
 
-### OpenAI
+Native SDK clients of other providers (`Anthropic()`, `genai.Client()`, `Mistral()`, `Groq()`, `Cohere()`, boto3) are **no longer accepted**, and neither are instructor-patched clients. `llm_factory()` raises an error naming the model string to use instead (see [Migrating from native clients](#migrating-from-native-clients)). If you need your own instructor client, construct `ragas.llms.InstructorLLM(client=..., model=..., provider=...)` directly.
 
-```python
-from openai import OpenAI
-from ragas.llms import llm_factory
-
-client = OpenAI(api_key="your-key")
-llm = llm_factory("gpt-6-luna", client=client)
-# Uses Instructor adapter automatically
-```
-
-### Anthropic Claude
-
-```python
-from anthropic import Anthropic
-from ragas.llms import llm_factory
-
-client = Anthropic(api_key="your-key")
-llm = llm_factory("claude-sonnet-5-5", provider="anthropic", client=client)
-# Uses Instructor adapter automatically
-```
-
-### Google Gemini
-
-```python
-from google import genai
-from ragas.llms import llm_factory
-
-client = genai.Client(api_key="your-key")
-llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
-# Uses the Instructor adapter (instructor.from_genai)
-
-# Or with no client, through LiteLLM (reads GEMINI_API_KEY)
-llm = llm_factory("gemini/gemini-3.6-flash")
-```
-
-### Google Gemini (with LiteLLM Proxy - Advanced)
-
-```python
-from openai import OpenAI
-from ragas.llms import llm_factory
-
-# Requires running: litellm --model gemini-3.6-flash
-client = OpenAI(
-    api_key="anything",
-    base_url="http://0.0.0.0:4000",  # LiteLLM proxy endpoint
-)
-llm = llm_factory("gemini-3.6-flash", client=client, adapter="litellm")
-# Uses LiteLLM adapter explicitly
-```
-
-### Local Models (Ollama)
-
-```python
-from openai import OpenAI
-from ragas.llms import llm_factory
-
-# Ollama exposes OpenAI-compatible API
-client = OpenAI(api_key="ollama", base_url="http://localhost:11434/v1")
-llm = llm_factory("mistral", provider="openai", client=client)
-# Uses Instructor adapter
-```
-
-### AWS Bedrock
-
-```python
-from openai import OpenAI
-from ragas.llms import llm_factory
-
-# Use LiteLLM proxy for Bedrock
-# Note: Set up LiteLLM with Bedrock credentials first
-client = OpenAI(
-    api_key="",  # Bedrock uses IAM auth
-    base_url="http://0.0.0.0:4000",  # LiteLLM proxy endpoint
-)
-llm = llm_factory("claude-sonnet-5-5", client=client, adapter="litellm")
-```
-
-### Groq
-
-```python
-from groq import Groq
-from ragas.llms import llm_factory
-
-client = Groq(api_key="your-key")
-llm = llm_factory("mixtral-8x7b", provider="groq", client=client)
-# Uses Instructor adapter automatically
-```
-
-### Mistral
-
-```python
-from mistralai import Mistral
-from ragas.llms import llm_factory
-
-client = Mistral(api_key="your-key")
-llm = llm_factory("mistral-large", provider="mistral", client=client)
-# Uses Instructor adapter automatically
-```
-
-### Cohere
-
-```python
-from cohere import Cohere
-from ragas.llms import llm_factory
-
-client = Cohere(api_key="your-key")
-llm = llm_factory("command-r-plus", provider="cohere", client=client)
-# Uses Instructor adapter automatically
-```
-
-## Adapter Selection Guide
-
-Choose your adapter based on your needs:
-
-### Use Instructor Adapter if:
-- Using OpenAI, Anthropic, Azure, Groq, Mistral, or Cohere
-- Provider is natively supported by Instructor
-- You want the most stable, well-tested option
-- Provider doesn't require special handling
-
-### Use LiteLLM Adapter if:
-- Using Google Gemini
-- Using local models (Ollama, vLLM, etc.)
-- Using providers with 100+ options (Bedrock, etc.)
-- You need maximum provider compatibility
-- Auto-detection selects it for your provider
-
-## Working with Adapters Directly
-
-### Get Available Adapters
-
-```python
-from ragas.llms.adapters import ADAPTERS
-
-print(ADAPTERS)
-# Output: {
-#     "instructor": InstructorAdapter(),
-#     "litellm": LiteLLMAdapter()
-# }
-```
-
-### Get Specific Adapter
-
-```python
-from ragas.llms.adapters import get_adapter
-
-instructor = get_adapter("instructor")
-litellm = get_adapter("litellm")
-
-# Create LLM using adapter directly
-llm = instructor.create_llm(client, "gpt-6-luna", "openai")
-```
-
-## Advanced Usage
-
-### Model Arguments
-
-All adapters support the same model arguments:
+## Model arguments
 
 ```python
 llm = llm_factory(
-    "gpt-6-luna",
-    client=client,
-    temperature=0.7,
-    max_tokens=2048,
+    "ollama/qwen3.8:27b",
+    temperature=0.2,
     top_p=0.9,
+    max_tokens=8192,
 )
 ```
 
-Without them, ragas uses near-deterministic defaults (`temperature=0.01`,
-`top_p=0.1`, `max_tokens=1024`). A default that a provider rejects is dropped;
-a value you set yourself is always sent:
+Without them, ragas sends near-deterministic defaults, `temperature=0.01` and `top_p=0.1`, together with LiteLLM's `drop_params`, so LiteLLM drops either one for a model it knows rejects it. A value **you** set is sent as given, so a provider that rejects it says so. No output cap is sent unless you set `max_tokens`.
 
-- **OpenAI reasoning models** (o-series, GPT-5 and later, `codex-mini`, including
-  dotted versions such as `gpt-5.2` and IDs like `openai/gpt-5.6-sol` or Bedrock's
-  `openai.gpt-6-sol`): `temperature` is sent as 1, `top_p` is dropped, and no
-  token cap is sent unless you set `max_tokens`, which is sent as
-  `max_completion_tokens`. The cap counts the model's hidden reasoning tokens
-  too, so set it generously.
-- **Anthropic** (Claude on any provider): neither default is sent, because
-  current Claude models reject `temperature` (other than 1) and `top_p`, and
-  anthropic SDK 2.6 removed both from `messages.create()`. Per-call sampling
-  (`strictness`, `n > 1`) doesn't send a temperature either; those calls use
-  Claude's default sampling. A `temperature` or `top_p` you set yourself is sent
-  (#177).
+ragas adds two rules where LiteLLM's model tables lag behind new models:
 
-Reasoning models are detected from the model name. For an Azure deployment (or
-proxy alias) whose name doesn't say what it serves, tell ragas:
+- **OpenAI reasoning models** (o-series, GPT-5 and later, `codex-mini`, including dotted versions such as `gpt-5.2` and IDs like `openai/gpt-5.6-sol` or Bedrock's `openai.gpt-6-sol`): `temperature` is sent as 1, `top_p` is dropped, and a `max_tokens` you set is sent as `max_completion_tokens`. The cap counts the model's hidden reasoning tokens too, so set it generously.
+- **Claude** (on any provider): no `temperature` or `top_p` unless you set them. Current Claude models reject both (#177).
+
+Per-call sampling (`strictness`, legacy prompts with `n > 1`) sends a temperature with `drop_params`. Where a model rejects it, as Claude does, the samples use the model's default sampling.
+
+Reasoning models are detected from the model name. For an Azure deployment or proxy alias whose name doesn't say what it serves, tell ragas:
 
 ```python
-llm = llm_factory("eval-deployment", provider="azure", client=client, reasoning=True)
+llm = llm_factory("eval-deployment", client=azure_client, reasoning=True)
 ```
 
-### System Prompts
-
-Both adapters support system prompts for models that require specific instructions:
+## System prompts
 
 ```python
 llm = llm_factory(
     "gpt-6-luna",
-    client=client,
     system_prompt="You are a helpful assistant that evaluates RAG systems.",
 )
 ```
 
-System prompts are useful when:
-- Your LLM requires specific behavior instructions
-- You're using fine-tuned models with custom system prompts
-- You want to guide the evaluation style across all metrics
+The system prompt is prepended to every call as a system message.
 
-The system prompt is prepended to all LLM calls as a system message.
+## Structured-output modes
 
-### Custom Instructor Modes
+instructor asks the model for structured output in one of several modes:
 
-The instructor adapter supports multiple modes for structured output generation. By default, `Mode.JSON` is used, but you can specify a different mode for backends that don't support certain features:
+| Mode | How |
+|---|---|
+| `Mode.TOOLS` | function calling |
+| `Mode.JSON` | `response_format={"type": "json_object"}` |
+| `Mode.JSON_SCHEMA` | `response_format` with the JSON schema |
+| `Mode.MD_JSON` | the schema in the prompt, with markdown JSON back (for backends without `response_format`) |
+
+Defaults:
+- **`Mode.JSON`** for `OpenAI` / Azure clients and for Claude. instructor's tool mode returned `{}` for `Dict` fields on OpenAI, and its forced tool call fails on `claude-sonnet-5-5` (#184).
+- **instructor's default** (`Mode.TOOLS`) otherwise.
+
+Choose another with `mode=`:
 
 ```python
 import instructor
-from ragas.llms import llm_factory
-from openai import OpenAI
 
-# Use MD_JSON mode for backends without response_format support
-client = OpenAI(api_key="...", base_url="https://custom-backend")
-llm = llm_factory(
-    "custom-model", provider="openai", client=client, mode=instructor.Mode.MD_JSON
-)
+llm = llm_factory("ollama/my-model", mode=instructor.Mode.MD_JSON)
 ```
 
-`mode` reaches every provider (OpenAI, Anthropic, Google, Mistral, Perplexity,
-LiteLLM). Without it:
+Use `Mode.MD_JSON` when a backend fails with errors like `only pytorch backend can use response_format now`. Native instructor modes (`Mode.ANTHROPIC_*`, `Mode.GENAI_*`, ...) only work with native SDK clients and raise an error naming the equivalent.
 
-- OpenAI-style clients use `Mode.JSON`.
-- Claude uses JSON too: `Mode.ANTHROPIC_JSON` with an Anthropic client, and
-  `Mode.JSON` through LiteLLM. Instructor's default for Claude forces a tool
-  call, which `claude-sonnet-5-5` rejects (#184). Pass `mode=` to choose
-  another, e.g. `Mode.ANTHROPIC_TOOLS`.
-- Other providers keep instructor's default for that provider.
-
-Available instructor modes:
-- `Mode.JSON` (default) - Uses OpenAI's response_format parameter
-- `Mode.MD_JSON` - Uses markdown JSON in the prompt (fallback for unsupported backends)
-- `Mode.TOOLS` - Uses function calling
-- `Mode.JSON_SCHEMA` - Uses JSON schema validation
-
-Use `Mode.MD_JSON` when you encounter errors like:
-```
-Error code: 400 - {'message': 'only pytorch backend can use response_format now'}
-```
-
-### Async Support
-
-Both adapters support async operations:
+## Sync and async
 
 ```python
-from openai import AsyncOpenAI
-from ragas.llms import llm_factory
-
-async_client = AsyncOpenAI(api_key="...")
-llm = llm_factory("gpt-6-luna", client=async_client)
-
-# Async generation
+llm = llm_factory("gpt-6-luna")
 response = await llm.agenerate(prompt, ResponseModel)
+response = llm.generate(prompt, ResponseModel)
 ```
 
-Sync and async both work with either kind of client. A sync client runs on a
-worker thread under `agenerate()`. An async client's sync calls (`generate()`,
-`metric.score()`, `embed_text()`) run on one shared background event loop. This
-also works inside Jupyter or another running loop, and the client stays bound
-to that one loop across calls.
+Both work for every LLM. With an `OpenAI` (sync) client, `agenerate()` runs on a worker thread. With an `AsyncOpenAI` client, `generate()`, `metric.score()` and `embed_text()` run on one shared background event loop. That also works inside Jupyter or another running loop.
 
 !!! warning "Don't mix both styles on one async client"
     An async client keeps its connections tied to the event loop that opened
@@ -353,158 +123,32 @@ to that one loop across calls.
     async code, use the async methods (`agenerate`, `ascore`, `aembed_text`)
     throughout.
 
-### Custom Providers with LiteLLM
+## Token usage and cost
 
-LiteLLM supports many providers beyond what Instructor covers. Use the LiteLLM proxy approach:
+Every response comes back in OpenAI's shape, Claude and Gemini included, so use `get_token_usage_for_openai` as the usage parser for any `llm_factory()` LLM.
 
-```python
-from openai import OpenAI
-from ragas.llms import llm_factory
+## Migrating from native clients
 
-# Set up LiteLLM proxy first:
-# litellm --model grok-1  (for xAI)
-# litellm --model deepseek-chat  (for DeepSeek)
-# etc.
+`llm_factory()` used to wrap each provider's own SDK. It now passes everything through LiteLLM (#182):
 
-client = OpenAI(
-    api_key="your-provider-api-key",
-    base_url="http://0.0.0.0:4000",  # LiteLLM proxy endpoint
-)
+| Before | Now |
+|---|---|
+| `llm_factory("claude-sonnet-5-5", provider="anthropic", client=Anthropic())` | `llm_factory("anthropic/claude-sonnet-5-5")` |
+| `llm_factory("gemini-3.6-flash", provider="google", client=genai.Client(api_key=...))` | `llm_factory("gemini/gemini-3.6-flash")` |
+| a google-genai Vertex AI client | `llm_factory("vertex_ai/gemini-3.6-flash", vertex_project=..., vertex_location=...)` |
+| `llm_factory(m, provider="mistral", client=Mistral(...))` | `llm_factory("mistral/<model>")` |
+| `llm_factory(m, provider="groq", client=Groq(...))` | `llm_factory("groq/<model>")` |
+| `llm_factory(m, provider="cohere", client=Cohere(...))` | `llm_factory("cohere_chat/<model>")` |
+| a boto3 Bedrock client | `llm_factory("bedrock/<model id>", aws_region_name=...)` |
+| `llm_factory(m, client=OpenAI(...))` | unchanged |
+| `llm_factory(m, client=client, adapter="instructor" / "litellm")` | drop `adapter=`; it is ignored, with a warning |
+| `mode=instructor.Mode.ANTHROPIC_JSON` / `ANTHROPIC_TOOLS` | `Mode.JSON` / `Mode.TOOLS` |
 
-# xAI Grok
-llm = llm_factory("grok-1", client=client, adapter="litellm")
-
-# DeepSeek
-llm = llm_factory("deepseek-chat", client=client, adapter="litellm")
-
-# Together AI
-llm = llm_factory("mistral-7b", client=client, adapter="litellm")
-```
-
-## Complete Evaluation Example
-
-```python
-from datasets import Dataset
-from ragas import evaluate
-from ragas.llms import llm_factory
-from ragas.metrics import (
-    ContextPrecision,
-    ContextRecall,
-    Faithfulness,
-    AnswerCorrectness,
-)
-
-# Initialize LLM with your provider
-import google.generativeai as genai
-
-genai.configure(api_key="...")
-client = genai.GenerativeModel("gemini-3.6-flash")
-llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
-
-# Create evaluation dataset
-data = {
-    "question": ["What is the capital of France?"],
-    "answer": ["Paris"],
-    "contexts": [["France is in Europe. Paris is its capital."]],
-    "ground_truth": ["Paris"],
-}
-dataset = Dataset.from_dict(data)
-
-# Define metrics
-metrics = [
-    ContextPrecision(llm=llm),
-    ContextRecall(llm=llm),
-    Faithfulness(llm=llm),
-    AnswerCorrectness(llm=llm),
-]
-
-# Evaluate
-results = evaluate(dataset, metrics=metrics)
-print(results)
-```
+The key that used to go to the SDK client is read from the provider's environment variable, or pass `api_key=`. `ragas.llms.adapters` (`get_adapter`, `auto_detect_adapter`) and `LiteLLMStructuredLLM` still import but are deprecated. See [Behavior changes](migrations/behavior_changes.md#one-path-for-every-llm-litellm-182).
 
 ## Troubleshooting
 
-### "Unknown adapter: xyz"
-
-Make sure you're using a valid adapter name:
-
-```python
-# Valid: "instructor" or "litellm"
-llm = llm_factory("model", client=client, adapter="instructor")
-
-# Invalid: "dspy" (not yet implemented)
-# llm = llm_factory("model", client=client, adapter="dspy")  # Error!
-```
-
-### "Failed to initialize provider client"
-
-Ensure:
-1. Your client is properly initialized
-2. Your API key is valid
-3. The provider is supported by the adapter
-
-```python
-# Check if adapter can handle your provider
-from ragas.llms.adapters import auto_detect_adapter
-
-adapter = auto_detect_adapter(client, "my-provider")
-print(f"Will use: {adapter}")
-```
-
-### Adapter Mismatch
-
-Auto-detection handles most cases, but explicit selection can help:
-
-```python
-# If auto-detection picks the wrong adapter:
-llm = llm_factory(
-    "model",
-    provider="provider-name",
-    client=client,
-    adapter="litellm",  # Explicit override
-)
-```
-
-## Migration Guide
-
-### From Text-Only to Structured Output
-
-If you're upgrading from text-only LLM usage:
-
-```python
-# Before (removed in the LangChain removal)
-# from ragas.llms import LangchainLLMWrapper
-# llm = LangchainLLMWrapper(langchain_llm)
-
-# After (new way)
-from ragas.llms import llm_factory
-
-llm = llm_factory("gpt-6-luna", client=client)
-```
-
-### Switching Providers
-
-To switch from OpenAI to Gemini:
-
-```python
-# Before: OpenAI
-from openai import OpenAI
-
-client = OpenAI(api_key="...")
-llm = llm_factory("gpt-6-luna", client=client)
-
-# After: Gemini (similar code pattern!)
-import google.generativeai as genai
-
-genai.configure(api_key="...")
-client = genai.GenerativeModel("gemini-3.6-flash")
-llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
-# Adapter automatically switches to LiteLLM for google provider
-```
-
-## See Also
-
-- [Gemini Integration Guide](./integrations/gemini.md) - Detailed Gemini setup
-- LLM Factory Reference - Complete API reference
-- [Metrics Documentation](../concepts/metrics/index.md) - Using metrics with LLMs
+- **`llm_factory() no longer accepts ... clients`**: pass the model string from the error message instead of the client.
+- **`AuthenticationError` / missing key**: set the provider's environment variable from [LiteLLM's provider list](https://docs.litellm.ai/docs/providers), or pass `api_key=`.
+- **`UnsupportedParamsError: ... does not support temperature=...`**: you set a sampling value the model rejects. Remove it; ragas' own defaults are dropped automatically.
+- **Structured output fails to parse**: try `mode=instructor.Mode.JSON` or `Mode.MD_JSON`.

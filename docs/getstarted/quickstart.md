@@ -63,7 +63,6 @@ To change only the model names, without editing code, set `RAGAS_EXAMPLE_APP_MOD
     Then update both parts in `evals.py`:
 
     ```python
-    from anthropic import Anthropic
     from openai import OpenAI
     from ragas.llms import llm_factory
 
@@ -77,12 +76,8 @@ To change only the model names, without editing code, set `RAGAS_EXAMPLE_APP_MOD
         llm_client=app_client, model=APP_MODEL, logdir="evals/logs"
     )
 
-    # The judge: Anthropic's native client
-    llm = llm_factory(
-        "claude-sonnet-5-5",
-        provider="anthropic",
-        client=Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY")),
-    )
+    # The judge: by model name, through LiteLLM (reads ANTHROPIC_API_KEY)
+    llm = llm_factory("anthropic/claude-sonnet-5-5")
     ```
 
     See Anthropic's [OpenAI SDK compatibility](https://platform.claude.com/docs/en/api/openai-sdk) notes for what the endpoint supports.
@@ -95,7 +90,6 @@ To change only the model names, without editing code, set `RAGAS_EXAMPLE_APP_MOD
     Then update both parts in `evals.py`:
 
     ```python
-    from google import genai
     from openai import OpenAI
     from ragas.llms import llm_factory
 
@@ -109,15 +103,11 @@ To change only the model names, without editing code, set `RAGAS_EXAMPLE_APP_MOD
         llm_client=app_client, model=APP_MODEL, logdir="evals/logs"
     )
 
-    # The judge: the google-genai SDK
-    llm = llm_factory(
-        "gemini-3.8-flash",
-        provider="google",
-        client=genai.Client(api_key=os.environ.get("GOOGLE_API_KEY")),
-    )
+    # The judge: by model name, through LiteLLM (reads GOOGLE_API_KEY)
+    llm = llm_factory("gemini/gemini-3.8-flash")
     ```
 
-    Install the SDK with `pip install google-genai`. For more Gemini options, see the [Google Gemini Integration Guide](../howtos/integrations/gemini.md) and Google's [OpenAI compatibility](https://aistudio.google.com/docs/openai) notes.
+    For more Gemini options, see the [Google Gemini Integration Guide](../howtos/integrations/gemini.md) and Google's [OpenAI compatibility](https://aistudio.google.com/docs/openai) notes.
 
 === "Local Models (Ollama)"
     Install and run Ollama locally. Ollama serves an OpenAI-compatible API, so one client serves both the app and the judge:
@@ -154,7 +144,7 @@ To change only the model names, without editing code, set `RAGAS_EXAMPLE_APP_MOD
     llm = llm_factory("model-name", provider="openai", client=app_client)
     ```
 
-    To use a different provider for the judge only, see [LLM adapters](../howtos/llm-adapters.md).
+    To use a different provider for the judge only, see [LLMs (llm_factory)](../howtos/llm-adapters.md).
 
 ## Project Structure
 

@@ -196,6 +196,10 @@ from ragas.backends import get_registry  # local/csv, local/jsonl, inmemory, gdr
 - `@experiment(Model, backend=..., backend_kwargs=..., max_workers=16)`, then `await fn.arun(dataset, ...)`. `name`, `backend`, `backend_kwargs` and `max_workers` belong to `arun`; other keyword arguments go to the experiment function.
 - User guide: `docs/howtos/customizations/storage_backends.md`. Contributor notes: `src/ragas/backends/README.md`.
 
+### LLMs
+
+`llm_factory()` (`src/ragas/llms/base.py`) returns an `InstructorLLM` over LiteLLM for every model (#182). The client may be `None`, an `OpenAI` / `Azure` client (passed to LiteLLM as a copy), or a `litellm.Router`. Native SDK clients raise. Per-provider parameter rules live in `InstructorLLM._map_provider_params`: the OpenAI reasoning-model and Claude rules, plus `_map_litellm_defaults`. Tests use LiteLLM's `mock_response`, so no network is needed (`tests/unit/llms/test_llm_factory.py`).
+
 ## Debugging Logs
 
 To view debug logs for any module:

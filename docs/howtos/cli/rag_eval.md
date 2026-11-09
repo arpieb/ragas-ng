@@ -40,11 +40,9 @@ pip install -e .
 
     Update `evals.py`:
     ```python
-    from anthropic import Anthropic
     from ragas.llms import llm_factory
 
-    client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-    llm = llm_factory("claude-sonnet-5-5", provider="anthropic", client=client)
+    llm = llm_factory("anthropic/claude-sonnet-5-5")  # reads ANTHROPIC_API_KEY
     ```
 
 === "Google Gemini"
@@ -54,12 +52,9 @@ pip install -e .
 
     Update `evals.py`:
     ```python
-    import google.generativeai as genai
     from ragas.llms import llm_factory
 
-    genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
-    client = genai.GenerativeModel("gemini-3.6-flash")
-    llm = llm_factory("gemini-3.6-flash", provider="google", client=client)
+    llm = llm_factory("gemini/gemini-3.6-flash")  # reads GOOGLE_API_KEY
     ```
 
 === "Local Models (Ollama)"

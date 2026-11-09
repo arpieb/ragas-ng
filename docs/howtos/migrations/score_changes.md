@@ -283,3 +283,11 @@ ragas no longer sends `temperature` or `top_p` to Claude unless you set them you
 ## Claude judges: JSON mode ([#184](https://github.com/arpieb/ragas-ng/issues/184))
 
 Without a `mode`, Claude now returns structured output as JSON, not through a forced tool call (see [Behavior changes](behavior_changes.md#claude-json-mode-by-default-184)). The prompts and output schemas are unchanged, so most scores shouldn't move. Claude models that accepted tool mode (e.g. `claude-haiku-5-5`) may parse a borderline answer differently. `claude-sonnet-5-5` had no scores before: every call failed.
+
+## One LiteLLM path: sampling defaults ([#182](https://github.com/arpieb/ragas-ng/issues/182))
+
+`llm_factory()` LLMs now share one set of parameter rules (see [Behavior changes](behavior_changes.md#one-path-for-every-llm-litellm-182)):
+
+- **LLMs built without a client** (`llm_factory("ollama/...")`, `"gemini/..."`, ...) now get ragas' near-deterministic defaults, `temperature=0.01` and `top_p=0.1`, where they used to get the provider's defaults. Their scores vary less from run to run and may shift. Reasoning models and Claude are unaffected: their sampling defaults are still dropped.
+- **LLMs built with an OpenAI or Azure client** no longer get a default `max_tokens=1024`. Answers that were cut off at 1024 tokens, which usually failed to parse and scored NaN, now complete.
+- **Gemini, Anthropic, Mistral, Groq and Cohere users** moving from a native client to a model string go through LiteLLM's request mapping instead of instructor's native integration. Prompts and schemas are unchanged, so scores should be close.

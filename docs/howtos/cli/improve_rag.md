@@ -221,11 +221,13 @@ Change the model in `evals.py`:
 # Use a larger model for better accuracy
 rag = RAG(llm_client=client, retriever=retriever, model="gpt-6.1-sol")
 
-# Or use a different provider
-from anthropic import Anthropic
+# Or a different provider, through its OpenAI-compatible endpoint
+from openai import AsyncOpenAI
 
-client = Anthropic()
-# Note: Would need to modify rag.py for non-OpenAI clients
+client = AsyncOpenAI(
+    api_key=os.environ["ANTHROPIC_API_KEY"], base_url="https://api.anthropic.com/v1/"
+)
+rag = RAG(llm_client=client, retriever=retriever, model="claude-sonnet-5-5")
 ```
 
 ### Add Custom Metrics
