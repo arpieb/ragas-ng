@@ -38,7 +38,10 @@ async def test_the_first_failure_is_raised_with_its_row():
 
     with pytest.raises(Boom, match="row two") as e:
         await run.arun(_dataset(4), name="exp", raise_exceptions=True)
-    assert any("row 2 of experiment 'exp'" in n for n in e.value.__notes__)
+    assert any(
+        "row 2 of experiment 'exp'" in n and "nothing was saved" in n
+        for n in e.value.__notes__
+    )
 
 
 @pytest.mark.asyncio
@@ -145,5 +148,60 @@ async def test_raise_exceptions_is_not_passed_to_the_function():
         seen.update(kwargs)
         return {"i": row["i"]}
 
-    await run.arun(_dataset(1), name="exp", raise_exceptions=True, other=1)
+    await run.arun(
+        _dataset(1), name="exp", raise_exceptions=True, save_partial=True, other=1
+    )
     assert seen == {"other": 1}
+
+
+# --- save_partial: keep the rows that finished --------------------------------
+
+
+def _fails_at(n):
+    @experiment()
+    async def run(row):
+        if row["i"] == n:
+            raise Boom()
+        return {"i": row["i"]}
+
+    return run
+
+
+@pytest.mark.asyncio
+async def test_save_partial_saves_the_finished_rows_then_raises():
+    backend = InMemoryBackend()
+    with pytest.raises(Boom) as e:
+        await _fails_at(3).arun(
+            _dataset(5, backend),
+            name="exp",
+            max_workers=1,
+            raise_exceptions=True,
+            save_partial=True,
+        )
+    assert [r["i"] for r in backend.load_experiment("exp")] == [0, 1, 2]
+    assert any("saved the 3 of 5 rows that finished" in n for n in e.value.__notes__)
+
+
+@pytest.mark.asyncio
+async def test_save_partial_on_the_decorator_with_a_per_run_override():
+    @experiment(raise_exceptions=True, save_partial=True)
+    async def run(row):
+        if row["i"] == 2:
+            raise Boom()
+        return {"i": row["i"]}
+
+    backend = InMemoryBackend()
+    with pytest.raises(Boom):
+        await run.arun(_dataset(3, backend), name="kept", max_workers=1)
+    with pytest.raises(Boom):
+        await run.arun(
+            _dataset(3, backend), name="dropped", max_workers=1, save_partial=False
+        )
+    assert backend.list_experiments() == ["kept"]
+
+
+@pytest.mark.asyncio
+async def test_save_partial_alone_changes_nothing():
+    # without raise_exceptions every row that didn't fail is saved anyway
+    result = await _fails_at(1).arun(_dataset(3), name="exp", save_partial=True)
+    assert [r["i"] for r in result] == [0, 2]

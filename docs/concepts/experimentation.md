@@ -96,6 +96,12 @@ results = await my_experiment.arun(dataset, max_workers=-1)  # no limit
     results = await my_experiment.arun(dataset, raise_exceptions=True)
     ```
 
+    To keep the rows that finished before the stop (their LLM calls are already paid for), add `save_partial=True`. They're saved in dataset order under the experiment's name, and the error is still raised, with a note saying how many of the rows were saved.
+
+    ```python
+    await my_experiment.arun(dataset, raise_exceptions=True, save_partial=True)
+    ```
+
 ### Parameterized Experiments
 
 You can create parameterized experiments to test different configurations:

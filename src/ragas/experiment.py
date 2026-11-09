@@ -120,6 +120,7 @@ class ExperimentProtocol(t.Protocol):
         backend_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
         max_workers: t.Optional[int] = None,
         raise_exceptions: t.Optional[bool] = None,
+        save_partial: t.Optional[bool] = None,
         **kwargs,
     ) -> "Experiment": ...
 
@@ -136,11 +137,13 @@ class ExperimentWrapper:
         default_backend_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
         max_workers: int = DEFAULT_MAX_WORKERS,
         raise_exceptions: bool = False,
+        save_partial: bool = False,
     ):
         _check_backend_kwargs(default_backend, default_backend_kwargs)
         _check_max_workers(max_workers)
         self.max_workers = max_workers
         self.raise_exceptions = raise_exceptions
+        self.save_partial = save_partial
         self.func = func
         self.experiment_model = experiment_model
         self.default_backend = default_backend
@@ -166,6 +169,7 @@ class ExperimentWrapper:
         backend_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
         max_workers: t.Optional[int] = None,
         raise_exceptions: t.Optional[bool] = None,
+        save_partial: t.Optional[bool] = None,
         **kwargs,
     ) -> "Experiment":
         """Run the experiment against a dataset.
@@ -192,10 +196,15 @@ class ExperimentWrapper:
                 Defaults to the decorator's ``raise_exceptions`` (False). A
                 sync function's thread can't be stopped; its row finishes in
                 the background and its result is discarded.
+            save_partial: With ``raise_exceptions``, save the rows that
+                finished before the stop, then raise. Defaults to the
+                decorator's ``save_partial`` (False: save nothing). Has no
+                effect without ``raise_exceptions``, which saves every row
+                that didn't fail anyway.
             **kwargs: Passed to the experiment function. ``name``,
-                ``backend``, ``backend_kwargs``, ``max_workers`` and
-                ``raise_exceptions`` are ``arun``'s own, so pass the
-                function's arguments by keyword.
+                ``backend``, ``backend_kwargs``, ``max_workers``,
+                ``raise_exceptions`` and ``save_partial`` are ``arun``'s
+                own, so pass the function's arguments by keyword.
         """
         # Generate name if not provided
         if name is None:
@@ -233,6 +242,7 @@ class ExperimentWrapper:
         fail_fast = (
             self.raise_exceptions if raise_exceptions is None else raise_exceptions
         )
+        keep_partial = self.save_partial if save_partial is None else save_partial
         is_async = asyncio.iscoroutinefunction(self.func)
         rows = list(dataset)
 
@@ -284,6 +294,7 @@ class ExperimentWrapper:
             results: t.List[t.Any] = [None] * len(rows)
             failures = 0
             first_error: t.Optional[BaseException] = None
+            failed_index = -1
             tasks = [
                 asyncio.create_task(start_row(i, item)) for i, item in enumerate(rows)
             ]
@@ -292,12 +303,8 @@ class ExperimentWrapper:
                 for future in asyncio.as_completed(tasks):
                     index, result, error = await future
                     if error is not None and fail_fast:
-                        error.add_note(
-                            f"Raised by row {index} of experiment {name!r}; "
-                            f"raise_exceptions=True stopped the run and nothing "
-                            f"was saved."
-                        )
                         first_error = error
+                        failed_index = index
                         break
                     if error is not None:
                         failures += 1
@@ -322,6 +329,18 @@ class ExperimentWrapper:
                 if pending:
                     await asyncio.gather(*pending, return_exceptions=True)
             if first_error is not None:
+                if keep_partial:
+                    saved = _save_in_order(experiment_view, results)
+                    outcome = (
+                        f"save_partial=True saved the {saved} of {len(rows)} rows "
+                        f"that finished"
+                    )
+                else:
+                    outcome = "nothing was saved"
+                first_error.add_note(
+                    f"Raised by row {failed_index} of experiment {name!r}; "
+                    f"raise_exceptions=True stopped the run and {outcome}."
+                )
                 # ends the experiment run as an error, then propagates
                 raise first_error
             experiment_run.end(
@@ -336,15 +355,17 @@ class ExperimentWrapper:
                 len(rows),
             )
 
-        # dataset order, not completion order
-        for result in results:
-            if result is not None:
-                experiment_view.append(result)
-
-        # Save experiment
-        experiment_view.save()
-
+        _save_in_order(experiment_view, results)
         return experiment_view
+
+
+def _save_in_order(experiment_view: "Experiment", results: t.List[t.Any]) -> int:
+    """Save the rows that finished, in dataset order; returns how many."""
+    saved = [result for result in results if result is not None]
+    for result in saved:
+        experiment_view.append(result)
+    experiment_view.save()
+    return len(saved)
 
 
 def _row_inputs(item: t.Any) -> t.Dict[str, t.Any]:
@@ -413,6 +434,7 @@ def experiment(
     backend_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
     max_workers: int = DEFAULT_MAX_WORKERS,
     raise_exceptions: bool = False,
+    save_partial: bool = False,
 ) -> t.Callable[[t.Callable], ExperimentProtocol]:
     """Decorator for creating experiment functions.
 
@@ -429,6 +451,9 @@ def experiment(
         raise_exceptions: Stop ``arun`` on the first row that raises, save
             nothing, and re-raise (default False: log the row, leave it out
             and go on). ``arun(raise_exceptions=...)`` overrides it.
+        save_partial: With ``raise_exceptions``, save the rows that finished
+            before the stop instead of nothing. ``arun(save_partial=...)``
+            overrides it.
 
     Returns:
         Decorator function that wraps experiment functions
@@ -451,6 +476,7 @@ def experiment(
             default_backend_kwargs=backend_kwargs,
             max_workers=max_workers,
             raise_exceptions=raise_exceptions,
+            save_partial=save_partial,
         )
         return t.cast(ExperimentProtocol, wrapper)
 
