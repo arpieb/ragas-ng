@@ -22,7 +22,7 @@ Where $K$ is the total number of chunks in `retrieved_contexts` and $v_k \in \{0
 
 ### Context Precision
 
-The `ContextPrecision` metric evaluates whether retrieved contexts are useful for answering a question by comparing each context against a reference answer. Use this when you have a reference answer available.
+The `ContextPrecision` metric evaluates whether retrieved contexts are useful for answering a question by comparing each context against a reference answer. Use this when you have a reference answer available. It is also available as `ContextPrecisionWithReference`.
 
 ```python
 from openai import AsyncOpenAI
@@ -66,7 +66,7 @@ Context Precision Score: 0.9999999999
 
 ### Context Utilization
 
-The `ContextUtilization` metric evaluates whether retrieved contexts are useful by comparing each context against the generated response. Use this when you don't have a reference answer but have the response that was generated.
+The `ContextUtilization` metric evaluates whether retrieved contexts are useful by comparing each context against the generated response. Use this when you don't have a reference answer but have the response that was generated. It is also available as `ContextPrecisionWithoutReference`.
 
 ```python
 from openai import AsyncOpenAI
@@ -123,29 +123,9 @@ The following examples use the legacy metrics API pattern. For new projects, we 
 !!! warning "Deprecation Timeline"
     This API will be deprecated in version 0.4 and removed in version 1.0. Please migrate to the collections-based API shown above.
 
-### Example with SingleTurnSample
-
-```python
-from ragas import SingleTurnSample
-from ragas.metrics import LLMContextPrecisionWithoutReference
-
-context_precision = LLMContextPrecisionWithoutReference(llm=evaluator_llm)
-
-sample = SingleTurnSample(
-    user_input="Where is the Eiffel Tower located?",
-    response="The Eiffel Tower is located in Paris.",
-    retrieved_contexts=["The Eiffel Tower is located in Paris."],
-)
-
-await context_precision.single_turn_ascore(sample)
-```
-
-Output:
-```
-0.9999999999
-```
-
 ### Context Precision without reference
+
+Collections equivalent: [`ContextUtilization`](#context-utilization).
 
 The `LLMContextPrecisionWithoutReference` metric can be used without the availability of a reference answer. To estimate if the retrieved contexts are relevant, this method uses the LLM to compare each chunk in `retrieved_contexts` with the `response`.
 
@@ -172,6 +152,8 @@ Output:
 ```
 
 ### Context Precision with reference
+
+Collections equivalent: [`ContextPrecision`](#context-precision_1).
 
 The `LLMContextPrecisionWithReference` metric can be used when you have both retrieved contexts and also a reference response associated with a `user_input`. To estimate if the retrieved contexts are relevant, this method uses the LLM to compare each chunk in `retrieved_contexts` with the `reference`.
 
