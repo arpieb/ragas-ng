@@ -24,11 +24,11 @@ When you use `generate_with_chunks`, Ragas:
 
 ## Example: Using Pre-chunked Documents
 
-You can pass a list of LangChain `Document` objects. This approach preserves the metadata of your chunks, which can be useful for tracking source documents or other custom information.
+You can pass a list of `ragas.testset.document.Document` objects. Any object with `page_content` and `metadata` attributes works too, so documents from another loader library can be passed as they are. This approach preserves the metadata of your chunks, which can be useful for tracking source documents or other custom information.
 
 ```python
 import os
-from langchain_core.documents import Document
+from ragas.testset.document import Document
 from ragas.testset.synthesizers.generate import TestsetGenerator
 from ragas.llms import llm_factory
 from ragas.embeddings import OpenAIEmbeddings

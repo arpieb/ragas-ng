@@ -22,18 +22,22 @@ Let’s get started!
 
 ## Download and Load documents
 
-Run the command below to download the dummy Ragas Airline dataset and load the documents using LangChain.
+Run the command below to download the dummy Ragas Airline dataset and load the Markdown files as documents.
 
 ```sh
 ! git clone https://huggingface.co/datasets/vibrantlabsai/ragas-airline-dataset
 ```
 
 ```python
-from langchain_community.document_loaders import DirectoryLoader
+from pathlib import Path
+
+from ragas.testset.document import Document
 
 path = "ragas-airline-dataset"
-loader = DirectoryLoader(path, glob="**/*.md")
-docs = loader.load()
+docs = [
+    Document(page_content=p.read_text(), metadata={"source": str(p)})
+    for p in Path(path).rglob("*.md")
+]
 ```
 
 ## Set up the LLM and Embedding Model

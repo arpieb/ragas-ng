@@ -25,7 +25,7 @@ In this tutorial, you will:
 
 
 ```python
-%pip install --upgrade --user --quiet langchain-core langchain-google-vertexai langchain ragas
+%pip install --upgrade --user --quiet google-cloud-aiplatform ragas
 ```
 
 ### Restart runtime
@@ -86,7 +86,9 @@ from ragas.embeddings import embedding_factory
 from ragas.llms import llm_factory
 
 evaluator_llm = llm_factory("vertex_ai/gemini-3.6-flash")
-evaluator_embeddings = embedding_factory("vertex_ai/gemini-embedding-2")
+evaluator_embeddings = embedding_factory(
+    "litellm", model="vertex_ai/gemini-embedding-2"
+)
 ```
 
 ### Ragas metrics
@@ -273,7 +275,9 @@ from ragas.embeddings import embedding_factory
 from ragas.llms import llm_factory
 
 evaluator_llm = llm_factory("vertex_ai/gemini-3.8-flash")
-evaluator_embeddings = embedding_factory("vertex_ai/gemini-embedding-2")
+evaluator_embeddings = embedding_factory(
+    "litellm", model="vertex_ai/gemini-embedding-2"
+)
 ```
 
 

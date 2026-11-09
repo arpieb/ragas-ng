@@ -22,7 +22,7 @@ The steps covered in this notebook include:
 
 
     ```python
-    %pip install --upgrade -q boto3 opensearch-py botocore awscli retrying ragas langchain-aws
+    %pip install --upgrade -q boto3 opensearch-py botocore awscli retrying ragas
     ```
 
     This command will clone the repository containing helper files needed for this tutorial. 

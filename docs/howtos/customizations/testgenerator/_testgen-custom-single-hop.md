@@ -13,12 +13,15 @@ I am using documents from [sample of GitLab handbook](https://huggingface.co/dat
 ```
 
 ```python
-from langchain_community.document_loaders import DirectoryLoader
+from pathlib import Path
 
+from ragas.testset.document import Document
 
 path = "Sample_Docs_Markdown/"
-loader = DirectoryLoader(path, glob="**/*.md")
-docs = loader.load()
+docs = [
+    Document(page_content=p.read_text(), metadata={"source": str(p)})
+    for p in Path(path).rglob("*.md")
+]
 ```
 
 ### Create KG

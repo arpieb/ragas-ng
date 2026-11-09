@@ -8,13 +8,13 @@ This command installs all the dependencies needed for the LlamaStack server with
 
 Use the command with conda
 ```shell
-!pip install ragas langchain-together uv 
+!pip install ragas uv
 !uv run --with llama-stack llama stack build --template together --image-type conda
 ```
 
 Use the command with venv
 ```shell
-!pip install ragas langchain-together uv 
+!pip install ragas uv
 !uv run --with llama-stack llama stack build --template together --image-type venv
 ```
 

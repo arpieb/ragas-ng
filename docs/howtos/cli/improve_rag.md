@@ -199,18 +199,23 @@ correctness_metric = DiscreteMetric(
 
 ### Change the Knowledge Base
 
-Replace HuggingFace docs with your own documents:
+Replace HuggingFace docs with your own documents. `RAG` only needs an object with a `retrieve(query, top_k)` method that returns documents with a `page_content` attribute:
 
 ```python
+from rank_bm25 import BM25Okapi
+
+from ragas.testset.document import Document
+
+
 class CustomRetriever:
     def __init__(self, documents: list[str]):
-        from langchain_community.retrievers import BM25Retriever
+        self.chunks = [Document(page_content=text) for text in documents]
+        self.index = BM25Okapi([text.split() for text in documents])
 
-        self.retriever = BM25Retriever.from_texts(documents)
-
-    def retrieve(self, query: str, top_k: int = 3):
-        self.retriever.k = top_k
-        return self.retriever.invoke(query)
+    def retrieve(self, query: str, top_k: int = 3) -> list[Document]:
+        scores = self.index.get_scores(query.split())
+        ranked = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+        return [self.chunks[i] for i in ranked[:top_k]]
 ```
 
 ### Use a Different Model

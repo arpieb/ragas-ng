@@ -194,7 +194,6 @@ not_in_nav: |
   extra/components/choose_generator_llm.md
   extra/components/running_async.md
   extra/components/earlier_run_outputs.md
-  howtos/customizations/metrics/_cost.md
 
   # Documents a shipped integration -- ragas.integrations.helicone (which
   # evaluate() reads) -- but isn't in the sidebar. Its imports resolve; what it

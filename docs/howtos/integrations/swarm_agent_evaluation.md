@@ -282,7 +282,7 @@ Here's how you can use the function:
 ```python
 from ragas.integrations.swarm import convert_to_ragas_messages
 
-# Assuming 'result["messages"]' contains the list of LangChain messages
+# Assuming 'result["messages"]' contains the list of Swarm messages
 shipment_update_ragas_trace = convert_to_ragas_messages(
     messages=shipment_update_interaction
 )
