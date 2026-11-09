@@ -215,7 +215,6 @@ validation:
 # Material-Docs Theme
 theme:
   name: material
-  custom_dir: docs/extra/overrides
   logo: _static/imgs/ragas-logo.png
   favicon: _static/favicon.ico
   features:
@@ -312,35 +311,57 @@ plugins:
         LiteLLM. It provides objective metrics for evaluation, test data generation, and
         integrations such as LlamaIndex. See the migration notes for differences from upstream.
       full_output: llms-full.txt
+      # The plugin matches these with fnmatch against every source file: `*`
+      # also matches "/", and pages left out of the nav are not excluded. So a
+      # directory with subdirectories, or with pages kept out of the nav, is
+      # listed file by file. tests/unit/test_llms_txt_sections.py checks that
+      # every nav page appears in exactly one section, and no other page does.
       sections:
         Getting Started:
+          - index.md
           - getstarted/*.md
         Tutorials:
           - tutorials/*.md
         Core Concepts:
-          - concepts/*.md
+          - concepts/index.md
+          - concepts/datasets.md
+          - concepts/experimentation.md
           - concepts/components/*.md
         Metrics:
-          - concepts/metrics/overview/*.md
-          - concepts/metrics/available_metrics/*.md
+          - concepts/metrics/*.md
         Test Data Generation:
           - concepts/test_data_generation/*.md
+        How-to Guides:
+          - howtos/index.md
+          - howtos/llm-adapters.md
+          - howtos/observability.md
         Migrating from Upstream Ragas:
           - howtos/migrations/*.md
         Customization Guides:
           - howtos/customizations/*.md
-          - howtos/customizations/metrics/*.md
-          - howtos/customizations/testgenerator/*.md
-          - howtos/customizations/optimizers/*.md
         Application Guides:
           - howtos/applications/*.md
-          - howtos/*.md
         CLI:
           - howtos/cli/*.md
         Integrations:
-          - howtos/integrations/*.md
+          - howtos/integrations/index.md
+          - howtos/integrations/_arize.md
+          - howtos/integrations/_langfuse.md
+          - howtos/integrations/_llamaindex.md
+          - howtos/integrations/ag_ui.md
+          - howtos/integrations/amazon_bedrock.md
+          - howtos/integrations/gemini.md
+          - howtos/integrations/griptape.md
+          - howtos/integrations/haystack.md
+          - howtos/integrations/llama_stack.md
+          - howtos/integrations/llamaindex_agents.md
+          - howtos/integrations/oci_genai.md
+          - howtos/integrations/r2r.md
+          - howtos/integrations/swarm_agent_evaluation.md
         API Reference:
           - references/*.md
+        Optional:
+          - community/index.md
   - git-revision-date-localized:
       enabled: !ENV [MKDOCS_CI, false]
       enable_creation_date: true
@@ -371,5 +392,3 @@ extra_javascript:
   - _static/js/header_border.js
   - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
   - _static/js/toggle.js
-  - https://cdn.octolane.com/tag.js?pk=c7c9b2b863bf7eaf4e2a # octolane for analytics
-  - _static/js/commonroom.js # commonroom analytics
