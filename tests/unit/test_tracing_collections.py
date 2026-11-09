@@ -321,6 +321,27 @@ def test_experiment_rows_hold_their_metric_and_llm_spans(spans, tmp_path):
     assert {s.parent.span_id for s in named(spans, "AspectCriticOutput")} == metric_ids
 
 
+def test_sync_run_keeps_the_span_tree_and_the_callers_parent(spans):
+    # #172: run() goes through run_sync onto another thread; the caller's
+    # context (its active span) must come along, and the tree is as arun's
+    metric = critic()
+
+    @experiment(Row)
+    async def judge(row):
+        result = await metric.ascore(user_input=row["question"], response=row["answer"])
+        return Row(question=row["question"], answer=row["answer"], score=result.value)
+
+    data = Dataset(name="qa", backend="inmemory")
+    data.append({"question": "q1", "answer": "a1"})
+    with cb._tracer.start_as_current_span("my-app"):
+        judge.run(data, name="sync-trace", backend="inmemory")
+
+    assert ("experiment sync-trace", "CHAIN", "my-app") in kinds(spans)
+    assert ("row 0", "CHAIN", "experiment sync-trace") in kinds(spans)
+    assert ("answers", "EVALUATOR", "row 0") in kinds(spans)
+    assert ("AspectCriticOutput", "LLM", "answers") in kinds(spans)
+
+
 def test_failed_experiment_row_is_an_error_span(spans):
     @experiment(Row)
     async def flaky(row):

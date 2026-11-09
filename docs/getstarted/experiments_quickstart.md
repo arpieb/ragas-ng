@@ -50,8 +50,6 @@ async def run_experiment(row):
 
 
 if __name__ == "__main__":
-    import asyncio
-
     # Create dataset inline
     dataset = Dataset(name="test_dataset", backend="local/csv", root_dir=".")
     test_data = [
@@ -73,7 +71,7 @@ if __name__ == "__main__":
     dataset.save()
 
     # Run experiment
-    _ = asyncio.run(run_experiment.arun(dataset, name="first_experiment"))
+    _ = run_experiment.run(dataset, name="first_experiment")
 ```
 
 ### 3. Inspect the generated files

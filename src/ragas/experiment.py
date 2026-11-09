@@ -10,6 +10,7 @@ from pathlib import Path
 from pydantic import BaseModel
 from tqdm import tqdm
 
+from ragas.async_utils import run_sync
 from ragas.backends.base import BaseBackend
 from ragas.callbacks import ChainType, traced
 from ragas.dataset import Dataset, DataTable
@@ -112,6 +113,18 @@ def version_experiment(
 class ExperimentProtocol(t.Protocol):
     async def __call__(self, *args, **kwargs) -> t.Any: ...
     async def arun(
+        self,
+        dataset: Dataset,
+        name: t.Optional[str] = None,
+        backend: t.Optional[t.Union[BaseBackend, str]] = None,
+        *args,
+        backend_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
+        max_workers: t.Optional[int] = None,
+        raise_exceptions: t.Optional[bool] = None,
+        save_partial: t.Optional[bool] = None,
+        **kwargs,
+    ) -> "Experiment": ...
+    def run(
         self,
         dataset: Dataset,
         name: t.Optional[str] = None,
@@ -357,6 +370,41 @@ class ExperimentWrapper:
 
         _save_in_order(experiment_view, results)
         return experiment_view
+
+    def run(
+        self,
+        dataset: Dataset,
+        name: t.Optional[str] = None,
+        backend: t.Optional[t.Union[BaseBackend, str]] = None,
+        *args,
+        backend_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
+        max_workers: t.Optional[int] = None,
+        raise_exceptions: t.Optional[bool] = None,
+        save_partial: t.Optional[bool] = None,
+        **kwargs,
+    ) -> "Experiment":
+        """Run the experiment from synchronous code: ``arun``, without ``await``.
+
+        Takes the same arguments as :meth:`arun` and returns the same
+        ``Experiment``. Like ``evaluate()`` and ``metric.score()``, it runs on
+        ragas' shared background event loop (``ragas.async_utils.run_sync``),
+        so it works in a plain script and inside a running loop (Jupyter)
+        alike. Ctrl-C cancels the rows still running. In async code, prefer
+        ``await arun(...)``, which doesn't block the event loop.
+        """
+        return run_sync(
+            self.arun(
+                dataset,
+                name,
+                backend,
+                *args,
+                backend_kwargs=backend_kwargs,
+                max_workers=max_workers,
+                raise_exceptions=raise_exceptions,
+                save_partial=save_partial,
+                **kwargs,
+            )
+        )
 
 
 def _save_in_order(experiment_view: "Experiment", results: t.List[t.Any]) -> int:

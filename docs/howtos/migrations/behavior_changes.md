@@ -537,3 +537,7 @@ When a metric needs embeddings and none are passed, `evaluate()` used to give ev
 Add `save_partial=True` (decorator or `arun`) to save the rows that finished before the stop instead; the error is still raised, and its note says how many rows were saved. Without `raise_exceptions` it has no effect.
 
 `raise_exceptions` and `save_partial` are now `arun`'s own keyword arguments, like `name`, `backend`, `backend_kwargs` and `max_workers`. An experiment function that took a keyword argument of either name through `arun` no longer receives it.
+
+## Experiments: a sync `run()` ([#172](https://github.com/arpieb/ragas-ng/issues/172))
+
+`@experiment` functions now have `run(dataset, ...)`, the synchronous form of `await arun(dataset, ...)`. It takes the same arguments and returns the same `Experiment`, so a script no longer needs `asyncio.run(fn.arun(...))`. Like `evaluate()` and `metric.score()`, it runs on ragas' shared background event loop (#74, #80), so it also works inside a running loop such as Jupyter. Ctrl-C cancels the rows still running.
