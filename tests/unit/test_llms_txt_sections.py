@@ -29,7 +29,7 @@ _Loader.add_multi_constructor("tag:yaml.org,2002:python/", lambda *a: None)
 
 
 def _config():
-    return yaml.load((ROOT / "mkdocs.yml").read_text(), Loader=_Loader)
+    return yaml.load((ROOT / "mkdocs.yml").read_text(encoding="utf-8"), Loader=_Loader)
 
 
 def _nav_pages(node):
