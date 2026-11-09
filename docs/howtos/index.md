@@ -26,6 +26,6 @@ Each guide in this section provides a focused solution to real-world problems th
 
     How to integrate Ragas with other frameworks and observability tools.
 
-    Use Ragas with frameworks like [LlamaIndex](integrations/_llamaindex.md), and [observability tools](./observability.md).
+    Use Ragas with frameworks like [LlamaIndex](integrations/llamaindex.md), and [observability tools](./observability.md).
 
 </div>

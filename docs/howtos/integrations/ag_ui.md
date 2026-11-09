@@ -331,8 +331,6 @@ For a complete production example, see `examples/ragas_examples/ag_ui_agent_expe
 - Proper logging and error handling
 - Timestamped result output
 
-An interactive walkthrough notebook is also available at `howtos/integrations/ag_ui.ipynb`.
-
 ## API Reference
 
 ### Primary API

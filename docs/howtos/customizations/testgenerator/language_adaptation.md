@@ -1,6 +1,6 @@
 ## Synthetic test generation from non-English corpus
 
-In this notebook, you'll learn how to generate synthetic test data in a target language. The sample corpus is a set of **French** Wikipedia articles about cities, and the goal is to generate test queries and answers in **Spanish**. The same steps work for any target language.
+In this guide, you'll learn how to generate synthetic test data in a target language. The sample corpus is a set of **French** Wikipedia articles about cities, and the goal is to generate test queries and answers in **Spanish**. The same steps work for any target language.
 
 Without adaptation, the generated queries follow the language of the documents. Adapting the query synthesizer's prompts to Spanish makes them ask for Spanish output, whatever language the documents are in.
 
@@ -66,7 +66,7 @@ generator_embeddings = embedding_factory(
 ```
 
 ### Set up the persona and transforms
-You can create personas automatically; see [Persona generation](./_persona_generator.md). To keep this simple, this notebook uses one predefined persona, two basic transforms and a simple query distribution.
+You can create personas automatically; see [Persona generation](./persona_generator.md). To keep this simple, this guide uses one predefined persona, two basic transforms and a simple query distribution.
 
 
 ```python

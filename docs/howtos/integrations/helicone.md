@@ -1,6 +1,6 @@
 # Helicone
 
-This notebook demonstrates how to integrate Helicone with Ragas for monitoring and evaluating RAG (Retrieval-Augmented Generation) systems.
+This guide demonstrates how to integrate Helicone with Ragas for monitoring and evaluating RAG (Retrieval-Augmented Generation) systems.
 
 ## Prerequisites
 

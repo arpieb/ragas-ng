@@ -78,7 +78,7 @@ In short scripts, call `provider.force_flush()` before exiting so the last batch
 
 ### Phoenix (Arize)
 
-Phoenix accepts OTLP at `http://localhost:6006/v1/traces` when you run it locally (`phoenix serve`). The [Phoenix guide](integrations/_arize.md) shows the setup with `phoenix.otel`, and how to write ragas scores back onto your app's spans.
+Phoenix accepts OTLP at `http://localhost:6006/v1/traces` when you run it locally (`phoenix serve`). The [Phoenix guide](integrations/arize.md) shows the setup with `phoenix.otel`, and how to write ragas scores back onto your app's spans.
 
 ### LangSmith
 
@@ -102,7 +102,7 @@ Use this exporter in the setup above. LangSmith maps OpenInference attributes, s
 
 ### Langfuse
 
-See the [Langfuse guide](integrations/_langfuse.md), which also covers scoring Langfuse traces with ragas metrics.
+See the [Langfuse guide](integrations/langfuse.md), which also covers scoring Langfuse traces with ragas metrics.
 
 ## Without a backend: `result.traces`
 

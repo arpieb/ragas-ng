@@ -163,8 +163,6 @@ check-docs: ## Build docs and fail on any mkdocs warning
 
 build-docs: ## Build all documentation
 	@echo "Building all documentation..."
-	@echo "Converting ipynb notebooks to md files..."
-	$(Q)MKDOCS_CI=true uv run python $(GIT_ROOT)/docs/ipynb_to_md.py
 	@echo "Building ragas documentation..."
 	$(Q)MKDOCS_CI=false uv run --group docs mkdocs build
 

@@ -315,7 +315,7 @@ the Langfuse SDK.
 To see ragas runs in Langfuse, export ragas' OpenTelemetry spans to it. The
 Langfuse SDK's default export filter drops spans from unknown
 instrumentations, `ragas` among them, so allow the `ragas` scope with
-`should_export_span`. The [Langfuse guide](../integrations/_langfuse.md) shows
+`should_export_span`. The [Langfuse guide](../integrations/langfuse.md) shows
 both set-ups and how to score your app's traces with ragas.
 
 The MLflow helper, `ragas.integrations.tracing.mlflow`, is unchanged.

@@ -82,7 +82,7 @@ nav:
           - General:
               - Customise models: howtos/customizations/customize_models.md
               - Run Config: howtos/customizations/run_config.md
-              - Caching: howtos/customizations/_caching.md
+              - Caching: howtos/customizations/caching.md
               - Cancelling Tasks: howtos/customizations/cancellation.md
               - Storage Backends: howtos/customizations/storage_backends.md
           - LLMs (llm_factory): howtos/llm-adapters.md
@@ -92,10 +92,10 @@ nav:
               - Tracing and Logging Evaluations: howtos/customizations/metrics/tracing.md
           - Testset Generation:
               - howtos/customizations/testgenerator/index.md
-              - Non-English Testset Generation: howtos/customizations/testgenerator/_language_adaptation.md
-              - Persona Generation: howtos/customizations/testgenerator/_persona_generator.md
-              - Custom Single-hop Query: howtos/customizations/testgenerator/_testgen-custom-single-hop.md
-              - Custom Multi-hop Query: howtos/customizations/testgenerator/_testgen-customisation.md
+              - Non-English Testset Generation: howtos/customizations/testgenerator/language_adaptation.md
+              - Persona Generation: howtos/customizations/testgenerator/persona_generator.md
+              - Custom Single-hop Query: howtos/customizations/testgenerator/testgen-custom-single-hop.md
+              - Custom Multi-hop Query: howtos/customizations/testgenerator/testgen-customisation.md
               - Using Pre-chunked Data: howtos/customizations/testgenerator/prechunked_data.md
           - Optimizers:
               - DSPy Optimizer: howtos/customizations/optimizers/index.md
@@ -106,7 +106,7 @@ nav:
             - Iterate and Improve Prompts: howtos/applications/iterate_prompt.md
             - Systematic Prompt Optimization: howtos/applications/prompt_optimization.md
           - Metrics:
-            - Cost Analysis: howtos/applications/_cost.md
+            - Cost Analysis: howtos/applications/cost.md
             - Evaluating Multi-turn Conversations: howtos/applications/evaluating_multi_turn_conversations.md
             - Evaluations with Vertex AI models: howtos/applications/vertexai_x_ragas.md
             - Aligning Vertex AI Evaluators with Human Judgment: howtos/applications/vertexai_alignment.md
@@ -138,8 +138,8 @@ nav:
           - howtos/integrations/index.md
           - Observability:
               - Overview: howtos/observability.md
-              - Arize: howtos/integrations/_arize.md
-              - Langfuse: howtos/integrations/_langfuse.md
+              - Arize: howtos/integrations/arize.md
+              - Langfuse: howtos/integrations/langfuse.md
           - LLM Providers:
               - Amazon Bedrock: howtos/integrations/amazon_bedrock.md
               - Google Gemini: howtos/integrations/gemini.md
@@ -148,7 +148,7 @@ nav:
               - AG-UI: howtos/integrations/ag_ui.md
               - Griptape: howtos/integrations/griptape.md
               - Haystack: howtos/integrations/haystack.md
-              - LlamaIndex: howtos/integrations/_llamaindex.md
+              - LlamaIndex: howtos/integrations/llamaindex.md
               - LlamaIndex Agents: howtos/integrations/llamaindex_agents.md
               - LlamaStack: howtos/integrations/llama_stack.md
               - R2R: howtos/integrations/r2r.md
@@ -199,7 +199,7 @@ not_in_nav: |
   # evaluate() reads) -- but isn't in the sidebar. Its imports resolve; what it
   # still uses is the legacy metric-injection pattern, so it wants modernising
   # before promotion.
-  howtos/integrations/_helicone.md
+  howtos/integrations/helicone.md
 
   # Stubs and internal notes, not user-facing documentation.
   community/pdf_export.md
@@ -345,9 +345,9 @@ plugins:
           - howtos/cli/*.md
         Integrations:
           - howtos/integrations/index.md
-          - howtos/integrations/_arize.md
-          - howtos/integrations/_langfuse.md
-          - howtos/integrations/_llamaindex.md
+          - howtos/integrations/arize.md
+          - howtos/integrations/langfuse.md
+          - howtos/integrations/llamaindex.md
           - howtos/integrations/ag_ui.md
           - howtos/integrations/amazon_bedrock.md
           - howtos/integrations/gemini.md

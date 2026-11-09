@@ -258,6 +258,6 @@ results.to_pandas(include_reasons=True)
 
 This adds a `<metric>_reason` column after each metric that explains its score, for example which statements in a response the retrieved context didn't support. `results.reasons` gives the same explanations as a dict, keyed by metric name.
 
-`results.traces` holds the full run tree: every prompt sent to the evaluator LLM and its output. To view these runs in an observability tool, export ragas' OpenTelemetry spans to it (Langfuse, Phoenix and others ingest them; see the [Langfuse guide](./_langfuse.md) for an example set-up).
+`results.traces` holds the full run tree: every prompt sent to the evaluator LLM and its output. To view these runs in an observability tool, export ragas' OpenTelemetry spans to it (Langfuse, Phoenix and others ingest them; see the [Langfuse guide](./langfuse.md) for an example set-up).
 
 Happy Coding
