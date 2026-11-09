@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import functools
 import inspect
+import json
 import logging
 import re
 import typing as t
@@ -15,6 +17,7 @@ from pydantic import BaseModel
 
 from ragas.async_utils import run_sync
 from ragas.cache import CacheInterface, cache_identity, cacher
+from ragas.callbacks import ChainType, clip_for_span, current_group, traced
 from ragas.exceptions import LLMDidNotFinishException
 from ragas.llms._retry import acall_with_retry, call_with_retry
 from ragas.llms.output import Generation, LLMResult
@@ -620,6 +623,40 @@ class InstructorBaseRagasLLM(ABC):
         return args
 
 
+# OpenInference LLM attributes (#196); spelled out, as in ragas.callbacks.
+_LLM_MODEL_NAME = "llm.model_name"
+_LLM_PROVIDER = "llm.provider"
+_LLM_INVOCATION_PARAMETERS = "llm.invocation_parameters"
+_LLM_TOKEN_COUNT = "llm.token_count"
+
+
+def _llm_span() -> t.Any:
+    """The recording span of the LLM call in progress, if any."""
+    group = current_group()
+    manager = getattr(group, "parent_run_manager", None)
+    span = getattr(manager, "span", None)
+    if span is None or not span.is_recording():
+        return None
+    meta = getattr(group, "metadata", {})
+    return span if meta.get("type") is ChainType.LLM else None
+
+
+def _record_usage_on_span(span: t.Any, raw: t.Any) -> None:
+    """Token counts from an OpenAI-shaped completion (what LiteLLM returns)."""
+    try:
+        from ragas.cost import get_token_usage_for_openai
+
+        usage = get_token_usage_for_openai(raw)
+        span.set_attribute(f"{_LLM_TOKEN_COUNT}.prompt", int(usage.input_tokens))
+        span.set_attribute(f"{_LLM_TOKEN_COUNT}.completion", int(usage.output_tokens))
+        span.set_attribute(
+            f"{_LLM_TOKEN_COUNT}.total",
+            int(usage.input_tokens) + int(usage.output_tokens),
+        )
+    except Exception:
+        logger.debug("Could not record token usage on the LLM span", exc_info=True)
+
+
 class InstructorLLM(InstructorBaseRagasLLM):
     """LLM wrapper using the Instructor library for structured outputs.
 
@@ -911,6 +948,63 @@ class InstructorLLM(InstructorBaseRagasLLM):
         """
         return run_sync(coro)
 
+    @staticmethod
+    def _record_raw(
+        collector: t.Any, span: t.Any, raw: t.Any, provider_kwargs: t.Dict[str, t.Any]
+    ) -> None:
+        if collector is not None:
+            collector.record(raw)
+        if span is not None:
+            _record_usage_on_span(span, raw)
+            try:
+                span.set_attribute(
+                    _LLM_INVOCATION_PARAMETERS,
+                    json.dumps(provider_kwargs, default=repr, sort_keys=True),
+                )
+            except Exception:
+                pass
+
+    @contextlib.contextmanager
+    def _traced_call(
+        self, prompt: str, response_model: t.Type[BaseModel]
+    ) -> t.Iterator[t.Any]:
+        """One LLM run: a span (kind LLM) and a run-tree node (#196).
+
+        Nested under the current run -- the metric, prompt or experiment row --
+        so evaluate()'s ``result.traces`` gets each call's prompt and output.
+        """
+        name = getattr(response_model, "__name__", "llm")
+        with traced(name, {"prompt": prompt}, ChainType.LLM) as run:
+            span = run.span
+            if span is not None and span.is_recording():
+                span.set_attribute(_LLM_MODEL_NAME, self.model)
+                span.set_attribute(_LLM_PROVIDER, self.provider)
+                for i, message in enumerate(self._messages(prompt)):
+                    prefix = f"llm.input_messages.{i}.message"
+                    span.set_attribute(f"{prefix}.role", message["role"])
+                    span.set_attribute(
+                        f"{prefix}.content", clip_for_span(message["content"])
+                    )
+            yield run
+
+    @staticmethod
+    def _end_call(run: t.Any, result: t.Any) -> None:
+        run.end({"output": result})
+        span = run.span
+        if span is not None and span.is_recording():
+            try:
+                content = (
+                    result.model_dump_json()
+                    if isinstance(result, BaseModel)
+                    else str(result)
+                )
+            except Exception:
+                content = repr(result)
+            span.set_attribute("llm.output_messages.0.message.role", "assistant")
+            span.set_attribute(
+                "llm.output_messages.0.message.content", clip_for_span(content)
+            )
+
     def _active_usage_collector(self) -> t.Optional[t.Any]:
         """The enclosing run's collector, else one attached to this LLM."""
         return scoped_usage_collector() or self.usage_collector
@@ -939,17 +1033,18 @@ class InstructorLLM(InstructorBaseRagasLLM):
         )
         target = self._target(client)
         collector = self._active_usage_collector()
-        if collector is not None:
+        span = _llm_span()
+        if collector is not None or span is not None:
             # create_with_completion also returns the provider's raw response,
             # which is the only place token counts are available. Gated so the
-            # default path is byte-identical to before.
+            # default path (no collector, no tracing SDK) is byte-identical.
             result, raw = target.create_with_completion(
                 model=self.model,
                 messages=self._messages(prompt),
                 response_model=response_model,
                 **provider_kwargs,
             )
-            collector.record(raw)
+            self._record_raw(collector, span, raw, provider_kwargs)
             return result
         return target.create(
             model=self.model,
@@ -971,24 +1066,33 @@ class InstructorLLM(InstructorBaseRagasLLM):
         See ``InstructorBaseRagasLLM.generate`` for ``temperature``/``sample_index``.
         """
         rc = self.run_config
-        if self.sync_client is not None:
-            return call_with_retry(
-                rc,
-                self._call_sync,
-                self.sync_client,
-                prompt,
-                response_model,
-                temperature,
-            )
-        if self.is_async:
-            return self._run_async_in_current_loop(
-                acall_with_retry(
-                    rc, self._call_async, prompt, response_model, temperature
+        with self._traced_call(prompt, response_model) as run:
+            if self.sync_client is not None:
+                result = call_with_retry(
+                    rc,
+                    self._call_sync,
+                    self.sync_client,
+                    prompt,
+                    response_model,
+                    temperature,
                 )
-            )
-        return call_with_retry(
-            rc, self._call_sync, self.client, prompt, response_model, temperature
-        )
+            elif self.is_async:
+                result = self._run_async_in_current_loop(
+                    acall_with_retry(
+                        rc, self._call_async, prompt, response_model, temperature
+                    )
+                )
+            else:
+                result = call_with_retry(
+                    rc,
+                    self._call_sync,
+                    self.client,
+                    prompt,
+                    response_model,
+                    temperature,
+                )
+            self._end_call(run, result)
+            return result
 
     async def _call_async(
         self,
@@ -1002,14 +1106,15 @@ class InstructorLLM(InstructorBaseRagasLLM):
         )
         target = self._target(self.client)
         collector = self._active_usage_collector()
-        if collector is not None:
+        span = _llm_span()
+        if collector is not None or span is not None:
             result, raw = await target.create_with_completion(
                 model=self.model,
                 messages=self._messages(prompt),
                 response_model=response_model,
                 **provider_kwargs,
             )
-            collector.record(raw)
+            self._record_raw(collector, span, raw, provider_kwargs)
             return result
         return await target.create(
             model=self.model,
@@ -1033,19 +1138,23 @@ class InstructorLLM(InstructorBaseRagasLLM):
         See ``InstructorBaseRagasLLM.generate`` for ``temperature``/``sample_index``.
         """
         rc = self.run_config
-        if not self.is_async:
-            return await asyncio.to_thread(
-                call_with_retry,
-                rc,
-                self._call_sync,
-                self.client,
-                prompt,
-                response_model,
-                temperature,
-            )
-        return await acall_with_retry(
-            rc, self._call_async, prompt, response_model, temperature
-        )
+        with self._traced_call(prompt, response_model) as run:
+            if not self.is_async:
+                result = await asyncio.to_thread(
+                    call_with_retry,
+                    rc,
+                    self._call_sync,
+                    self.client,
+                    prompt,
+                    response_model,
+                    temperature,
+                )
+            else:
+                result = await acall_with_retry(
+                    rc, self._call_async, prompt, response_model, temperature
+                )
+            self._end_call(run, result)
+            return result
 
     def _get_client_info(self) -> str:
         """Get client type and async status information."""

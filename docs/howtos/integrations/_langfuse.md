@@ -50,7 +50,7 @@ provider = TracerProvider()
 provider.add_span_processor(BatchSpanProcessor(exporter))
 trace.set_tracer_provider(provider)
 
-# every evaluate() call from here on appears in Langfuse
+# every evaluate(), experiment and metric call from here on appears in Langfuse
 ```
 
 **With the Langfuse SDK, if your app already uses it.** The SDK becomes the global tracer provider, so ragas spans pass through it. By default it exports only Langfuse spans, GenAI spans and known LLM instrumentations, so allow the `ragas` scope as well:

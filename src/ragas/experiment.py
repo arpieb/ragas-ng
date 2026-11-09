@@ -12,6 +12,7 @@ from tqdm import tqdm
 
 from ragas.async_utils import as_completed
 from ragas.backends.base import BaseBackend
+from ragas.callbacks import ChainType, traced
 from ragas.dataset import Dataset, DataTable
 from ragas.utils import find_git_root, memorable_names
 
@@ -219,42 +220,62 @@ class ExperimentWrapper:
         limit = self.max_workers if max_workers is None else max_workers
         _check_max_workers(limit)
         is_async = asyncio.iscoroutinefunction(self.func)
-
-        async def run_row(index: int, item: t.Any):
-            try:
-                if is_async:
-                    result = await self.func(item, *args, **kwargs)
-                else:
-                    # a sync function would block the event loop and run the
-                    # rows one at a time
-                    result = await asyncio.to_thread(self.func, item, *args, **kwargs)
-                return index, result, None
-            except Exception as e:
-                return index, None, e
-
         rows = list(dataset)
-        results: t.List[t.Any] = [None] * len(rows)
-        failures = 0
-        progress_bar = tqdm(total=len(rows), desc="Running experiment")
-        try:
-            for future in as_completed(
-                [run_row(i, item) for i, item in enumerate(rows)], limit
-            ):
-                index, result, error = await future
-                if error is not None:
-                    failures += 1
-                    logger.warning(
-                        "Experiment %r: row %d failed and is not saved: %s: %s",
-                        name,
-                        index,
-                        type(error).__name__,
-                        error,
-                    )
-                else:
-                    results[index] = result
-                progress_bar.update(1)
-        finally:
-            progress_bar.close()
+
+        # One run for the experiment and one per row (#196). The row's run is
+        # current while the function runs, so metrics scored inside it --
+        # and their LLM calls -- nest under the row.
+        with traced(
+            f"experiment {name}", {"rows": len(rows)}, ChainType.EXPERIMENT
+        ) as experiment_run:
+
+            async def run_row(index: int, item: t.Any):
+                try:
+                    with traced(
+                        f"row {index}",
+                        _row_inputs(item),
+                        ChainType.ROW,
+                        callbacks=experiment_run.group,
+                    ) as row_run:
+                        if is_async:
+                            result = await self.func(item, *args, **kwargs)
+                        else:
+                            # a sync function would block the event loop and
+                            # run the rows one at a time; to_thread carries
+                            # the row's run along with the other contextvars
+                            result = await asyncio.to_thread(
+                                self.func, item, *args, **kwargs
+                            )
+                        row_run.end({"output": result})
+                    return index, result, None
+                except Exception as e:
+                    return index, None, e
+
+            results: t.List[t.Any] = [None] * len(rows)
+            failures = 0
+            progress_bar = tqdm(total=len(rows), desc="Running experiment")
+            try:
+                for future in as_completed(
+                    [run_row(i, item) for i, item in enumerate(rows)], limit
+                ):
+                    index, result, error = await future
+                    if error is not None:
+                        failures += 1
+                        logger.warning(
+                            "Experiment %r: row %d failed and is not saved: %s: %s",
+                            name,
+                            index,
+                            type(error).__name__,
+                            error,
+                        )
+                    else:
+                        results[index] = result
+                    progress_bar.update(1)
+            finally:
+                progress_bar.close()
+            experiment_run.end(
+                {"rows": len(rows), "failed": failures, "saved": len(rows) - failures}
+            )
 
         if failures:
             logger.warning(
@@ -273,6 +294,15 @@ class ExperimentWrapper:
         experiment_view.save()
 
         return experiment_view
+
+
+def _row_inputs(item: t.Any) -> t.Dict[str, t.Any]:
+    """A dataset row as the row run's input."""
+    if isinstance(item, BaseModel):
+        return item.model_dump()
+    if isinstance(item, dict):
+        return item
+    return {"row": item}
 
 
 def _check_backend_kwargs(

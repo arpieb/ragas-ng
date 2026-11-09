@@ -1,6 +1,6 @@
 # Tracing and logging evaluations
 
-ragas emits [OpenTelemetry](https://opentelemetry.io) spans for `evaluate()` runs: one trace per run, with a span per row and per metric holding its score. Any OpenTelemetry backend can collect them, including Phoenix, LangSmith, Langfuse, Opik, MLflow and Jaeger. ragas needs no backend-specific code.
+ragas emits [OpenTelemetry](https://opentelemetry.io) spans for `evaluate()` runs, `@experiment` runs, and metrics scored on their own: one trace per run, with spans for each row, each metric (holding its score and reason) and each LLM call (holding the prompt, the response, the model and token counts). Any OpenTelemetry backend can collect them, including Phoenix, LangSmith, Langfuse, Opik, MLflow and Jaeger. ragas needs no backend-specific code.
 
 Spans are no-ops until you configure an OpenTelemetry SDK. Install it with an OTLP exporter:
 
@@ -40,7 +40,7 @@ evaluator_llm = llm_factory("gpt-6-luna", client=OpenAI())
 evaluate(eval_dataset, metrics=[LLMContextRecall()], llm=evaluator_llm)
 ```
 
-See [Observability](../../observability.md) for the span attributes, the LangSmith and Phoenix endpoints, `result.traces` and what isn't traced yet.
+See [Observability](../../observability.md) for the span attributes, the LangSmith and Phoenix endpoints and `result.traces`.
 
 !!! note "Coming from `evaluate(callbacks=...)`"
     The `callbacks` argument, and LangChain tracers such as `LangChainTracer`, are no longer supported. ragas does not depend on LangChain. The OpenTelemetry setup above replaces them.

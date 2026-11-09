@@ -229,7 +229,7 @@ class _CollectionsHandoff:
         adapter = self._handoff_adapter()
         if adapter is None:
             return await super()._single_turn_ascore(sample, callbacks)  # type: ignore[misc]
-        return await adapter._ascore_from_sample(sample)
+        return await adapter._ascore_from_sample(sample, callbacks)
 
     async def _multi_turn_ascore(
         self, sample: "MultiTurnSample", callbacks: "Callbacks" = None
@@ -237,7 +237,7 @@ class _CollectionsHandoff:
         adapter = self._handoff_adapter()
         if adapter is None:
             return await super()._multi_turn_ascore(sample, callbacks)  # type: ignore[misc]
-        return await adapter._ascore_from_sample(sample)
+        return await adapter._ascore_from_sample(sample, callbacks)
 
 
 _WARNED: t.Set[t.Tuple[str, str]] = set()
