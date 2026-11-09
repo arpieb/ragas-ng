@@ -141,13 +141,14 @@ class LlamaIndexLLMWrapper(BaseRagasLLM):
             "LlamaIndexLLMWrapper is deprecated and will be removed in a future version. "
             "Use llm_factory instead: "
             "from openai import OpenAI; from ragas.llms import llm_factory; "
-            "client = OpenAI(api_key='...'); llm = llm_factory('gpt-6-luna', client=client)",
+            "client = OpenAI(api_key='...'); "
+            f"llm = llm_factory('{DEFAULT_LLM_MODEL}', client=client)",
             DeprecationWarning,
             stacklevel=2,
         )
         super().__init__(cache=cache)
         self.llm = llm
-        # Certain LLMs (e.g., OpenAI o1 series) do not support temperature
+        # Certain LLMs (e.g., OpenAI reasoning models) do not support temperature
         self.bypass_temperature = bypass_temperature
 
         try:
@@ -547,7 +548,7 @@ def llm_factory(
             raise ImportError(
                 "llm_factory() without an explicit client requires litellm. "
                 "Install it, or pass a client: "
-                "llm_factory('gpt-6-luna', client=OpenAI())"
+                f"llm_factory('{DEFAULT_LLM_MODEL}', client=OpenAI())"
             ) from e
 
         # Prefix the model with the provider when the caller named one and the
@@ -629,7 +630,7 @@ def is_reasoning_model(model: str) -> bool:
     These reject ``max_tokens`` (they take ``max_completion_tokens``), any
     temperature but 1, and ``top_p``. Matches dotted versions (gpt-5.1,
     gpt-5.2-mini), o10+, and IDs behind LiteLLM or Bedrock prefixes
-    (``openai/gpt-5``, ``openai.gpt-6-sol``) (#67).
+    (``openai/gpt-5.6-sol``, ``openai.gpt-6-sol``) (#67).
 
     Azure deployment names are arbitrary, so no name check can be complete;
     pass ``reasoning=True`` to ``llm_factory`` for such deployments.

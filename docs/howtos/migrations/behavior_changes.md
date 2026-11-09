@@ -442,3 +442,15 @@ Instructor's defaults (`ANTHROPIC_TOOLS` / `TOOLS`) force a tool call. `claude-s
 - Provider and transport errors now propagate, as in other collections metrics. With `evaluate(raise_exceptions=False)` the row is still missing, and the error is logged.
 - Only an **invalid rating** (outside the metric scale after `max_retries` attempts) still gives `nan`.
 - `DataCompyScore` is unchanged: its `except` covers CSV parsing, not an LLM call.
+
+## Model names in examples and hints ([#181](https://github.com/arpieb/ragas-ng/issues/181))
+
+- **Example templates** name each model once, near the top of the module that uses it:
+  - `RAGAS_EXAMPLE_APP_MODEL` sets the model the app or agent under test calls;
+  - `RAGAS_EXAMPLE_JUDGE_MODEL` sets the model that judges.
+
+  Unset, each template uses the same default as before.
+- **Error messages and deprecation hints** that suggest a model use `ragas.llms.base.DEFAULT_LLM_MODEL`.
+- **Metric docstrings** show `llm_factory("<model>", client=client)` instead of a specific model.
+- **Model retirements** are tracked in `scripts/model_registry.toml`, and a unit test fails when a retired model is named in code, docs or examples. See `scripts/README.md`.
+- `text2sql/analyze_errors.py` used `gpt-5` (shutting down 2026-12-11) and now uses `gpt-5.6-sol`. A source comment and two doc lines still named `gpt-5` or the shut-down `o1`; they were updated.

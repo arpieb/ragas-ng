@@ -1,114 +1,117 @@
-"""No shut-down or soon-retired model IDs in code, docs or examples (#176).
+"""No retired model IDs in code, docs or examples (#176, #181).
 
 Providers retire model IDs on a schedule. A retired ID fails on the first call,
 so docs and quickstart templates that name one are broken for every reader.
-Recorded output (``text`` fences, notebook outputs, results files) keeps the
-names it was produced with.
+
+The IDs, dates and replacements live in ``scripts/model_registry.toml``:
+- an ID whose shutdown date has passed **fails** this test;
+- one shutting down within 60 days gives a **warning**.
+
+``scripts/replace_model_ids.py`` applies the replacements. Recorded output
+(``text`` fences, notebook outputs, results files) keeps the names it was
+produced with.
 """
 
-import json
-import re
+import datetime as dt
+import sys
+import warnings
 from pathlib import Path
 
 import pytest
 
-from ragas.llms.base import DEFAULT_LLM_MODEL, is_reasoning_model, llm_factory
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
-ROOT = Path(__file__).resolve().parents[2]
+import model_ids  # noqa: E402
 
-# Shut down, or with an announced shutdown date, as of 2026-11-06.
-RETIRED = [
-    "gpt-3.5-turbo",
-    "gpt-4",
-    "gpt-4-turbo",
-    "gpt-4-vision-preview",
-    "gpt-4o",
-    "gpt-4o-mini",
-    "gpt-4.1",
-    "gpt-4.1-mini",
-    "gpt-4.1-nano",
-    "gpt-5-mini",
-    "gpt-5-nano",
-    "claude-3-opus",
-    "claude-3-sonnet",
-    "claude-3-haiku",
-    "claude-3-5-sonnet",
-    "claude-sonnet-4-5",
-    "gemini-1.0-pro",
-    "gemini-1.5-pro",
-    "gemini-1.5-flash",
-    "gemini-2.0-flash",
-    "gemini-2.5-pro",
-    "gemini-2.5-flash",
-    "text-embedding-004",
-]
-_RX = re.compile(
-    r"(?<![\w.-])(" + "|".join(re.escape(m) for m in RETIRED) + r")(?![\w-]|\.\d)"
+from ragas.llms.base import (  # noqa: E402
+    DEFAULT_LLM_MODEL,
+    is_reasoning_model,
+    llm_factory,
 )
 
-# Files where the old names are correct: tiktoken encoding names (no API call)
-# and historical notes about past runs.
-ALLOWED = {
-    "src/ragas/tokenizers.py",
-    "docs/references/tokenizers.md",
-    "docs/howtos/migrations/behavior_changes.md",
-    "docs/howtos/migrations/score_changes.md",
-}
+TODAY = dt.date.today()
+MODELS = model_ids.load_registry()
+BY_ID = {m.id: m for m in MODELS}
 
 
-def _code_text(path: Path) -> str:
-    """The parts of a file that someone would run: not recorded output."""
-    text = path.read_text(encoding="utf-8")
-    if path.suffix == ".ipynb":
-        nb = json.loads(text)
-        return "\n".join("".join(c["source"]) for c in nb["cells"])
-    if path.suffix != ".md":
-        return text
-    kept, in_fence, output = [], False, False
-    generated = path.name.startswith("_")  # nbconvert: outputs are indented
-    for line in text.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("```"):
-            if not in_fence:
-                in_fence = True
-                output = stripped[3:].strip() in ("", "text", "output", "console")
-            else:
-                in_fence = False
+def _hits(models):
+    pattern = model_ids.id_pattern(m.id for m in models)
+    hits = []
+    for path in model_ids.scan_paths():
+        rel = model_ids.rel(path)
+        if rel in model_ids.ALLOWED:
             continue
-        if in_fence and output:
-            continue
-        if generated and not in_fence and line.startswith("    "):
-            continue
-        kept.append(line)
-    return "\n".join(kept)
-
-
-def _files():
-    for base in ("src", "examples", "docs"):
-        for path in (ROOT / base).rglob("*"):
-            if path.suffix in (".py", ".md", ".ipynb") and ".egg-info" not in str(path):
-                yield path
-    for name in ("README.md", "CLAUDE.md"):
-        yield ROOT / name
+        for line in model_ids.code_text(path).splitlines():
+            for m in pattern.finditer(line):
+                hits.append((rel, m.group(1), line.strip()[:100]))
+    return hits
 
 
 def test_no_retired_model_ids():
-    hits = []
-    for path in _files():
-        rel = path.relative_to(ROOT).as_posix()
-        if rel in ALLOWED:
-            continue
-        for lineno, line in enumerate(_code_text(path).splitlines(), 1):
-            for m in _RX.finditer(line):
-                hits.append(f"{rel}: {m.group(1)}: {line.strip()[:100]}")
-    assert not hits, "Retired model IDs (see #176):\n" + "\n".join(hits)
+    retired = [m for m in MODELS if m.is_retired(TODAY)]
+    hits = _hits(retired)
+    assert not hits, (
+        "Retired model IDs (see scripts/model_registry.toml; fix with "
+        "`uv run python scripts/replace_model_ids.py --apply`):\n"
+        + "\n".join(
+            f"{rel}: {mid} -> {BY_ID[mid].replacement}: {line}"
+            for rel, mid, line in hits
+        )
+    )
 
 
-def test_default_model_is_current_and_mapped_as_reasoning(monkeypatch):
-    assert DEFAULT_LLM_MODEL == "gpt-6-luna"
-    assert not _RX.search(DEFAULT_LLM_MODEL)
+def test_warn_on_model_ids_retiring_soon():
+    soon = [m for m in MODELS if m.retires_within(TODAY, model_ids.WARN_DAYS)]
+    for rel, mid, line in _hits(soon):
+        warnings.warn(
+            f"{rel}: {mid} shuts down {BY_ID[mid].shutdown} "
+            f"(replacement {BY_ID[mid].replacement}): {line}",
+            UserWarning,
+            stacklevel=1,
+        )
+
+
+# --- the registry itself --------------------------------------------------
+
+
+def test_registry_ids_are_unique():
+    ids = [m.id for m in MODELS]
+    assert len(ids) == len(set(ids))
+
+
+@pytest.mark.parametrize("model", [m for m in MODELS if m.replacement], ids=str)
+def test_replacement_is_registered_and_alive(model):
+    final = model_ids.replacement_map(MODELS, TODAY, within_days=10_000).get(
+        model.id, model.id
+    )
+    assert model.replacement in BY_ID, f"{model.replacement} isn't in the registry"
+    assert not BY_ID[final].is_retired(TODAY), f"{model.id} -> {final} is retired"
+
+
+def test_every_row_has_a_source():
+    assert all(m.source.startswith("https://") for m in MODELS)
+
+
+def test_replacement_map_follows_chains():
+    models = [
+        model_ids.Model("a", "x", retired=True, replacement="b"),
+        model_ids.Model("b", "x", shutdown=dt.date(2000, 1, 1), replacement="c"),
+        model_ids.Model("c", "x"),
+    ]
+    assert model_ids.replacement_map(models, TODAY) == {"a": "c", "b": "c"}
+
+
+# --- the library default --------------------------------------------------
+
+
+def test_default_model_is_registered_and_not_retiring():
+    assert DEFAULT_LLM_MODEL in BY_ID
+    assert not BY_ID[DEFAULT_LLM_MODEL].is_retired(TODAY)
+    assert not BY_ID[DEFAULT_LLM_MODEL].retires_within(TODAY, model_ids.WARN_DAYS)
+
+
+def test_default_model_is_mapped_as_reasoning(monkeypatch):
     assert is_reasoning_model(DEFAULT_LLM_MODEL)
-
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     llm = llm_factory(DEFAULT_LLM_MODEL)
     args = llm._request_args(None)

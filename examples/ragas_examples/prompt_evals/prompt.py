@@ -3,6 +3,8 @@ import os
 from openai import OpenAI
 
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+# The model the app under test calls. Override with RAGAS_EXAMPLE_APP_MODEL.
+MODEL = os.getenv("RAGAS_EXAMPLE_APP_MODEL", "gpt-6-luna")
 
 
 SYSTEM_PROMPT = """
@@ -13,7 +15,7 @@ Please respond with "positive" or "negative" only.
 
 def run_prompt(prompt: str):
     response = client.chat.completions.create(
-        model="gpt-6-luna",
+        model=MODEL,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prompt},

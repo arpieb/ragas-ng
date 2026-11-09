@@ -39,7 +39,7 @@ class ContextPrecisionWithReference(BaseMetric):
         >>>
         >>> # Setup dependencies
         >>> client = openai.AsyncOpenAI()
-        >>> llm = llm_factory("gpt-6-luna", client=client)
+        >>> llm = llm_factory("<model>", client=client)
         >>>
         >>> # Create metric instance
         >>> metric = ContextPrecisionWithReference(llm=llm)
@@ -157,7 +157,7 @@ class ContextPrecisionWithoutReference(BaseMetric):
         >>>
         >>> # Setup dependencies
         >>> client = openai.AsyncOpenAI()
-        >>> llm = llm_factory("gpt-6-luna", client=client)
+        >>> llm = llm_factory("<model>", client=client)
         >>>
         >>> # Create metric instance
         >>> metric = ContextPrecisionWithoutReference(llm=llm)
@@ -271,7 +271,7 @@ class ContextPrecision(ContextPrecisionWithReference):
         >>>
         >>> # Setup dependencies
         >>> client = openai.AsyncOpenAI()
-        >>> llm = llm_factory("gpt-6-luna", client=client)
+        >>> llm = llm_factory("<model>", client=client)
         >>>
         >>> # Create metric instance (same as ContextPrecisionWithReference)
         >>> metric = ContextPrecision(llm=llm)
@@ -307,7 +307,7 @@ class ContextUtilization(ContextPrecisionWithoutReference):
         >>>
         >>> # Setup dependencies
         >>> client = openai.AsyncOpenAI()
-        >>> llm = llm_factory("gpt-6-luna", client=client)
+        >>> llm = llm_factory("<model>", client=client)
         >>>
         >>> # Create metric instance (same as ContextPrecisionWithoutReference)
         >>> metric = ContextUtilization(llm=llm)

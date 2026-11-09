@@ -66,6 +66,19 @@ Most examples call OpenAI, so set your key first. The `llamaIndex_agent_evals` e
 export OPENAI_API_KEY=your_key_here
 ```
 
+Each template names its models once, near the top of the module that uses them. Override them without editing code:
+
+| Variable | Sets |
+|---|---|
+| `RAGAS_EXAMPLE_APP_MODEL` | the model the app or agent under test calls |
+| `RAGAS_EXAMPLE_JUDGE_MODEL` | the model that judges the results |
+
+```bash
+RAGAS_EXAMPLE_APP_MODEL=gpt-5.6-terra RAGAS_EXAMPLE_JUDGE_MODEL=gpt-6.1-sol python -m ragas_examples.rag_eval.evals
+```
+
+The app's client must reach the model you name. Most templates use an OpenAI client, so a non-OpenAI model also needs that provider's OpenAI-compatible endpoint (see the [quickstart guide](../docs/getstarted/quickstart.md)).
+
 Run an example as a module, or with its console script:
 
 ```bash

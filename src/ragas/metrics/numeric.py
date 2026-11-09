@@ -41,7 +41,7 @@ class NumericMetric(SimpleLLMMetric, NumericValidator):
     >>>
     >>> # Create an LLM instance
     >>> client = OpenAI(api_key="your-api-key")
-    >>> llm = llm_factory("gpt-6-luna", client=client)
+    >>> llm = llm_factory("<model>", client=client)
     >>>
     >>> # Create a custom numeric metric with 0-10 range
     >>> metric = NumericMetric(

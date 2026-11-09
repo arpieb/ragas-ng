@@ -30,7 +30,7 @@ class SQLSemanticEquivalence(BaseMetric):
         >>> from ragas.metrics.collections import SQLSemanticEquivalence
         >>>
         >>> client = AsyncOpenAI()
-        >>> llm = llm_factory("gpt-6-luna", client=client)
+        >>> llm = llm_factory("<model>", client=client)
         >>>
         >>> metric = SQLSemanticEquivalence(llm=llm)
         >>>

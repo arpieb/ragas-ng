@@ -26,6 +26,9 @@ load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+# The model whose judgments are being aligned. Override with RAGAS_EXAMPLE_JUDGE_MODEL.
+JUDGE_MODEL = os.getenv("RAGAS_EXAMPLE_JUDGE_MODEL", "gpt-6-luna")
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("openai._base_client").setLevel(logging.WARNING)
 
@@ -171,15 +174,15 @@ async def main():
     logger.info(f"Loaded dataset with {len(dataset)} samples")
     
     # Initialize LLM client
-    logger.info("Initializing LLM client with model: gpt-6-luna")
+    logger.info(f"Initializing LLM client with model: {JUDGE_MODEL}")
     openai_client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-    llm = llm_factory("gpt-6-luna", client=openai_client)
+    llm = llm_factory(JUDGE_MODEL, client=openai_client)
 
     # Run baseline evaluation
     logger.info("Running baseline evaluation...")
     results = await judge_experiment.arun(
         dataset,
-        name="judge_baseline_v1_gpt-6-luna",
+        name=f"judge_baseline_v1_{JUDGE_MODEL}",
         accuracy_metric=accuracy_metric,
         llm=llm,
     )
@@ -198,15 +201,15 @@ async def main_v2():
     logger.info(f"Loaded dataset with {len(dataset)} samples")
     
     # Initialize LLM client
-    logger.info("Initializing LLM client with model: gpt-6-luna")
+    logger.info(f"Initializing LLM client with model: {JUDGE_MODEL}")
     openai_client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-    llm = llm_factory("gpt-6-luna", client=openai_client)
+    llm = llm_factory(JUDGE_MODEL, client=openai_client)
 
     # Run v2 evaluation with improved prompt
     logger.info("Running v2 evaluation with improved prompt...")
     results = await judge_experiment.arun(
         dataset,
-        name="judge_accuracy_v2_gpt-6-luna",
+        name=f"judge_accuracy_v2_{JUDGE_MODEL}",
         accuracy_metric=accuracy_metric_v2,
         llm=llm,
     )

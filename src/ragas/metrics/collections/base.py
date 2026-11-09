@@ -8,7 +8,7 @@ import typing as t
 
 from ragas.async_utils import run_sync
 from ragas.embeddings.base import BaseRagasEmbedding
-from ragas.llms.base import InstructorBaseRagasLLM
+from ragas.llms.base import DEFAULT_LLM_MODEL, InstructorBaseRagasLLM
 from ragas.metrics.base import SimpleBaseMetric
 from ragas.metrics.result import MetricResult
 from ragas.metrics.validators import NumericValidator
@@ -173,7 +173,7 @@ class BaseMetric(SimpleBaseMetric, NumericValidator):
         if not isinstance(llm, InstructorBaseRagasLLM):
             raise ValueError(
                 f"Collections metrics only support modern InstructorLLM. Found: {type(llm).__name__}. "
-                f"Use: llm_factory('gpt-6-luna', client=openai_client)"
+                f"Use: llm_factory('{DEFAULT_LLM_MODEL}', client=openai_client)"
             )
 
     def _validate_embeddings(self):

@@ -43,7 +43,7 @@ class ContextRelevance(BaseMetric):
         >>>
         >>> # Setup dependencies
         >>> client = AsyncOpenAI()
-        >>> llm = llm_factory("openai", client=client, model="gpt-6-luna")
+        >>> llm = llm_factory("<model>", client=client)
         >>>
         >>> # Create metric instance
         >>> metric = ContextRelevance(llm=llm)

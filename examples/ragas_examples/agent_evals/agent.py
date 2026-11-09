@@ -9,6 +9,9 @@ import openai
 
 from ragas.llms.base import is_reasoning_model
 
+# The model the app under test calls. Override with RAGAS_EXAMPLE_APP_MODEL.
+DEFAULT_MODEL = os.getenv("RAGAS_EXAMPLE_APP_MODEL", "gpt-6-luna")
+
 SYSTEM_MESSAGE = """You are a mathematical problem-solving agent. You can only use these four atomic tools to solve problems:
 - add(a, b): Add two numbers
 - sub(a, b): Subtract b from a  
@@ -45,7 +48,7 @@ class MathToolsAgent:
     def __init__(
         self,
         client,
-        model_name: str = "gpt-6-luna",
+        model_name: str = DEFAULT_MODEL,
         system_message: str = SYSTEM_MESSAGE,
         logdir: str = "logs",
     ):
@@ -399,7 +402,7 @@ class MathToolsAgent:
 
 
 def get_default_agent(
-    model_name: str = "gpt-6-luna", logdir: str = "logs"
+    model_name: str = DEFAULT_MODEL, logdir: str = "logs"
 ) -> MathToolsAgent:
     """Get a default instance of the MathToolsAgent with OpenAI client"""
     openai_client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))

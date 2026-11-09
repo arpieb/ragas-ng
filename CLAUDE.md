@@ -136,6 +136,10 @@ make build-docs
 make serve-docs
 ```
 
+### Model retirements
+
+Model IDs named in `src`, `examples` and `docs` are tracked in `scripts/model_registry.toml`, with shutdown dates and replacements. `tests/unit/test_retired_models.py` fails on a retired ID and warns 60 days ahead. `uv run python scripts/replace_model_ids.py --check|--apply [--within DAYS]` applies the replacements. See `scripts/README.md`.
+
 ### Benchmarks
 
 ```bash

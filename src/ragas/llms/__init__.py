@@ -1,4 +1,5 @@
 from ragas.llms.base import (
+    DEFAULT_LLM_MODEL,
     BaseRagasLLM,
     InstructorBaseRagasLLM,
     InstructorLLM,
@@ -19,7 +20,7 @@ LlamaIndexLLMWrapper = DeprecationHelper(
     "Use llm_factory instead: "
     "from openai import OpenAI; "
     "from ragas.llms import llm_factory; "
-    "llm = llm_factory('gpt-6-luna', client=OpenAI(api_key='...'))",
+    f"llm = llm_factory('{DEFAULT_LLM_MODEL}', client=OpenAI(api_key='...'))",
 )
 
 __all__ = [
