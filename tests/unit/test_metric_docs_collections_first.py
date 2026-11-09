@@ -50,7 +50,9 @@ def test_legacy_metric_examples_are_under_legacy_headings():
     hits = [
         f"{page.name}:{line}: {path}"
         for page in sorted(METRIC_DOCS.glob("*.md"))
-        for line, path in legacy_examples_outside_legacy_headings(page.read_text())
+        for line, path in legacy_examples_outside_legacy_headings(
+            page.read_text(encoding="utf-8")
+        )
     ]
     assert not hits, (
         "Legacy metric examples outside a 'Legacy' heading. Show the "

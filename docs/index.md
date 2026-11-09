@@ -14,6 +14,9 @@ Traditional evaluation metrics don't capture what matters for LLM applications. 
 
 - **Easy to integrate**: Built-in dataset management, result tracking, and integration with popular frameworks like LlamaIndex, Haystack, Griptape and more.
 
+!!! tip "For AI agents"
+    These docs are also published for LLMs, following [llms.txt](https://llmstxt.org/): an index at [llms.txt](https://arpieb.github.io/ragas-ng/llms.txt), the full text at [llms-full.txt](https://arpieb.github.io/ragas-ng/llms-full.txt), and every page as Markdown (its URL plus `index.md`).
+
 <div class="grid cards" markdown>
 - 🚀 **Get Started**
 
