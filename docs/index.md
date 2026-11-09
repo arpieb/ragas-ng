@@ -12,7 +12,7 @@ Traditional evaluation metrics don't capture what matters for LLM applications. 
 
 - **Ragas Metrics**: Create custom metrics tailored to your specific use case with simple decorators or use our library of [available metrics](./concepts/metrics/available_metrics/index.md). Learn more about [metrics in Ragas](./concepts/metrics/overview/index.md).
 
-- **Easy to integrate**: Built-in dataset management, result tracking, and integration with popular frameworks like LangChain, LlamaIndex, and more.
+- **Easy to integrate**: Built-in dataset management, result tracking, and integration with popular frameworks like LlamaIndex, Haystack, Griptape and more.
 
 <div class="grid cards" markdown>
 - 🚀 **Get Started**

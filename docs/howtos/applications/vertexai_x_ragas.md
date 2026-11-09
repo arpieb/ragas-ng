@@ -33,7 +33,7 @@ For additional use cases and advanced features, refer to the documentation and H
 
 
 ```python
-!pip install --upgrade --user --quiet langchain-core langchain-google-vertexai langchain ragas rouge_score
+!pip install --upgrade --user --quiet google-cloud-aiplatform ragas rouge_score
 ```
 
 ### Restart runtime
@@ -101,7 +101,9 @@ from ragas.embeddings import embedding_factory
 from ragas.llms import llm_factory
 
 evaluator_llm = llm_factory("vertex_ai/gemini-3.8-flash")
-evaluator_embeddings = embedding_factory("vertex_ai/gemini-embedding-2")
+evaluator_embeddings = embedding_factory(
+    "litellm", model="vertex_ai/gemini-embedding-2"
+)
 ```
 
 ### Build your own model-based point-wise metrics using Ragas

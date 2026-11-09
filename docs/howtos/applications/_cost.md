@@ -8,25 +8,26 @@ When using LLMs for evaluation and test set generation, cost will be an importan
 
 ## Implement `TokenUsageParser`
 
-By default, Ragas does not calculate the usage of tokens for `evaluate()`. This is because langchain's LLMs do not always return information about token usage in a uniform way. So in order to get the usage data, we have to implement a `TokenUsageParser`.
+By default Ragas does not calculate token usage for `evaluate()`, because providers report it in different shapes. To get usage data, pass a `TokenUsageParser`.
 
-A `TokenUsageParser` is function that parses the `LLMResult` or `ChatResult` from langchain models `generate_prompt()` function and outputs `TokenUsage` which Ragas expects.
+A `TokenUsageParser` is a function that takes the provider's raw completion and returns the `TokenUsage` that Ragas expects. Ragas ships parsers for OpenAI-shaped (`get_token_usage_for_openai`), Anthropic, Bedrock and Azure AI responses. LLMs created with `llm_factory()` call through LiteLLM, which returns OpenAI-shaped responses, so `get_token_usage_for_openai` works for them whatever the provider.
 
-For an example here is one that will parse OpenAI by using a parser we have defined.
+For example, here is the OpenAI parser applied to a completion:
 
 
 ```python
-from langchain_openai.chat_models import ChatOpenAI
-from langchain_core.prompt_values import StringPromptValue
-
-gpt4o = ChatOpenAI(model="gpt-6-luna")
-p = StringPromptValue(text="hai there")
-llm_result = gpt4o.generate_prompt([p])
+from openai import OpenAI
 
 # lets import a parser for OpenAI
 from ragas.cost import get_token_usage_for_openai
 
-get_token_usage_for_openai(llm_result)
+client = OpenAI()
+completion = client.chat.completions.create(
+    model="gpt-6-luna",
+    messages=[{"role": "user", "content": "hai there"}],
+)
+
+get_token_usage_for_openai(completion)
 ```
 Output
 ```
@@ -42,8 +43,9 @@ Let's use the `get_token_usage_for_openai` parser to calculate the token usage f
 
 
 ```python
-from ragas import EvaluationDataset
 from datasets import load_dataset
+
+from ragas import EvaluationDataset
 
 dataset = load_dataset("vibrantlabsai/amnesty_qa", "english_v3")
 
@@ -59,14 +61,16 @@ You can pass in the parser to the `evaluate()` function and the cost will be cal
 
 ```python
 from ragas import evaluate
+from ragas.cost import get_token_usage_for_openai
+from ragas.llms import llm_factory
 from ragas.metrics import LLMContextRecall
 
-from ragas.cost import get_token_usage_for_openai
+evaluator_llm = llm_factory("gpt-6-luna", client=client)
 
 result = evaluate(
     eval_dataset,
     metrics=[LLMContextRecall()],
-    llm=gpt4o,
+    llm=evaluator_llm,
     token_usage_parser=get_token_usage_for_openai,
 )
 ```
@@ -119,7 +123,7 @@ kg
 Output
 ```
 KnowledgeGraph(nodes: 47, relationships: 109)
-
+```
 
 
 ### Choose your LLM
@@ -130,8 +134,8 @@ choose_generator_llm.md
 
 
 ```python
-from ragas.testset import TestsetGenerator
 from ragas.llms import llm_factory
+from ragas.testset import TestsetGenerator
 
 tg = TestsetGenerator(llm=llm_factory(), knowledge_graph=kg)
 # generating a testset

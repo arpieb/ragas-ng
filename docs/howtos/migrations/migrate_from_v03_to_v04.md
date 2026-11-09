@@ -1336,15 +1336,10 @@ result = await run(dataset)
 
 #### LangchainLLMWrapper - Removed
 
-- **Status**: Still works but discouraged
-- **Deprecation warning**:
-  ```
-  Direct usage of LangChain LLMs with Ragas prompts is deprecated and will be
-  removed in a future version. Use Ragas LLM interfaces instead
-  ```
-- **Migration**: Use `llm_factory()` with native client instead
+- **Status**: Removed. ragas-ng does not depend on LangChain, so `from ragas.llms import LangchainLLMWrapper` raises `ImportError`. See [Migrating off LangChain](migrate_off_langchain.md).
+- **Migration**: Use `llm_factory()` instead
 
-**Before (v0.3) - Deprecated:**
+**Before (v0.3), no longer works:**
 ```python
 from ragas.llms import LangchainLLMWrapper
 from langchain_openai import ChatOpenAI
@@ -1364,9 +1359,8 @@ ragas_llm = llm_factory("gpt-6-luna", client=client)
 
 #### LlamaIndexLLMWrapper - Deprecated
 
-- **Status**: Still works but discouraged
-- **Similar warning** as LangchainLLMWrapper
-- **Migration**: Use `llm_factory()` with native client
+- **Status**: Still works, but emits a deprecation warning
+- **Migration**: Use `llm_factory()`
 
 **Before (v0.3) - Deprecated:**
 ```python
@@ -1388,9 +1382,9 @@ ragas_llm = llm_factory("gpt-6-luna", client=client)
 
 ### Embeddings Migration
 
-#### LangchainEmbeddingsWrapper & LlamaIndexEmbeddingsWrapper - Deprecated
+#### LangchainEmbeddingsWrapper (removed) & LlamaIndexEmbeddingsWrapper (deprecated)
 
-- **Status**: Still work but show deprecation warnings
+- **Status**: `LangchainEmbeddingsWrapper` has been removed, because ragas-ng does not depend on LangChain. `LlamaIndexEmbeddingsWrapper` still works but shows a deprecation warning
 - **Reason**: Replaced by native embedding providers with direct client integration
 - **Migration**: See [Embeddings Migration](#embeddings-migration) section
 
@@ -1407,7 +1401,7 @@ v0.4 replaces wrapper classes with **native embedding providers** that integrate
 
 #### OpenAI Migration
 
-**Before (v0.3):**
+**Before (v0.3), no longer works:**
 ```python
 from langchain_openai import OpenAIEmbeddings as LangChainEmbeddings
 from ragas.embeddings import LangchainEmbeddingsWrapper
@@ -1429,7 +1423,7 @@ embedding = embeddings.embed_text("text")  # Different method name
 
 #### Google Embeddings Migration
 
-**Before (v0.3):**
+**Before (v0.3), no longer works:**
 ```python
 from langchain_community.embeddings import VertexAIEmbeddings
 from ragas.embeddings import LangchainEmbeddingsWrapper

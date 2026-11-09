@@ -1,45 +1,46 @@
-# Tracing and logging evaluations with Observability tools
+# Tracing and logging evaluations
 
-Logging and tracing results from LLM are important for any language model-based application. This is a tutorial on how to do tracing with Ragas. Ragas provides `callbacks` functionality which allows you to hook various tracers like LangSmith, wandb, Opik, etc easily.  In this notebook, I will be using LangSmith for tracing.
+ragas emits [OpenTelemetry](https://opentelemetry.io) spans for `evaluate()` runs: one trace per run, with a span per row and per metric holding its score. Any OpenTelemetry backend can collect them, including Phoenix, LangSmith, Langfuse, Opik, MLflow and Jaeger. ragas needs no backend-specific code.
 
-To set up LangSmith, we need to set some environment variables that it needs. For more information, you can refer to the [docs](https://docs.smith.langchain.com/)
+Spans are no-ops until you configure an OpenTelemetry SDK. Install it with an OTLP exporter:
 
 ```bash
-export LANGCHAIN_TRACING_V2=true
-export LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
-export LANGCHAIN_API_KEY=<your-api-key>
-export LANGCHAIN_PROJECT=<your-project>  # if not specified, defaults to "default"
+pip install opentelemetry-sdk opentelemetry-exporter-otlp
 ```
 
-Now we have to import the required tracer from LangChain, here we are using `LangChainTracer`, but you can similarly use any tracer supported by LangChain like [WandbTracer](https://python.langchain.com/docs/integrations/providers/wandb_tracing) or [OpikTracer](https://comet.com/docs/opik/tracing/integrations/ragas?utm_source=ragas&utm_medium=docs&utm_campaign=opik&utm_content=tracing_how_to)
+Point the exporter at your backend before the first ragas call:
 
 ```python
-# LangSmith
-from langchain.callbacks.tracers import LangChainTracer
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
-tracer = LangChainTracer(project_name="callback-experiments")
+provider = TracerProvider()
+provider.add_span_processor(
+    BatchSpanProcessor(OTLPSpanExporter(endpoint="http://localhost:6006/v1/traces"))
+)
+trace.set_tracer_provider(provider)
 ```
 
-We now pass the tracer to the `callbacks` parameter when calling `evaluate`
+Then evaluate as usual. The trace appears in your backend:
 
 ```python
-from ragas import EvaluationDataset
 from datasets import load_dataset
+from openai import OpenAI
+
+from ragas import EvaluationDataset, evaluate
+from ragas.llms import llm_factory
 from ragas.metrics import LLMContextRecall
 
 dataset = load_dataset("vibrantlabsai/amnesty_qa", "english_v3")
+eval_dataset = EvaluationDataset.from_hf_dataset(dataset["eval"])
 
-dataset = EvaluationDataset.load_from_hf(dataset["eval"])
-evaluate(dataset, metrics=[LLMContextRecall()], callbacks=[tracer])
+evaluator_llm = llm_factory("gpt-6-luna", client=OpenAI())
+evaluate(eval_dataset, metrics=[LLMContextRecall()], llm=evaluator_llm)
 ```
 
-```text
-{'context_precision': 1.0000}
-```
-<figure markdown="span">
-  ![Tracing with LangSmith](../../../_static/imgs/trace-langsmith.png)
-  <figcaption>Tracing with LangSmith</figcaption>
-</figure>
+See [Observability](../../observability.md) for the span attributes, the LangSmith and Phoenix endpoints, `result.traces` and what isn't traced yet.
 
-
-You can also write your own custom callbacks using LangChain’s `BaseCallbackHandler`, refer [here](https://www.notion.so/Docs-logging-and-tracing-6f21cde9b3cb4d499526f48fd615585d?pvs=21) to read more about it.
+!!! note "Coming from `evaluate(callbacks=...)`"
+    The `callbacks` argument, and LangChain tracers such as `LangChainTracer`, are no longer supported. ragas does not depend on LangChain. The OpenTelemetry setup above replaces them.
