@@ -28,6 +28,7 @@ from ragas.metrics.base import (
     MultiTurnMetric,
     SimpleBaseMetric,
     SingleTurnMetric,
+    adopt_metric_run,
 )
 from ragas.metrics.result import ScoreWithReason
 from ragas.run_config import RunConfig
@@ -126,7 +127,9 @@ class _CollectionsMetricAdapter(Metric):
         may be shared (#76).
         """
 
-    async def _ascore_from_sample(self, sample: t.Any) -> float:
+    async def _ascore_from_sample(
+        self, sample: t.Any, callbacks: "Callbacks" = None
+    ) -> float:
         kwargs = {}
         for name, required in self._params.items():
             value = getattr(sample, name, None)
@@ -139,7 +142,10 @@ class _CollectionsMetricAdapter(Metric):
             if value is None and not required:
                 continue
             kwargs[name] = value
-        result = await self.metric.ascore(**kwargs)
+        # evaluate() has already opened this metric's run for the row; the
+        # metric's LLM calls go under it (#196).
+        with adopt_metric_run(callbacks):
+            result = await self.metric.ascore(**kwargs)
         score = _as_score(getattr(result, "value", result), self.name)
         reason = getattr(result, "reason", None)
         # Carry the metric's explanation through evaluate() (#116).
@@ -151,7 +157,7 @@ class _SingleTurnAdapter(_CollectionsMetricAdapter, SingleTurnMetric):
     async def _single_turn_ascore(
         self, sample: SingleTurnSample, callbacks: "Callbacks"
     ) -> float:
-        return await self._ascore_from_sample(sample)
+        return await self._ascore_from_sample(sample, callbacks)
 
 
 @dataclass(repr=False)
@@ -159,7 +165,7 @@ class _MultiTurnAdapter(_CollectionsMetricAdapter, MultiTurnMetric):
     async def _multi_turn_ascore(
         self, sample: MultiTurnSample, callbacks: "Callbacks"
     ) -> float:
-        return await self._ascore_from_sample(sample)
+        return await self._ascore_from_sample(sample, callbacks)
 
 
 @dataclass(repr=False)

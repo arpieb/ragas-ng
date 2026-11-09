@@ -10,7 +10,7 @@ import typing as t
 from pydantic import BaseModel, ValidationError
 
 from ragas._version import __version__
-from ragas.callbacks import ChainType, new_group
+from ragas.callbacks import ChainType, current_group, new_group, use_group
 from ragas.exceptions import RagasOutputParserException
 from ragas.prompt.value import StringPromptValue as PromptValue
 
@@ -192,7 +192,9 @@ class PydanticPrompt(BasePrompt, t.Generic[InputModel, OutputModel]):
         RagasOutputParserException
             If there's an error parsing the output.
         """
-        callbacks = callbacks or []
+        # With no callbacks, nest under the run in progress (a collections
+        # metric, an experiment row), if any (#196).
+        callbacks = callbacks or current_group() or []
 
         processed_data = self.process_input(data)
         prompt_rm, prompt_cb = new_group(
@@ -206,16 +208,19 @@ class PydanticPrompt(BasePrompt, t.Generic[InputModel, OutputModel]):
         # Every failure ends the prompt's trace span: only parser errors did,
         # so a raw ValidationError or a provider error left it open (#94).
         try:
-            output_models = await self._generate_outputs(
-                llm=llm,
-                data=data,
-                prompt_value=prompt_value,
-                n=n,
-                temperature=temperature,
-                stop=stop,
-                prompt_cb=prompt_cb,
-                retries_left=retries_left,
-            )
+            # The prompt's run is current while the LLM is called, so an
+            # llm_factory() LLM's call span nests under it.
+            with use_group(prompt_cb):
+                output_models = await self._generate_outputs(
+                    llm=llm,
+                    data=data,
+                    prompt_value=prompt_value,
+                    n=n,
+                    temperature=temperature,
+                    stop=stop,
+                    prompt_cb=prompt_cb,
+                    retries_left=retries_left,
+                )
         except Exception as e:
             error = as_output_parser_exception(e)
             prompt_rm.on_chain_error(error=error)

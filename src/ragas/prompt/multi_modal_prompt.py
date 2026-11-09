@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from typing_extensions import TypedDict
 from urllib3.util import parse_url as urllib3_parse_url
 
-from ragas.callbacks import ChainType, new_group
+from ragas.callbacks import ChainType, current_group, new_group
 from ragas.exceptions import RagasOutputParserException
 from ragas.prompt.pydantic_prompt import (
     PydanticPrompt,
@@ -166,7 +166,8 @@ class ImageTextPrompt(PydanticPrompt, t.Generic[InputModel, OutputModel]):
         RagasOutputParserException
             If there's an error parsing the output.
         """
-        callbacks = callbacks or []
+        # With no callbacks, nest under the run in progress, if any (#196).
+        callbacks = callbacks or current_group() or []
         processed_data = self.process_input(data)
         prompt_rm, prompt_cb = new_group(
             name=self.name,

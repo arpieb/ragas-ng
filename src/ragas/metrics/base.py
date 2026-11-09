@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import contextvars
+import functools
+import inspect
 import logging
 import typing as t
 from abc import ABC, abstractmethod
@@ -12,7 +16,7 @@ from pydantic import ValidationError
 from tqdm import tqdm
 
 from ragas.async_utils import run
-from ragas.callbacks import ChainType, new_group
+from ragas.callbacks import CallbackGroup, ChainType, new_group, traced, use_group
 from ragas.dataset_schema import MetricAnnotation, MultiTurnSample, SingleTurnSample
 from ragas.llms import BaseRagasLLM
 from ragas.losses import BinaryMetricLoss, MSELoss
@@ -650,6 +654,107 @@ class ModeMetric(t.Protocol):
 ensembler = Ensember()
 
 
+# Tracing for SimpleBaseMetric subclasses (#196): collections metrics and the
+# DiscreteMetric / NumericMetric / decorator family take no `callbacks`.
+
+# Set by evaluate()'s adapters: the metric run evaluate() already opened, for the
+# metric's own score()/ascore() to adopt instead of opening a second one.
+_adopted_metric_run: contextvars.ContextVar[t.Optional[CallbackGroup]] = (
+    contextvars.ContextVar("ragas_adopted_metric_run", default=None)
+)
+# The metric whose score()/ascore() is running, so that score() -> ascore() and
+# super().ascore() don't each open a run.
+_active_metric: contextvars.ContextVar[t.Optional[t.Any]] = contextvars.ContextVar(
+    "ragas_active_metric", default=None
+)
+
+# Components, not inputs: kept out of the run's recorded inputs.
+_NOT_INPUTS = frozenset({"llm", "embeddings", "callbacks"})
+
+
+@contextlib.contextmanager
+def adopt_metric_run(callbacks: "Callbacks") -> t.Iterator[None]:
+    """Run the enclosed metric call inside the metric run in ``callbacks``.
+
+    ``evaluate()`` opens a run per metric and row before handing over to a
+    collections metric; the metric's LLM calls should nest under that run, not
+    under a second one.
+    """
+    group = callbacks if isinstance(callbacks, CallbackGroup) else None
+    token = _adopted_metric_run.set(group)
+    try:
+        yield
+    finally:
+        _adopted_metric_run.reset(token)
+
+
+@contextlib.contextmanager
+def _metric_scope(metric: t.Any, inputs: t.Dict[str, t.Any]):
+    """Yield a run handle (or None) for one top-level score()/ascore() call."""
+    adopted = _adopted_metric_run.get()
+    if adopted is not None:
+        # Consumed here, so a metric this one calls opens its own run.
+        adopted_token = _adopted_metric_run.set(None)
+        active_token = _active_metric.set(metric)
+        try:
+            with use_group(adopted):
+                yield None
+        finally:
+            _active_metric.reset(active_token)
+            _adopted_metric_run.reset(adopted_token)
+        return
+    active_token = _active_metric.set(metric)
+    try:
+        with traced(metric.name, inputs, ChainType.METRIC) as run:
+            yield run
+    finally:
+        _active_metric.reset(active_token)
+
+
+def _metric_inputs(args: t.Tuple, kwargs: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+    inputs = {k: v for k, v in kwargs.items() if k not in _NOT_INPUTS}
+    if args:
+        inputs["args"] = list(args)
+    return inputs
+
+
+def _metric_outputs(result: t.Any) -> t.Dict[str, t.Any]:
+    outputs = {"output": getattr(result, "value", result)}
+    reason = getattr(result, "reason", None)
+    if reason:
+        outputs["reason"] = reason
+    return outputs
+
+
+def _traced_metric_method(fn: t.Callable) -> t.Callable:
+    """Wrap a metric's ``score``/``ascore`` so each top-level call is a run."""
+    if inspect.iscoroutinefunction(fn):
+
+        @functools.wraps(fn)
+        async def ascore(self, *args, **kwargs):
+            if _active_metric.get() is self and _adopted_metric_run.get() is None:
+                return await fn(self, *args, **kwargs)
+            with _metric_scope(self, _metric_inputs(args, kwargs)) as run:
+                result = await fn(self, *args, **kwargs)
+                if run is not None:
+                    run.end(_metric_outputs(result))
+                return result
+
+        return ascore
+
+    @functools.wraps(fn)
+    def score(self, *args, **kwargs):
+        if _active_metric.get() is self and _adopted_metric_run.get() is None:
+            return fn(self, *args, **kwargs)
+        with _metric_scope(self, _metric_inputs(args, kwargs)) as run:
+            result = fn(self, *args, **kwargs)
+            if run is not None:
+                run.end(_metric_outputs(result))
+            return result
+
+    return score
+
+
 @dataclass
 class SimpleBaseMetric(ABC):
     """
@@ -681,6 +786,15 @@ class SimpleBaseMetric(ABC):
 
     name: str
     allowed_values: AllowedValuesType = field(default_factory=lambda: ["pass", "fail"])
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        # Every score()/ascore() a subclass defines is traced (#196). Abstract
+        # declarations are left alone.
+        for name in ("score", "ascore"):
+            fn = cls.__dict__.get(name)
+            if callable(fn) and not getattr(fn, "__isabstractmethod__", False):
+                setattr(cls, name, _traced_metric_method(fn))
 
     @abstractmethod
     def score(self, **kwargs) -> "MetricResult":

@@ -18,10 +18,20 @@ of the run, while the native tree keeps the objects themselves.
 Only ``opentelemetry-api`` is required. With no SDK configured the tracer is a
 no-op, which is correct behaviour for a library -- and costs nothing here,
 because ``EvaluationResult.traces`` comes from the native tree either way.
+
+Runs are passed down explicitly (``callbacks=`` groups) where the legacy APIs
+take them. Collections metrics, ``llm_factory()`` LLMs and experiments take no
+``callbacks``, so the group of the run in progress is also kept in a context
+variable (``current_group()``). ``traced()`` opens a run under it, which is how
+a metric's LLM calls nest under the metric, and the metric under its row (#196).
+Context variables follow ``asyncio`` tasks, ``asyncio.to_thread`` and
+``run_sync``, so concurrent rows never see each other's group.
 """
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import json
 import logging
 import typing as t
@@ -56,6 +66,8 @@ class ChainType(Enum):
     METRIC = "metric"
     ROW = "row"
     RAGAS_PROMPT = "ragas_prompt"
+    LLM = "llm"
+    EXPERIMENT = "experiment"
 
 
 # OpenInference span kinds, so backends group ragas spans sensibly.
@@ -64,6 +76,8 @@ _SPAN_KIND_BY_CHAIN_TYPE = {
     ChainType.ROW: "CHAIN",
     ChainType.METRIC: "EVALUATOR",
     ChainType.RAGAS_PROMPT: "LLM",
+    ChainType.LLM: "LLM",
+    ChainType.EXPERIMENT: "CHAIN",
 }
 
 
@@ -231,9 +245,10 @@ def new_group(
     tags = tags or []
     metadata = metadata or {}
 
+    # The parent is not modified: it may be shared by concurrent runs (rows,
+    # gathered LLM calls). Its tags/metadata were overwritten here before and
+    # never read.
     parent = _as_group(callbacks)
-    parent.tags = tags
-    parent.metadata = metadata
 
     run_id = uuid.uuid4()
 
@@ -281,6 +296,71 @@ def new_group(
 Callbacks = t.Optional[t.Union[t.List[ChainCallback], CallbackGroup]]
 
 
+# The group of the run in progress, for code that takes no `callbacks` (#196).
+_current_group: contextvars.ContextVar[t.Optional[CallbackGroup]] = (
+    contextvars.ContextVar("ragas_current_group", default=None)
+)
+
+
+def current_group() -> t.Optional[CallbackGroup]:
+    """The run-tree group of the run in progress, if any."""
+    return _current_group.get()
+
+
+@contextlib.contextmanager
+def use_group(group: t.Optional[CallbackGroup]) -> t.Iterator[None]:
+    """Make ``group`` the current group for the duration of the block."""
+    token = _current_group.set(group)
+    try:
+        yield
+    finally:
+        _current_group.reset(token)
+
+
+class TracedRun:
+    """A run opened by ``traced()``. Call ``end(outputs)`` to record its result."""
+
+    def __init__(self, manager: ChainRunManager, group: CallbackGroup) -> None:
+        self.manager = manager
+        self.group = group
+        self.outputs: t.Optional[t.Dict[str, t.Any]] = None
+
+    @property
+    def span(self) -> t.Optional[Span]:
+        return self.manager.span
+
+    def end(self, outputs: t.Dict[str, t.Any]) -> None:
+        self.outputs = outputs
+
+
+@contextlib.contextmanager
+def traced(
+    name: str,
+    inputs: t.Dict[str, t.Any],
+    chain_type: ChainType,
+    callbacks: Callbacks = None,
+) -> t.Iterator[TracedRun]:
+    """Open a run (a span and a run-tree node) for the block.
+
+    The parent is ``callbacks`` if given, else ``current_group()``, else none (a
+    root span, nested under the caller's active OpenTelemetry span if any).
+    Inside the block the new run is the current group. An exception ends the
+    run as an error and propagates.
+    """
+    parent = callbacks if callbacks is not None else current_group()
+    manager, child = new_group(
+        name, inputs=inputs, callbacks=parent, metadata={"type": chain_type}
+    )
+    run = TracedRun(manager, child)
+    try:
+        with use_group(child):
+            yield run
+    except BaseException as e:
+        manager.on_chain_error(e)
+        raise
+    manager.on_chain_end(run.outputs if run.outputs is not None else {})
+
+
 class ChainRun(BaseModel):
     run_id: str
     parent_run_id: t.Optional[str]
@@ -297,6 +377,9 @@ class ChainRunEncoder(json.JSONEncoder):
             return str(o)
         if isinstance(o, ChainType):
             return o.value
+        if isinstance(o, BaseModel):
+            # LLM outputs and experiment rows: show their fields, not a repr.
+            return o.model_dump(mode="json")
         return json.JSONEncoder.default(self, o)
 
 
@@ -410,8 +493,10 @@ def parse_run_traces(
                 name = f"{prompt_trace.name}"
                 seen[name] = seen.get(name, 0) + 1
                 key = name if seen[name] == 1 else f"{name} ({seen[name]})"
+                # Prompt runs carry their input under "data"; LLM-call runs
+                # (collections metrics, #196) carry the prompt itself.
                 prompt_traces[key] = {
-                    "input": prompt_trace.inputs.get("data", {}),
+                    "input": prompt_trace.inputs.get("data", prompt_trace.inputs),
                     "output": output,
                 }
             metric_traces[f"{metric_trace.name}"] = prompt_traces

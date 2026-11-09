@@ -494,3 +494,16 @@ All three are removed in the next release.
 **Token usage:** responses are OpenAI-shaped for every provider, so use `get_token_usage_for_openai`.
 
 **Embeddings:** the default embeddings for a Gemini LLM are now ragas' default (OpenAI's `text-embedding-ada-002` through LiteLLM). They used to be Google's, when you passed a google-genai client. Pass `GoogleEmbeddings(...)` explicitly for a Gemini-only setup. `GoogleEmbeddings` still takes a google-genai client.
+
+## Tracing: metrics, LLM calls and experiments ([#196](https://github.com/arpieb/ragas-ng/issues/196))
+
+Collections metrics, `llm_factory()` LLMs and `@experiment` take no `callbacks`, so they used to emit no OpenTelemetry spans and add nothing to the run tree. Now:
+
+- **Metrics:** every metric's `score()` / `ascore()` is an `EVALUATOR` span. That covers `ragas.metrics.collections` metrics and `DiscreteMetric`, `NumericMetric`, `RankingMetric` and decorator metrics. A metric called on its own is a root span, or a child of your application's active span. Under `evaluate()` it is the metric span `evaluate()` opens, not a second one.
+- **LLM calls:** every call to an `llm_factory()` LLM is an `LLM` span named after its response model. It records the prompt, the validated response, `llm.model_name`, the messages, the invocation parameters and token counts. It nests under the metric, legacy prompt or experiment row that made it.
+- **Experiments:** `arun()` is an `experiment <name>` span, with one `row N` span per row. A failed row is an error span. Metrics scored in the experiment function nest under their row.
+- **`result.traces` has each LLM call's input and output again.** Since metrics imported from `ragas.metrics` started handing off to collections, `result.traces[i][metric]` had been empty for `llm_factory()` LLMs. It now maps each call to `{"input": {"prompt": ...}, "output": <response model>}`, keyed by the response model's name, e.g. `AspectCriticOutput`.
+- A legacy prompt run without `callbacks` nests under the run in progress instead of starting a new trace.
+- Span payloads render pydantic models as JSON fields instead of `repr()`.
+
+Without an OpenTelemetry SDK, spans are still no-ops. The LLM call is unchanged unless a usage collector or a recording span needs the provider's raw response for token counts.

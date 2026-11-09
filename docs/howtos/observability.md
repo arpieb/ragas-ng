@@ -6,21 +6,34 @@ ragas depends only on `opentelemetry-api`. Until you configure an SDK, its spans
 
 ## What ragas traces
 
-Spans use the instrumentation scope `ragas` and follow the [OpenInference](https://github.com/Arize-ai/openinference/tree/main/spec) conventions, so backends that understand those show inputs, outputs and span kinds. An `evaluate()` run produces this tree:
+Spans use the instrumentation scope `ragas` and follow the [OpenInference](https://github.com/Arize-ai/openinference/tree/main/spec) conventions, so backends that understand those show inputs, outputs, span kinds, models and token counts.
 
-| Span | `openinference.span.kind` | `ragas.chain.type` |
-|---|---|---|
-| `ragas evaluation` | `CHAIN` | `evaluation` |
-| `row 0`, `row 1`, ... | `CHAIN` | `row` |
-| one per metric, named after it (e.g. `faithfulness`) | `EVALUATOR` | `metric` |
+| Span | `openinference.span.kind` | `ragas.chain.type` | Emitted by |
+|---|---|---|---|
+| `ragas evaluation` | `CHAIN` | `evaluation` | `evaluate()` |
+| `experiment <name>` | `CHAIN` | `experiment` | `@experiment` `arun()` |
+| `row 0`, `row 1`, ... | `CHAIN` | `row` | each row of either |
+| one per metric call, named after the metric (e.g. `faithfulness`) | `EVALUATOR` | `metric` | `evaluate()`, and any metric's `score()` / `ascore()` |
+| one per legacy ragas prompt, named after it | `LLM` | `ragas_prompt` | legacy prompts (testset generation, metrics on the legacy implementation) |
+| one per call to an `llm_factory()` LLM, named after its response model (e.g. `AspectCriticOutput`) | `LLM` | `llm` | `InstructorLLM.generate()` / `agenerate()` |
 
-Each span carries `input.value` and `output.value` as JSON (cut to 4,096 characters) and `ragas.run.id`. A metric span's input is the row's fields and its output is the score, for example `{"output": 1.0}`. Testset generation is traced too.
+Spans nest the way the work does. An `evaluate()` run is `ragas evaluation` → `row N` → metric → LLM call. An experiment is `experiment <name>` → `row N`, with any metric scored inside your experiment function under its row. A metric scored on its own is a root span, or a child of your application's active span if there is one. Concurrent rows and calls each get their own branch.
 
-!!! note "What is not traced yet"
-    - **The LLM calls inside a metric.** With an `llm_factory()` LLM, metrics score through their collections implementation, which emits no spans of its own. A metric span therefore has no children. (Metrics that fall back to the legacy implementation, for example with customised prompts, also emit one `LLM` span per ragas prompt.)
-    - **Collections metrics called directly** with `score()` / `ascore()`, and **`@experiment` runs**: no spans.
+Each span carries `input.value` and `output.value` as JSON (cut to 4,096 characters) and `ragas.run.id`:
 
-    To see the LLM calls themselves, trace the LLM client, for example with an OpenInference instrumentor for OpenAI or LiteLLM.
+- **metric spans:** the input is the metric's arguments, and the output is its score plus the reason, for example `{"output": 1.0, "reason": "..."}`;
+- **LLM spans:** the input is the prompt, and the output is the validated response.
+
+LLM spans also carry:
+
+- `llm.model_name` and `llm.provider`;
+- `llm.input_messages.*` and `llm.output_messages.*`;
+- `llm.invocation_parameters`;
+- token counts as `llm.token_count.prompt` / `completion` / `total`.
+
+A cache hit makes no LLM call, so it has no LLM span.
+
+LLMs that don't come from `llm_factory()` (the Haystack, OCI and LlamaIndex wrappers) emit no LLM spans of their own; their prompts still have prompt spans.
 
 ## Send spans to a backend
 
@@ -81,13 +94,18 @@ See the [Langfuse guide](integrations/_langfuse.md), which also covers scoring L
 
 ## Without a backend: `result.traces`
 
-`EvaluationResult.traces` holds the same run tree in process, with no OpenTelemetry setup: one entry per row, with each metric's score. For metrics on the legacy implementation it also holds the input and output of every ragas prompt the metric ran. Metrics scored through collections, the default with `llm_factory()`, record their score only.
+`EvaluationResult.traces` holds the same run tree in process, with no OpenTelemetry setup: one entry per row, keyed by metric name. Each metric's entry holds the input and output of every LLM call or ragas prompt it ran, and `.scores` holds the row's scores:
 
 ```python
 result = evaluate(dataset, metrics=[...], llm=evaluator_llm)
 
-result.traces[0]  # the first row, e.g. {'harmless': 1.0, 'faithfulness': 1.0}
+result.traces[0].scores  # {'answers': 1.0}
+dict(result.traces[0]["answers"])
+# {'AspectCriticOutput': {'input': {'prompt': '...'},
+#                         'output': AspectCriticOutput(reason='...', verdict=1)}}
 ```
+
+A metric that makes the same call several times gets numbered keys: `name`, `name (2)`, and so on.
 
 ## Coming from LangChain callbacks
 
