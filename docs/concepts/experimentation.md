@@ -90,6 +90,11 @@ results = await my_experiment.arun(dataset, max_workers=-1)  # no limit
 - **Sync experiment functions run in worker threads,** up to `max_workers` at once, so they don't block the event loop. If your function isn't thread-safe, use `max_workers=1`. Threads come from asyncio's default thread pool, which also caps them, at `min(32, CPU count + 4)`.
 - **Results are saved in dataset order,** whatever order the rows finish in, so row *i* of the results comes from row *i* of the dataset.
 - **A row whose function raises is left out of the results.** It is logged as a warning on the `ragas.experiment` logger, with its index and the error, and a final warning gives the number of failed rows. To keep failed rows, catch the error in your function; see [Error handling](#error-handling-in-experiments).
+- **To stop on the first failure instead,** pass `raise_exceptions=True`, on the decorator or on one run. The rows still running are cancelled, nothing is saved, and the row's exception is raised from `arun`, with a note giving the row index. This is useful in CI, where a broken pipeline should fail the job rather than leave a short results file. A sync function's thread can't be interrupted, so a row already running in one finishes in the background and its result is discarded.
+
+    ```python
+    results = await my_experiment.arun(dataset, raise_exceptions=True)
+    ```
 
 ### Parameterized Experiments
 

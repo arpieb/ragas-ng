@@ -337,6 +337,31 @@ def test_failed_experiment_row_is_an_error_span(spans):
     )
 
 
+def test_fail_fast_ends_the_experiment_span_as_an_error_after_its_rows(spans):
+    # #170: the failing row stops the run; the cancelled row's span ends
+    # before the experiment's, so the tree is complete in the backend
+    @experiment(Row)
+    async def flaky(row):
+        if row["question"] == "q1":
+            await asyncio.sleep(0)  # let row 1 start, so it is cancelled mid-run
+            raise RuntimeError("row failed")
+        await asyncio.sleep(30)
+
+    data = Dataset(name="qa", backend="inmemory")
+    data.append({"question": "q1", "answer": "a1"})
+    data.append({"question": "q2", "answer": "a2"})
+    with pytest.raises(RuntimeError):
+        asyncio.run(
+            flaky.arun(data, name="flaky", backend="inmemory", raise_exceptions=True)
+        )
+
+    (exp,) = named(spans, "experiment flaky")
+    assert exp.status.status_code.name == "ERROR"
+    rows = named(spans, "row 0") + named(spans, "row 1")
+    assert [r.status.status_code.name for r in rows] == ["ERROR", "ERROR"]
+    assert all(r.end_time <= exp.end_time for r in rows)
+
+
 # --- no tracing SDK ---------------------------------------------------------------
 
 
