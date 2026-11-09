@@ -193,7 +193,7 @@ from ragas.backends import get_registry  # local/csv, local/jsonl, inmemory, gdr
 ```
 
 - `Dataset(name, backend="local/csv", root_dir="./data")`: a backend by name plus its constructor arguments, or a backend instance.
-- `@experiment(Model, backend=..., backend_kwargs=..., max_workers=16)`, then `await fn.arun(dataset, ...)`. `name`, `backend`, `backend_kwargs` and `max_workers` belong to `arun`; other keyword arguments go to the experiment function.
+- `@experiment(Model, backend=..., backend_kwargs=..., max_workers=16, raise_exceptions=False, save_partial=False)`, then `await fn.arun(dataset, ...)`. `name`, `backend`, `backend_kwargs`, `max_workers`, `raise_exceptions` and `save_partial` belong to `arun`; other keyword arguments go to the experiment function.
 - User guide: `docs/howtos/customizations/storage_backends.md`. Contributor notes: `src/ragas/backends/README.md`.
 
 ### LLMs

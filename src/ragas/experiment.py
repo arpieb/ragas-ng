@@ -10,7 +10,6 @@ from pathlib import Path
 from pydantic import BaseModel
 from tqdm import tqdm
 
-from ragas.async_utils import as_completed
 from ragas.backends.base import BaseBackend
 from ragas.callbacks import ChainType, traced
 from ragas.dataset import Dataset, DataTable
@@ -120,6 +119,8 @@ class ExperimentProtocol(t.Protocol):
         *args,
         backend_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
         max_workers: t.Optional[int] = None,
+        raise_exceptions: t.Optional[bool] = None,
+        save_partial: t.Optional[bool] = None,
         **kwargs,
     ) -> "Experiment": ...
 
@@ -135,10 +136,14 @@ class ExperimentWrapper:
         name_prefix: str = "",
         default_backend_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
         max_workers: int = DEFAULT_MAX_WORKERS,
+        raise_exceptions: bool = False,
+        save_partial: bool = False,
     ):
         _check_backend_kwargs(default_backend, default_backend_kwargs)
         _check_max_workers(max_workers)
         self.max_workers = max_workers
+        self.raise_exceptions = raise_exceptions
+        self.save_partial = save_partial
         self.func = func
         self.experiment_model = experiment_model
         self.default_backend = default_backend
@@ -163,13 +168,16 @@ class ExperimentWrapper:
         *args,
         backend_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
         max_workers: t.Optional[int] = None,
+        raise_exceptions: t.Optional[bool] = None,
+        save_partial: t.Optional[bool] = None,
         **kwargs,
     ) -> "Experiment":
         """Run the experiment against a dataset.
 
         Rows run concurrently, at most ``max_workers`` at a time. A sync
         experiment function runs in worker threads. Results are saved in
-        dataset order. A row whose function raises is logged and left out.
+        dataset order. A row whose function raises is logged and left out,
+        unless ``raise_exceptions`` is set.
 
         Args:
             dataset: The rows to run the experiment function on.
@@ -182,9 +190,21 @@ class ExperimentWrapper:
                 name, e.g. ``{"root_dir": "./data"}``.
             max_workers: How many rows run at once. Defaults to the
                 decorator's ``max_workers`` (16). ``-1`` means no limit.
+            raise_exceptions: Stop on the first row that raises: the rows
+                still running are cancelled, nothing is saved, and that row's
+                exception is re-raised, with the row index added as a note.
+                Defaults to the decorator's ``raise_exceptions`` (False). A
+                sync function's thread can't be stopped; its row finishes in
+                the background and its result is discarded.
+            save_partial: With ``raise_exceptions``, save the rows that
+                finished before the stop, then raise. Defaults to the
+                decorator's ``save_partial`` (False: save nothing). Has no
+                effect without ``raise_exceptions``, which saves every row
+                that didn't fail anyway.
             **kwargs: Passed to the experiment function. ``name``,
-                ``backend``, ``backend_kwargs`` and ``max_workers`` are
-                ``arun``'s own, so pass the function's arguments by keyword.
+                ``backend``, ``backend_kwargs``, ``max_workers``,
+                ``raise_exceptions`` and ``save_partial`` are ``arun``'s
+                own, so pass the function's arguments by keyword.
         """
         # Generate name if not provided
         if name is None:
@@ -219,6 +239,10 @@ class ExperimentWrapper:
 
         limit = self.max_workers if max_workers is None else max_workers
         _check_max_workers(limit)
+        fail_fast = (
+            self.raise_exceptions if raise_exceptions is None else raise_exceptions
+        )
+        keep_partial = self.save_partial if save_partial is None else save_partial
         is_async = asyncio.iscoroutinefunction(self.func)
         rows = list(dataset)
 
@@ -228,8 +252,14 @@ class ExperimentWrapper:
         with traced(
             f"experiment {name}", {"rows": len(rows)}, ChainType.EXPERIMENT
         ) as experiment_run:
+            # Set by the first failure when fail_fast, before that row gives
+            # up its worker slot, so a row waiting for the slot never starts.
+            stop = False
 
             async def run_row(index: int, item: t.Any):
+                nonlocal stop
+                if stop:
+                    return index, None, None
                 try:
                     with traced(
                         f"row {index}",
@@ -249,16 +279,33 @@ class ExperimentWrapper:
                         row_run.end({"output": result})
                     return index, result, None
                 except Exception as e:
+                    if fail_fast:
+                        stop = True
                     return index, None, e
+
+            semaphore = None if limit == -1 else asyncio.Semaphore(limit)
+
+            async def start_row(index: int, item: t.Any):
+                if semaphore is None:
+                    return await run_row(index, item)
+                async with semaphore:
+                    return await run_row(index, item)
 
             results: t.List[t.Any] = [None] * len(rows)
             failures = 0
+            first_error: t.Optional[BaseException] = None
+            failed_index = -1
+            tasks = [
+                asyncio.create_task(start_row(i, item)) for i, item in enumerate(rows)
+            ]
             progress_bar = tqdm(total=len(rows), desc="Running experiment")
             try:
-                for future in as_completed(
-                    [run_row(i, item) for i, item in enumerate(rows)], limit
-                ):
+                for future in asyncio.as_completed(tasks):
                     index, result, error = await future
+                    if error is not None and fail_fast:
+                        first_error = error
+                        failed_index = index
+                        break
                     if error is not None:
                         failures += 1
                         logger.warning(
@@ -273,6 +320,29 @@ class ExperimentWrapper:
                     progress_bar.update(1)
             finally:
                 progress_bar.close()
+                # After a fail-fast stop, or if arun itself is cancelled: cancel
+                # the rows still running and wait for them, so their runs end
+                # before the experiment's.
+                pending = [task for task in tasks if not task.done()]
+                for task in pending:
+                    task.cancel()
+                if pending:
+                    await asyncio.gather(*pending, return_exceptions=True)
+            if first_error is not None:
+                if keep_partial:
+                    saved = _save_in_order(experiment_view, results)
+                    outcome = (
+                        f"save_partial=True saved the {saved} of {len(rows)} rows "
+                        f"that finished"
+                    )
+                else:
+                    outcome = "nothing was saved"
+                first_error.add_note(
+                    f"Raised by row {failed_index} of experiment {name!r}; "
+                    f"raise_exceptions=True stopped the run and {outcome}."
+                )
+                # ends the experiment run as an error, then propagates
+                raise first_error
             experiment_run.end(
                 {"rows": len(rows), "failed": failures, "saved": len(rows) - failures}
             )
@@ -285,15 +355,17 @@ class ExperimentWrapper:
                 len(rows),
             )
 
-        # dataset order, not completion order
-        for result in results:
-            if result is not None:
-                experiment_view.append(result)
-
-        # Save experiment
-        experiment_view.save()
-
+        _save_in_order(experiment_view, results)
         return experiment_view
+
+
+def _save_in_order(experiment_view: "Experiment", results: t.List[t.Any]) -> int:
+    """Save the rows that finished, in dataset order; returns how many."""
+    saved = [result for result in results if result is not None]
+    for result in saved:
+        experiment_view.append(result)
+    experiment_view.save()
+    return len(saved)
 
 
 def _row_inputs(item: t.Any) -> t.Dict[str, t.Any]:
@@ -361,6 +433,8 @@ def experiment(
     *,
     backend_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
     max_workers: int = DEFAULT_MAX_WORKERS,
+    raise_exceptions: bool = False,
+    save_partial: bool = False,
 ) -> t.Callable[[t.Callable], ExperimentProtocol]:
     """Decorator for creating experiment functions.
 
@@ -374,6 +448,12 @@ def experiment(
         max_workers: How many rows ``arun`` runs at once (default 16, the
             same as ``evaluate()``); ``-1`` means no limit. A sync function
             runs in that many threads, so use 1 if it isn't thread-safe.
+        raise_exceptions: Stop ``arun`` on the first row that raises, save
+            nothing, and re-raise (default False: log the row, leave it out
+            and go on). ``arun(raise_exceptions=...)`` overrides it.
+        save_partial: With ``raise_exceptions``, save the rows that finished
+            before the stop instead of nothing. ``arun(save_partial=...)``
+            overrides it.
 
     Returns:
         Decorator function that wraps experiment functions
@@ -395,6 +475,8 @@ def experiment(
             name_prefix=name_prefix,
             default_backend_kwargs=backend_kwargs,
             max_workers=max_workers,
+            raise_exceptions=raise_exceptions,
+            save_partial=save_partial,
         )
         return t.cast(ExperimentProtocol, wrapper)
 

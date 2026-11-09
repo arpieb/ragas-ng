@@ -529,3 +529,11 @@ When a metric needs embeddings and none are passed, `evaluate()` used to give ev
 - Other providers (`ollama/`, `anthropic/`, `bedrock/`, ...) also keep it, but now with a `UserWarning` that says to pass `embeddings=`.
 
 **⚠ Scores change** for Gemini and Vertex users of embedding metrics who relied on the default, since a different embedding model gives different similarities. Pass `embeddings=` to keep the old model. LLMs built with an OpenAI or Azure client are unchanged: they still take embeddings from that client.
+
+## Experiments: `raise_exceptions` stops on the first failed row ([#170](https://github.com/arpieb/ragas-ng/issues/170))
+
+`@experiment(raise_exceptions=True)` or `arun(..., raise_exceptions=True)` makes `arun` stop at the first row whose function raises, like `evaluate(raise_exceptions=True)`. The rows still running are cancelled, rows not yet started never run, **nothing is saved**, and that row's exception is raised from `arun`, with a note naming the row index. The default, `False`, is unchanged: the row is logged and left out, and the run goes on.
+
+Add `save_partial=True` (decorator or `arun`) to save the rows that finished before the stop instead; the error is still raised, and its note says how many rows were saved. Without `raise_exceptions` it has no effect.
+
+`raise_exceptions` and `save_partial` are now `arun`'s own keyword arguments, like `name`, `backend`, `backend_kwargs` and `max_workers`. An experiment function that took a keyword argument of either name through `arun` no longer receives it.
