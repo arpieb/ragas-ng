@@ -41,7 +41,7 @@ Each metric are essentially paradigms that are designed to evaluate a particular
 ## SQL
 
 - [Execution based Datacompy Score](sql.md#execution-based-metrics)
-- [SQL query Equivalence](sql.md#sql-query-semantic-equivalence)
+- [SQL query Equivalence](sql.md#sql-semantic-equivalence)
 
 ## General purpose
 

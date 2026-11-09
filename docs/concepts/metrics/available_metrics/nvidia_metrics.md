@@ -81,7 +81,7 @@ Thus, the final **Answer Accuracy** score is **1**.
 
 1. [Answer Correctness](answer_correctness.md): This metric gauges the accuracy of the generated answer compared to the ground truth by considering both semantic and factual similarity.
 
-2. [Rubric Score](general_purpose.md#rubrics-based-criteria-scoring): The Rubric-Based Criteria Scoring Metric allows evaluations based on user-defined rubrics, where each rubric outlines specific scoring criteria. The LLM assesses responses according to these customized descriptions, ensuring a consistent and objective evaluation process.
+2. [Rubric Score](general_purpose.md#rubrics-based-scoring): The Rubric-Based Criteria Scoring Metric allows evaluations based on user-defined rubrics, where each rubric outlines specific scoring criteria. The LLM assesses responses according to these customized descriptions, ensuring a consistent and objective evaluation process.
 
 ### Comparison of Metrics
 
@@ -204,7 +204,7 @@ In this example, the two retrieved contexts together fully address the user's qu
 
 2. [Context Recall](context_recall.md): It quantifies the extent to which the relevant information is successfully retrieved. It is calculated as the ratio of the number of relevant claims (or contexts) found in the retrieved results to the total number of relevant claims in the reference, ensuring that important information is not missed.
 
-3. [Rubric Score](general_purpose.md#rubrics-based-criteria-scoring): The Rubric-Based Criteria Scoring Metric evaluates responses based on user-defined rubrics with customizable scoring criteria, ensuring consistent and objective assessments. The scoring scale is flexible to suit user needs.
+3. [Rubric Score](general_purpose.md#rubrics-based-scoring): The Rubric-Based Criteria Scoring Metric evaluates responses based on user-defined rubrics with customizable scoring criteria, ensuring consistent and objective assessments. The scoring scale is flexible to suit user needs.
 
 #### Context Precision and Context Recall vs. Context Relevance
 
@@ -312,7 +312,7 @@ In this example, the retrieved contexts provide both the birthdate and location 
 
 1. [Faithfulness](faithfulness.md): This metric measures how factually consistent a response is with the retrieved context, ensuring that every claim in the response is supported by the provided information. The Faithfulness score ranges from 0 to 1, with higher scores indicating better consistency.
 
-2. [Rubric Score](general_purpose.md#rubrics-based-criteria-scoring): This is a general-purpose metric that evaluates responses based on user-defined criteria and can be adapted to assess Answer Accuracy, Context Relevance or Response Groundedness by aligning the rubric with the requirements.
+2. [Rubric Score](general_purpose.md#rubrics-based-scoring): This is a general-purpose metric that evaluates responses based on user-defined criteria and can be adapted to assess Answer Accuracy, Context Relevance or Response Groundedness by aligning the rubric with the requirements.
 
 ### Comparison of Metrics
 

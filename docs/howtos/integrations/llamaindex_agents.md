@@ -410,7 +410,7 @@ When assessing CodeAct agents, we can begin with foundational metrics that exami
 Ragas offers powerful custom metric capabilities that enable increasingly nuanced evaluation as your requirements evolve.
 
 - [AspectCritic](../../concepts/metrics/available_metrics/aspect_critic.md) - Provides a binary evaluation (pass/fail) that determines whether an agent's response satisfies specific user-defined criteria, using LLM-based judgment to deliver clear success indicators.
-- [RubricScoreMetric](../../concepts/metrics/available_metrics/general_purpose.md#rubrics-based-criteria-scoring) - Evaluates agent responses against comprehensive, predefined quality rubrics with discrete scoring levels, enabling consistent performance assessment across multiple dimensions.
+- [RubricScoreMetric](../../concepts/metrics/available_metrics/general_purpose.md#rubrics-based-scoring) - Evaluates agent responses against comprehensive, predefined quality rubrics with discrete scoring levels, enabling consistent performance assessment across multiple dimensions.
 
 
 ```python

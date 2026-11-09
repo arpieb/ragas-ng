@@ -561,7 +561,7 @@ When defining evaluation criteria, focus on binary decisions or discrete classif
 Ragas includes metrics suited to such evaluations, and we will explore some of them in action:  
 
 - [Aspect Critic Metric](../../concepts/metrics/available_metrics/aspect_critic.md): Evaluates whether a submission follows user-defined criteria by leveraging LLM judgments to yield a binary outcome.
-- [Rubric Score Metric](../../concepts/metrics/available_metrics/general_purpose.md#rubrics-based-criteria-scoring): Assesses responses against detailed, user-defined rubrics to consistently assign scores reflecting quality.
+- [Rubric Score Metric](../../concepts/metrics/available_metrics/general_purpose.md#rubrics-based-scoring): Assesses responses against detailed, user-defined rubrics to consistently assign scores reflecting quality.
 
 
 ```python
