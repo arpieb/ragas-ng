@@ -541,3 +541,11 @@ Add `save_partial=True` (decorator or `arun`) to save the rows that finished bef
 ## Experiments: a sync `run()` ([#172](https://github.com/arpieb/ragas-ng/issues/172))
 
 `@experiment` functions now have `run(dataset, ...)`, the synchronous form of `await arun(dataset, ...)`. It takes the same arguments and returns the same `Experiment`, so a script no longer needs `asyncio.run(fn.arun(...))`. Like `evaluate()` and `metric.score()`, it runs on ragas' shared background event loop (#74, #80), so it also works inside a running loop such as Jupyter. Ctrl-C cancels the rows still running.
+
+## `evaluate()` / `Executor`: stopping stops the jobs ([#207](https://github.com/arpieb/ragas-ng/issues/207))
+
+- **`raise_exceptions=True` no longer leaves jobs running.** The first error used to be raised while the other jobs ran on in the background: for `evaluate()`, LLM calls still being made, and paid for, after the error. Now the jobs still running are cancelled and awaited before the error propagates, and no job starts after the failing one (with `max_workers=1`, the rest never run).
+- **`Executor.cancel()` takes effect within about 50 ms.** It used to wait for the next job to finish, then cancel only what hadn't finished yet. Jobs still running are cancelled; `results()` returns what had finished.
+- The cancel path no longer leaves a coroutine un-awaited (`RuntimeWarning: coroutine ... was never awaited`).
+
+`ragas.async_utils.as_completed` is unchanged apart from that warning; ragas itself now uses `concurrent_results`.

@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from tqdm.auto import tqdm
 
-from ragas.async_utils import as_completed, process_futures, run_sync
+from ragas.async_utils import concurrent_results, run_sync
 from ragas.run_config import RunConfig, capture_run_scope
 from ragas.utils import ProgressBarManager, batched
 
@@ -171,16 +171,19 @@ class Executor:
                     afunc(*args, **kwargs) for afunc, args, kwargs, _ in batch
                 ]
 
-                async for result in process_futures(
-                    as_completed(
-                        coroutines, max_workers, cancel_check=self.is_cancelled
-                    )
-                ):
-                    # If jobs are configured to raise exceptions, propagate immediately
-                    if isinstance(result, Exception) and self.raise_exceptions:
-                        raise result
-                    results.append(result)
-                    batch_pbar.update(1)
+                async with concurrent_results(
+                    coroutines,
+                    max_workers,
+                    cancel_check=self.is_cancelled,
+                    fail_fast=self.raise_exceptions,
+                ) as finished:
+                    async for result in finished:
+                        # raise_exceptions: propagate at once; leaving the
+                        # block cancels the other jobs and waits for them (#207)
+                        if isinstance(result, Exception) and self.raise_exceptions:
+                            raise result
+                        results.append(result)
+                        batch_pbar.update(1)
                 # Update overall progress bar for all futures in this batch
                 overall_pbar.update(len(batch))
 
@@ -188,14 +191,19 @@ class Executor:
         """Helper function to process coroutines and update the progress bar."""
         coroutines = [afunc(*args, **kwargs) for afunc, args, kwargs, _ in jobs]
 
-        async for result in process_futures(
-            as_completed(coroutines, max_workers, cancel_check=self.is_cancelled)
-        ):
-            # If jobs are configured to raise exceptions, propagate immediately
-            if isinstance(result, Exception) and self.raise_exceptions:
-                raise result
-            results.append(result)
-            pbar.update(1)
+        async with concurrent_results(
+            coroutines,
+            max_workers,
+            cancel_check=self.is_cancelled,
+            fail_fast=self.raise_exceptions,
+        ) as finished:
+            async for result in finished:
+                # raise_exceptions: propagate at once; leaving the block
+                # cancels the other jobs and waits for them (#207)
+                if isinstance(result, Exception) and self.raise_exceptions:
+                    raise result
+                results.append(result)
+                pbar.update(1)
 
     async def aresults(self) -> t.List[t.Any]:
         """
