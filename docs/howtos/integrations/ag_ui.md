@@ -199,7 +199,7 @@ factual_result = await factual_experiment.arun(
 )
 
 # In a standalone script, use:
-# factual_result = asyncio.run(factual_experiment.arun(scientist_questions, name="scientist_qa_eval"))
+# factual_result = factual_experiment.run(scientist_questions, name="scientist_qa_eval")
 
 factual_result.to_pandas()
 ```
@@ -252,7 +252,7 @@ async def tool_experiment(row):
 tool_result = await tool_experiment.arun(weather_queries, name="weather_tool_eval")
 
 # Or in a script
-# tool_result = asyncio.run(tool_experiment.arun(weather_queries, name="weather_tool_eval"))
+# tool_result = tool_experiment.run(weather_queries, name="weather_tool_eval")
 
 tool_result.to_pandas()
 ```
