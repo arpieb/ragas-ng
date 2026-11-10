@@ -4,6 +4,9 @@ import typing as t
 
 from ragas.cache import CacheInterface
 
+if t.TYPE_CHECKING:
+    from ragas.rate_limit import RateLimit
+
 from .base import BaseRagasEmbedding
 from .utils import batch_texts, get_optimal_batch_size, safe_import, validate_texts
 
@@ -13,6 +16,9 @@ class LiteLLMEmbeddings(BaseRagasEmbedding):
 
     Supports 100+ models across OpenAI, Azure, Google, Cohere, Anthropic, and more.
     Provides intelligent batching and provider-specific optimizations.
+
+    ``rate_limit`` (a ``ragas.rate_limit.RateLimit``) paces every embedding
+    request: one per call, or one per batch (#171).
     """
 
     PROVIDER_NAME = "litellm"
@@ -28,6 +34,7 @@ class LiteLLMEmbeddings(BaseRagasEmbedding):
         max_retries: int = 3,
         batch_size: t.Optional[int] = None,
         cache: t.Optional[CacheInterface] = None,
+        rate_limit: t.Optional["RateLimit"] = None,
         **litellm_params: t.Any,
     ):
         super().__init__(cache=cache)
@@ -40,6 +47,22 @@ class LiteLLMEmbeddings(BaseRagasEmbedding):
         self.max_retries = max_retries
         self.batch_size = batch_size or get_optimal_batch_size("litellm", model)
         self.litellm_params = litellm_params
+        self.rate_limit = rate_limit
+
+    def _tokens(self, texts: t.Sequence[str]) -> int:
+        if self.rate_limit is None or not self.rate_limit.tpm:
+            return 0
+        from ragas.rate_limit import estimate_embedding_tokens
+
+        return estimate_embedding_tokens(self.model, texts)
+
+    def _wait(self, texts: t.Sequence[str]) -> None:
+        if self.rate_limit is not None:
+            self.rate_limit.acquire(self._tokens(texts))
+
+    async def _await(self, texts: t.Sequence[str]) -> None:
+        if self.rate_limit is not None:
+            await self.rate_limit.aacquire(self._tokens(texts))
 
     def _prepare_kwargs(self, **kwargs: t.Any) -> t.Dict[str, t.Any]:
         """Prepare kwargs for LiteLLM call."""
@@ -63,12 +86,14 @@ class LiteLLMEmbeddings(BaseRagasEmbedding):
     def embed_text(self, text: str, **kwargs: t.Any) -> t.List[float]:
         """Embed a single text using LiteLLM."""
         call_kwargs = self._prepare_kwargs(**kwargs)
+        self._wait([text])
         response = self.litellm.embedding(input=[text], **call_kwargs)
         return response.data[0]["embedding"]
 
     async def aembed_text(self, text: str, **kwargs: t.Any) -> t.List[float]:
         """Asynchronously embed a single text using LiteLLM."""
         call_kwargs = self._prepare_kwargs(**kwargs)
+        await self._await([text])
         response = await self.litellm.aembedding(input=[text], **call_kwargs)
         return response.data[0]["embedding"]
 
@@ -83,6 +108,7 @@ class LiteLLMEmbeddings(BaseRagasEmbedding):
 
         for batch in batches:
             call_kwargs = self._prepare_kwargs(**kwargs)
+            self._wait(batch)
             response = self.litellm.embedding(input=batch, **call_kwargs)
             embeddings.extend([item["embedding"] for item in response.data])
 
@@ -101,6 +127,7 @@ class LiteLLMEmbeddings(BaseRagasEmbedding):
 
         for batch in batches:
             call_kwargs = self._prepare_kwargs(**kwargs)
+            await self._await(batch)
             response = await self.litellm.aembedding(input=batch, **call_kwargs)
             embeddings.extend([item["embedding"] for item in response.data])
 

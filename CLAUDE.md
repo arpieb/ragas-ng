@@ -198,7 +198,7 @@ from ragas.backends import get_registry  # local/csv, local/jsonl, inmemory, gdr
 
 ### LLMs
 
-`llm_factory()` (`src/ragas/llms/base.py`) returns an `InstructorLLM` over LiteLLM for every model (#182). The client may be `None`, an `OpenAI` / `Azure` client (passed to LiteLLM as a copy), or a `litellm.Router`. Native SDK clients raise. Per-provider parameter rules live in `InstructorLLM._map_provider_params`: the OpenAI reasoning-model and Claude rules, plus `_map_litellm_defaults`. Tests use LiteLLM's `mock_response`, so no network is needed (`tests/unit/llms/test_llm_factory.py`).
+`llm_factory()` (`src/ragas/llms/base.py`) returns an `InstructorLLM` over LiteLLM for every model (#182). The client may be `None`, an `OpenAI` / `Azure` client (passed to LiteLLM as a copy), or a `litellm.Router`. Native SDK clients raise. Per-provider parameter rules live in `InstructorLLM._map_provider_params`: the OpenAI reasoning-model and Claude rules, plus `_map_litellm_defaults`. Tests use LiteLLM's `mock_response`, so no network is needed (`tests/unit/llms/test_llm_factory.py`). `llm_factory(rate_limit=RateLimit(rpm=..., tpm=...))` (`src/ragas/rate_limit.py`, over pyrate-limiter) paces each request by wrapping LiteLLM's completion function, below instructor's retries (#171).
 
 ## Debugging Logs
 

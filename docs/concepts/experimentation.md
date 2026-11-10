@@ -92,7 +92,7 @@ results = await my_experiment.arun(dataset, max_workers=2)  # this run only
 results = await my_experiment.arun(dataset, max_workers=-1)  # no limit
 ```
 
-- **It limits how many rows run at once, not requests per minute.** A row that calls an LLM three times still counts as one. If your provider still returns rate-limit errors (HTTP 429), lower `max_workers`. The LLM client's own retries and backoff handle short bursts, such as the OpenAI client's `max_retries`.
+- **It limits how many rows run at once, not requests per minute.** A row that calls an LLM three times still counts as one. To keep under a provider's requests- or tokens-per-minute limit, give the LLM a `RateLimit`: `llm_factory(..., rate_limit=RateLimit(rpm=500))` (see [Requests and tokens per minute](../howtos/customizations/run_config.md#requests-and-tokens-per-minute)).
 - **Sync experiment functions run in worker threads,** up to `max_workers` at once, so they don't block the event loop. If your function isn't thread-safe, use `max_workers=1`. Threads come from asyncio's default thread pool, which also caps them, at `min(32, CPU count + 4)`.
 - **Results are saved in dataset order,** whatever order the rows finish in, so row *i* of the results comes from row *i* of the dataset.
 - **A row whose function raises is left out of the results.** It is logged as a warning on the `ragas.experiment` logger, with its index and the error, and a final warning gives the number of failed rows. To keep failed rows, catch the error in your function; see [Error handling](#error-handling-in-experiments).

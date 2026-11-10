@@ -9,6 +9,7 @@ This section contains detailed API documentation for all core components of Raga
 - [Embeddings](embeddings.md) - Embedding model interfaces and utilities
 - [Tokenizers](tokenizers.md) - Tokenizer interfaces for text splitting
 - [RunConfig](run_config.md) - Evaluation runtime configuration
+- [RateLimit](rate_limit.md) - Requests and tokens per minute for LLM calls
 - [Executor](executor.md) - Execution engine for evaluations
 - [Cache](cache.md) - Caching mechanisms for LLM calls
 

@@ -6321,6 +6321,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pyrate-limiter"
+version = "4.5.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/2b/0b/f69f1614940f29d51e31d4fe8de69b2b4d411094ba3c77f50da34dfb63c6/pyrate_limiter-4.5.1.tar.gz", hash = "sha256:7f03c6a9235b00a4ba3c7b1e8cb6b23fbacc9d40b09f326220917a12ef22cc09", size = 129966, upload-time = "2026-10-20T13:51:27.935Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bc/72/bf7279ae5799e1b54cf137859c17755446b2d2b6194606bda41753a43f76/pyrate_limiter-4.5.1-py3-none-any.whl", hash = "sha256:bb8dd2926b0679e4ada6629a865e85daa5599268f930c61a8992dafa8bf3ba0d", size = 57873, upload-time = "2026-10-20T13:51:26.584Z" },
+]
+
+[[package]]
 name = "pyright"
 version = "1.1.414"
 source = { registry = "https://pypi.org/simple" }
@@ -6695,6 +6704,7 @@ dependencies = [
     { name = "opentelemetry-api" },
     { name = "pillow" },
     { name = "pydantic" },
+    { name = "pyrate-limiter" },
     { name = "rich" },
     { name = "scikit-network" },
     { name = "tiktoken" },
@@ -6840,6 +6850,7 @@ requires-dist = [
     { name = "pandas", marker = "extra == 'all'" },
     { name = "pillow", specifier = ">=10.4.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
+    { name = "pyrate-limiter", specifier = ">=4.5,<5" },
     { name = "r2r", marker = "extra == 'all'" },
     { name = "rapidfuzz", marker = "extra == 'all'" },
     { name = "rich" },
