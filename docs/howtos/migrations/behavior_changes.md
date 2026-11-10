@@ -604,6 +604,15 @@ A copy (deep or shallow) of an LLM or embeddings with a `cache` used to keep the
 
 `MultiModalFaithfulness` and `MultiModalRelevance` (collections) called the provider client directly, so they skipped retries, the cache, tracing, usage recording and `system_prompt`, and failed with a sync client such as `OpenAI()`. They now go through `llm.agenerate()`, so all of these apply and a sync client works. Scores are unchanged, except that a configured `system_prompt` is now sent and can change the verdict.
 
+## One prompt class ([#214](https://github.com/arpieb/ragas-ng/issues/214))
+
+`ragas.prompt.metrics.BasePrompt`, the prompt class collections metrics use, is now ragas' one structured-prompt implementation, and `ragas.prompt.PydanticPrompt` is a subclass that only adds support for legacy `BaseRagasLLM` wrappers. Rendered prompts are byte-for-byte unchanged for both, so cache keys and scores don't move.
+
+- `BasePrompt` gains what `PydanticPrompt` had: `generate()` / `generate_multiple()` through an `llm_factory()` LLM (with `n` concurrent samples, `process_input` / `process_output` hooks and a traced prompt run), `name`, content-based `==` and `hash()`, and `save()` / `load()`.
+- **⚠ silent:** `PydanticPrompt.adapt()` with an `llm_factory()` LLM now translates with the same prompt collections metrics use, so translations of adapted testset prompts can differ. With a legacy LLM it still uses `TranslateStatements`.
+- `BasePrompt.adapt(..., adapt_instruction=True)` now translates the instruction even when the prompt has no example strings. It returned without translating it.
+- `save()` logs the saved path at INFO instead of printing it.
+
 ## evaluate() runs modern metrics natively ([#214](https://github.com/arpieb/ragas-ng/issues/214))
 
 `evaluate()` and `aevaluate()` no longer wrap `ragas.metrics.collections` metrics as legacy metrics. They call the metric's `ascore()` with the sample's fields by name. Scores, reasons, traces and token usage are the same as before.
