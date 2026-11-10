@@ -565,3 +565,9 @@ New: `result.check(min_mean=..., max_mean=..., allow_missing=0)` raises `Thresho
 A copy (deep or shallow) of an LLM or embeddings with a `cache` used to keep the original's cached `generate` / `embed_text`, so its calls ran on the original object, with the original's settings. They now run on the copy.
 
 `distance_measure_map` on the string-distance metrics and `OverlapScoreBuilder` is now a read-only property rather than an instance attribute.
+
+## The LLM takes chat messages, and the multimodal metrics use them ([#214](https://github.com/arpieb/ragas-ng/issues/214))
+
+`generate()` and `agenerate()` on `llm_factory()` LLMs now accept a list of OpenAI-format chat messages as well as a prompt string; message content can be a list of text and `image_url` parts. A messages list takes the same path as a string: retries, cache, rate limit, tracing, token usage, provider parameter mapping, and sync or async clients. The LLM's `system_prompt` is prepended unless the list already has a system message. String prompts are sent and cached exactly as before, so existing caches still hit.
+
+`MultiModalFaithfulness` and `MultiModalRelevance` (collections) called the provider client directly, so they skipped retries, the cache, tracing, usage recording and `system_prompt`, and failed with a sync client such as `OpenAI()`. They now go through `llm.agenerate()`, so all of these apply and a sync client works. Scores are unchanged, except that a configured `system_prompt` is now sent and can change the verdict.
