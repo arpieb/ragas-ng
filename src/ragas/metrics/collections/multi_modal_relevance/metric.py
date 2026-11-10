@@ -13,7 +13,7 @@ from .util import (
 )
 
 if t.TYPE_CHECKING:
-    from ragas.llms.base import InstructorLLM
+    from ragas.llms.base import InstructorBaseRagasLLM
 
 
 class MultiModalRelevance(BaseMetric):
@@ -64,11 +64,11 @@ class MultiModalRelevance(BaseMetric):
     """
 
     # Type hints for linter (attributes are set in __init__)
-    llm: "InstructorLLM"
+    llm: "InstructorBaseRagasLLM"
 
     def __init__(
         self,
-        llm: "InstructorLLM",
+        llm: "InstructorBaseRagasLLM",
         name: str = "multi_modal_relevance",
         **kwargs,
     ):
@@ -145,25 +145,9 @@ class MultiModalRelevance(BaseMetric):
         Returns:
             MultiModalRelevanceOutput with verdict and reason
         """
-        # Build the messages for the LLM
+        # One user message with text and image parts. agenerate sends it
+        # through the LLM layer: retries, cache, rate limit, tracing, usage,
+        # system_prompt and provider parameter mapping, with sync or async
+        # clients (#214).
         messages = [{"role": "user", "content": message_content}]
-
-        # Get provider-specific kwargs
-        provider_kwargs = self.llm._map_provider_params()
-
-        # Call the LLM directly with multimodal messages
-        if self.llm.provider.lower() == "google":
-            result = await self.llm.client.create(
-                messages=messages,
-                response_model=MultiModalRelevanceOutput,
-                **provider_kwargs,
-            )
-        else:
-            result = await self.llm.client.chat.completions.create(
-                model=self.llm.model,
-                messages=messages,
-                response_model=MultiModalRelevanceOutput,
-                **provider_kwargs,
-            )
-
-        return result
+        return await self.llm.agenerate(messages, MultiModalRelevanceOutput)

@@ -5,6 +5,7 @@ import typing as t
 from pydantic import BaseModel, Field
 
 from ragas.metrics.collections.multi_modal_faithfulness.util import (
+    build_multimodal_content,
     is_image_path_or_url,
     process_image_to_base64,
 )
@@ -52,9 +53,6 @@ def build_multimodal_relevance_message_content(
     Returns:
         List of content blocks for the message
     """
-    content: t.List[t.Dict[str, t.Any]] = []
-
-    # Add instruction, question, and response
     prompt_text = f"""{instruction}
 
 Question: {user_input}
@@ -63,37 +61,11 @@ Response to evaluate: {response}
 
 Retrieved contexts:
 """
-    content.append({"type": "text", "text": prompt_text})
-
-    # Process each context
-    for i, ctx in enumerate(retrieved_contexts):
-        # Try to process as image
-        image_data = process_image_to_base64(ctx)
-
-        if image_data:
-            # Add as image
-            content.append(
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:{image_data['mime_type']};base64,{image_data['encoded_data']}"
-                    },
-                }
-            )
-            content.append({"type": "text", "text": f"[Image context {i + 1}]"})
-        else:
-            # Add as text
-            content.append({"type": "text", "text": f"Context {i + 1}: {ctx}"})
-
-    # Add closing instruction
-    content.append(
-        {
-            "type": "text",
-            "text": "\n\nBased on the above contexts (both visual and textual), determine if the response is relevant. A response is relevant if it appropriately addresses the question using information from the provided contexts.",
-        }
+    return build_multimodal_content(
+        prompt_text,
+        retrieved_contexts,
+        "\n\nBased on the above contexts (both visual and textual), determine if the response is relevant. A response is relevant if it appropriately addresses the question using information from the provided contexts.",
     )
-
-    return content
 
 
 # Instruction for the prompt
