@@ -736,13 +736,58 @@ class InstructorLLM(InstructorBaseRagasLLM):
         # Check if client is async-capable at initialization
         self.is_async = self._check_client_async()
 
-        if self.cache is not None:
-            self.generate = cacher(
-                cache_backend=self.cache, identity=lambda: cache_identity(self)
-            )(self.generate)  # type: ignore
-            self.agenerate = cacher(
-                cache_backend=self.cache, identity=lambda: cache_identity(self)
-            )(self.agenerate)  # type: ignore
+        self._wrap_with_cache()
+
+    def _wrap_with_cache(self) -> None:
+        """Route ``generate``/``agenerate`` through ``cache``, if set.
+
+        The wrappers are bound to this object, so a copy gets its own
+        (see ``__copy__``): with the original's, the copy's calls would run
+        on the original, with its settings.
+        """
+        if self.cache is None:
+            return
+        cls = type(self)
+        self.generate = cacher(  # type: ignore
+            cache_backend=self.cache, identity=lambda: cache_identity(self)
+        )(cls.generate.__get__(self, cls))
+        self.agenerate = cacher(  # type: ignore
+            cache_backend=self.cache, identity=lambda: cache_identity(self)
+        )(cls.agenerate.__get__(self, cls))
+
+    # Shared by copies, never copied: what connects to the provider, and the
+    # limits and stores meant to be shared. A copied LLM goes to the same
+    # provider, under the same rate limit, with the same cache (#211).
+    _SHARED_ON_COPY = frozenset(
+        {
+            "client",
+            "sync_client",
+            "source_client",
+            "cache",
+            "rate_limit",
+            "usage_collector",
+        }
+    )
+
+    def _copied(self, memo: t.Optional[t.Dict[int, t.Any]]) -> "InstructorLLM":
+        from ragas._copying import copy_sharing
+
+        new = copy_sharing(
+            self,
+            shared=self._SHARED_ON_COPY,
+            rebuilt={"generate", "agenerate"},
+            memo=memo,
+        )
+        new._wrap_with_cache()
+        return new
+
+    def __copy__(self) -> "InstructorLLM":
+        return self._copied(None)
+
+    def __deepcopy__(self, memo: t.Dict[int, t.Any]) -> "InstructorLLM":
+        # instructor's clients can't be deep-copied: their __getattr__
+        # recurses on an object that copy made without __init__ (#211)
+        return self._copied(memo)
 
     def _map_provider_params(
         self, args: t.Optional[t.Dict[str, t.Any]] = None, sampled: bool = False

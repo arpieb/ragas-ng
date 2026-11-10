@@ -7,6 +7,7 @@ from enum import Enum
 from ragas.dataset_schema import SingleTurnSample
 from ragas.metrics.base import MetricType, SingleTurnMetric
 from ragas.run_config import RunConfig
+from ragas.utils import rapidfuzz_distances
 
 if t.TYPE_CHECKING:
     from ragas.callbacks import Callbacks
@@ -70,19 +71,11 @@ class NonLLMStringSimilarity(SingleTurnMetric):
     distance_measure: DistanceMeasure = DistanceMeasure.LEVENSHTEIN
 
     def __post_init__(self):
-        try:
-            from rapidfuzz import distance
-        except ImportError:
-            raise ImportError(
-                "rapidfuzz is required for string distance. Please install it using `pip install rapidfuzz`"
-            )
+        rapidfuzz_distances(DistanceMeasure)  # rapidfuzz is installed
 
-        self.distance_measure_map = {
-            DistanceMeasure.LEVENSHTEIN: distance.Levenshtein,
-            DistanceMeasure.HAMMING: distance.Hamming,
-            DistanceMeasure.JARO: distance.Jaro,
-            DistanceMeasure.JARO_WINKLER: distance.JaroWinkler,
-        }
+    @property
+    def distance_measure_map(self) -> t.Dict[DistanceMeasure, t.Any]:
+        return rapidfuzz_distances(DistanceMeasure)
 
     def init(self, run_config: RunConfig):
         pass

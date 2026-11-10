@@ -1,9 +1,11 @@
 """String-based metrics v2 - Class-based implementations with automatic validation."""
 
+import typing as t
 from enum import Enum
 
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
+from ragas.utils import rapidfuzz_distances
 
 
 class DistanceMeasure(Enum):
@@ -168,21 +170,11 @@ class NonLLMStringSimilarity(BaseMetric):
         """Initialize NonLLMStringSimilarity metric."""
         super().__init__(name=name, **base_kwargs)
         self.distance_measure = distance_measure
+        rapidfuzz_distances(DistanceMeasure)  # rapidfuzz is installed
 
-        try:
-            from rapidfuzz import distance
-        except ImportError:
-            raise ImportError(
-                "rapidfuzz is required for string distance. "
-                "Please install it using `pip install rapidfuzz`"
-            )
-
-        self.distance_measure_map = {
-            DistanceMeasure.LEVENSHTEIN: distance.Levenshtein,
-            DistanceMeasure.HAMMING: distance.Hamming,
-            DistanceMeasure.JARO: distance.Jaro,
-            DistanceMeasure.JARO_WINKLER: distance.JaroWinkler,
-        }
+    @property
+    def distance_measure_map(self) -> t.Dict[DistanceMeasure, t.Any]:
+        return rapidfuzz_distances(DistanceMeasure)
 
     async def ascore(
         self,

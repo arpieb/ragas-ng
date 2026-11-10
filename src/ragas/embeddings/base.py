@@ -44,14 +44,44 @@ class BaseRagasEmbedding(ABC):
                 Use DiskCacheBackend() for persistent caching.
         """
         self.cache = cache
+        self._wrap_with_cache()
 
-        if self.cache is not None:
-            self.embed_text = cacher(
-                cache_backend=self.cache, identity=lambda: cache_identity(self)
-            )(self.embed_text)
-            self.aembed_text = cacher(
-                cache_backend=self.cache, identity=lambda: cache_identity(self)
-            )(self.aembed_text)
+    def _wrap_with_cache(self) -> None:
+        """Route ``embed_text``/``aembed_text`` through ``cache``, if set.
+
+        Bound to this object, so a copy gets its own (see ``__copy__``).
+        """
+        if self.cache is None:
+            return
+        cls = type(self)
+        self.embed_text = cacher(  # type: ignore[method-assign]
+            cache_backend=self.cache, identity=lambda: cache_identity(self)
+        )(cls.embed_text.__get__(self, cls))
+        self.aembed_text = cacher(  # type: ignore[method-assign]
+            cache_backend=self.cache, identity=lambda: cache_identity(self)
+        )(cls.aembed_text.__get__(self, cls))
+
+    # Shared by copies, never copied: provider clients, the cache and the
+    # rate limit. Modules (LiteLLMEmbeddings.litellm) are shared too (#211).
+    _SHARED_ON_COPY = frozenset({"client", "cache", "rate_limit"})
+
+    def _copied(self, memo: t.Optional[t.Dict[int, t.Any]]) -> "BaseRagasEmbedding":
+        from ragas._copying import copy_sharing
+
+        new = copy_sharing(
+            self,
+            shared=self._SHARED_ON_COPY,
+            rebuilt={"embed_text", "aembed_text"},
+            memo=memo,
+        )
+        new._wrap_with_cache()
+        return new
+
+    def __copy__(self) -> "BaseRagasEmbedding":
+        return self._copied(None)
+
+    def __deepcopy__(self, memo: t.Dict[int, t.Any]) -> "BaseRagasEmbedding":
+        return self._copied(memo)
 
     @abstractmethod
     def embed_text(self, text: str, **kwargs: t.Any) -> t.List[float]:
