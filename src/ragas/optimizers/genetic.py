@@ -246,6 +246,7 @@ class GeneticOptimizer(Optimizer):
                 raise_exceptions=raise_exceptions,
                 parent_pbar=parent_pbar,
             )
+        # evaluate_fitness returns higher-is-better values (Loss.fitness)
         best_candidate = improved_prompts[np.argmax(fitness_scores)]
 
         optimization_generation_rm.on_chain_end(
@@ -613,7 +614,7 @@ class GeneticOptimizer(Optimizer):
         if self.metric is None:
             raise ValueError("No metric provided for optimization.")
 
-        losses = []
+        fitness_scores = []
 
         eval_dataset, y_true = self._get_evaluation_dataset(dataset)
 
@@ -638,12 +639,15 @@ class GeneticOptimizer(Optimizer):
             y_pred = values.tolist() if isinstance(values, np.ndarray) else [values]
             y_pred = t.cast(t.List[float], y_pred)
 
-            loss = loss_fn(y_true, y_pred)
-            losses.append(loss)
+            # Loss takes (predicted, actual). fitness() negates lower-is-better
+            # losses, so a larger value is always better.
+            fitness_scores.append(loss_fn.fitness(y_pred, y_true))
 
-        initialize_population_rm.on_chain_end(outputs={"losses": losses})
+        initialize_population_rm.on_chain_end(
+            outputs={"fitness_scores": fitness_scores}
+        )
 
-        return losses
+        return fitness_scores
 
     async def _cross_over_chain(
         self,
@@ -705,7 +709,10 @@ class GeneticOptimizer(Optimizer):
             prediction_vectors.append(prediction)
 
         prediction_vectors = np.array(prediction_vectors)
-        distance_matrix = hamming_distance(prediction_vectors)
+        distance_matrix = hamming_distance(prediction_vectors).astype(float)
+        if len(candidates) > 1:
+            # A candidate must not be paired with itself.
+            np.fill_diagonal(distance_matrix, np.inf)
 
         exec = Executor(
             desc="Mutating candidates",

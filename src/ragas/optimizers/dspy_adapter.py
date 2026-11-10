@@ -155,8 +155,7 @@ def create_dspy_metric(
         if ground_truth is None or predicted is None:
             return 0.0
 
-        loss_value = loss([predicted], [ground_truth])
-
-        return -float(loss_value)
+        # DSPy maximises its metric, and Loss.fitness is higher-is-better.
+        return loss.fitness([predicted], [ground_truth])
 
     return dspy_metric
