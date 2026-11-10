@@ -12,7 +12,14 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from ragas.llms.base import InstructorLLM
 from ragas.losses import BinaryMetricLoss, Loss, MSELoss
+
+
+@pytest.fixture
+def fake_llm():
+    return MagicMock(spec=InstructorLLM)
+
 
 # --- losses -------------------------------------------------------------------
 
@@ -99,6 +106,8 @@ def _optimizer(predictions: t.Dict[str, t.List[float]]):
 
     metric = Mock()
     metric.name = "m"
+    # one prompt, "p"; the optimizer returns copies with the best instruction
+    metric.get_prompts.side_effect = lambda: {"p": Mock()}
     opt = GeneticOptimizer(metric=metric, llm=Mock())
 
     def evaluate_candidate(*, candidate, **kwargs):
@@ -162,7 +171,7 @@ def test_optimize_picks_best_candidate(make_loss, good, bad):
             patch.object(opt, "evaluate_candidate", side_effect=evaluate_candidate),
         ):
             best = opt.optimize(dataset, loss, {"population_size": 2})
-        assert best == {"p": "good"}
+        assert best["p"].instruction == "good"
 
 
 def test_cross_over_pairs_nearest_other_candidate():

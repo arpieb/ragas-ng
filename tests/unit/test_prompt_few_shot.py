@@ -99,18 +99,6 @@ def test_dynamic_prompt_with_zero_examples_has_no_examples_section():
     assert "Example" not in prompt.format(text="cat")
 
 
-def test_dspy_inspect_history_n_zero():
-    from ragas.optimizers.dspy_llm_wrapper import RagasDSPyLM
-
-    lm = RagasDSPyLM.__new__(RagasDSPyLM)
-    lm.history = [{"i": 1}, {"i": 2}, {"i": 3}]
-
-    assert lm.inspect_history(0) == []
-    assert lm.inspect_history(2) == [{"i": 2}, {"i": 3}]
-    with pytest.raises(ValueError):
-        lm.inspect_history(-1)
-
-
 # --- top-k ordering is unchanged ----------------------------------------------
 
 

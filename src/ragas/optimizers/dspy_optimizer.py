@@ -14,7 +14,22 @@ from ragas.run_config import RunConfig
 
 if t.TYPE_CHECKING:
     from ragas.callbacks import Callbacks
+    from ragas.prompt.metrics.base_prompt import BasePrompt
 logger = logging.getLogger(__name__)
+
+_SCORE_TYPES = (int, float, bool)
+
+
+def _score_field(prompt: "BasePrompt", metric_name: str) -> str:
+    """The output field DSPy's metric compares: one named after the metric,
+    else the prompt's first numeric output field (a verdict or score)."""
+    fields = prompt.output_model.model_fields
+    if metric_name in fields:
+        return metric_name
+    for name, info in fields.items():
+        if info.annotation in _SCORE_TYPES:
+            return name
+    return metric_name
 
 
 @dataclass
@@ -29,8 +44,17 @@ class DSPyOptimizer(Optimizer):
 
     Requires: pip install dspy-ai or uv add ragas[dspy]
 
+    Each of the metric's prompts is compiled on its own annotations. The
+    result is a copy of the prompt with MIPROv2's instruction and its chosen
+    demonstrations as examples. DSPy calls the model ``llm`` calls, through
+    its own LiteLLM ``dspy.LM`` (see ``dspy_adapter.dspy_lm_from_llm``), or
+    ``lm`` when given.
+
     Parameters
     ----------
+    lm : Any, optional
+        A DSPy LM to optimize with, instead of one built from ``llm``. Use it
+        for an LLM over a ``litellm.Router`` or Azure client.
     num_candidates : int
         Number of prompt variants to try during optimization.
     max_bootstrapped_demos : int
@@ -73,6 +97,7 @@ class DSPyOptimizer(Optimizer):
     log_dir: t.Optional[str] = None
     metric_threshold: t.Optional[float] = None
     cache: t.Optional[CacheInterface] = field(default=None, repr=False)
+    lm: t.Optional[t.Any] = field(default=None, repr=False)
     _dspy: t.Optional[t.Any] = field(default=None, init=False, repr=False)
 
     def __post_init__(self):
@@ -126,18 +151,18 @@ class DSPyOptimizer(Optimizer):
         callbacks: t.Optional[Callbacks] = None,
         with_debugging_logs: bool = False,
         raise_exceptions: bool = True,
-    ) -> t.Dict[str, str]:
+    ) -> t.Dict[str, BasePrompt]:
         """
         Optimize metric prompts using DSPy MIPROv2.
 
-        Steps:
+        Steps, for each prompt the dataset annotates:
 
-        1. Convert Ragas PydanticPrompt to DSPy Signature
+        1. Convert the prompt to a DSPy Signature
         2. Create DSPy Module with signature
-        3. Convert dataset to DSPy Examples
+        3. Convert the prompt's annotations to DSPy Examples
         4. Run MIPROv2 optimization
-        5. Extract optimized prompts
-        6. Convert back to Ragas format
+        5. Extract the optimized instruction and demonstrations
+        6. Return a copy of the prompt with them
 
         Parameters
         ----------
@@ -152,7 +177,7 @@ class DSPyOptimizer(Optimizer):
         batch_size : int, optional
             Batch size for evaluation.
         callbacks : Callbacks, optional
-            Langchain callbacks for tracking.
+            Unused; DSPy traces its own calls.
         with_debugging_logs : bool
             Enable debug logging.
         raise_exceptions : bool
@@ -160,49 +185,59 @@ class DSPyOptimizer(Optimizer):
 
         Returns
         -------
-        Dict[str, str]
-            Optimized prompts for each prompt name.
+        Dict[str, BasePrompt]
+            For each annotated prompt, a copy of the metric's prompt with the
+            optimized instruction and demonstrations as its examples.
         """
         if self.metric is None:
             raise ValueError("No metric provided for optimization.")
 
-        if self.llm is None:
+        if self.llm is None and self.lm is None:
             raise ValueError("No llm provided for optimization.")
 
         if self._dspy is None:
             raise RuntimeError("DSPy module not loaded.")
 
+        metric = self.metric
         if self.cache is not None:
             cache_key = self._generate_cache_key(dataset, loss, config)
             if self.cache.has_key(cache_key):
-                logger.info(
-                    f"Cache hit for DSPy optimization of metric: {self.metric.name}"
-                )
-                return self.cache.get(cache_key)
+                logger.info(f"Cache hit for DSPy optimization of metric: {metric.name}")
+                return self._from_cacheable(self.cache.get(cache_key))
 
-        logger.info(f"Starting DSPy optimization for metric: {self.metric.name}")
+        logger.info(f"Starting DSPy optimization for metric: {metric.name}")
 
         from ragas.optimizers.dspy_adapter import (
             create_dspy_metric,
-            pydantic_prompt_to_dspy_signature,
+            dspy_demos_to_examples,
+            prompt_to_dspy_signature,
             ragas_dataset_to_dspy_examples,
             setup_dspy_llm,
         )
 
-        setup_dspy_llm(self._dspy, self.llm)
+        setup_dspy_llm(self._dspy, self.lm if self.lm is not None else self.llm)
 
-        prompts = self.metric.get_prompts()
-        optimized_prompts = {}
+        prompts = metric.get_prompts()  # copies
+        optimized_prompts: t.Dict[str, BasePrompt] = {}
 
         for prompt_name, prompt in prompts.items():
+            examples = ragas_dataset_to_dspy_examples(dataset, prompt_name)
+            if not examples:
+                logger.info(f"No annotations for prompt {prompt_name}; skipped.")
+                continue
             logger.info(f"Optimizing prompt: {prompt_name}")
 
-            signature = pydantic_prompt_to_dspy_signature(prompt)
+            signature = prompt_to_dspy_signature(prompt)
             module = self._dspy.Predict(signature)
-            examples = ragas_dataset_to_dspy_examples(dataset, prompt_name)
 
+            metric_fn = create_dspy_metric(loss, _score_field(prompt, dataset.name))
+
+            # MIPROv2 takes the metric here, not in compile(). With an auto
+            # level it sizes the search itself and rejects num_candidates;
+            # without one it needs num_trials.
             teleprompter = self._dspy.MIPROv2(
-                num_candidates=self.num_candidates,
+                metric=metric_fn,
+                num_candidates=None if self.auto else self.num_candidates,
                 max_bootstrapped_demos=self.max_bootstrapped_demos,
                 max_labeled_demos=self.max_labeled_demos,
                 init_temperature=self.init_temperature,
@@ -216,27 +251,66 @@ class DSPyOptimizer(Optimizer):
                 metric_threshold=self.metric_threshold,
             )
 
-            metric_fn = create_dspy_metric(loss, dataset.name)
-
+            compile_kwargs: t.Dict[str, t.Any] = {"requires_permission_to_run": False}
+            if not self.auto:
+                compile_kwargs["num_trials"] = config.get(
+                    "num_trials", self.num_candidates
+                )
             optimized = teleprompter.compile(
                 module,
                 trainset=examples,
-                metric=metric_fn,
+                **compile_kwargs,
             )
 
             optimized_instruction = self._extract_instruction(optimized)
-            optimized_prompts[prompt_name] = optimized_instruction
+            if optimized_instruction:
+                prompt.instruction = optimized_instruction
+            demos = getattr(optimized, "demos", None)
+            if isinstance(demos, (list, tuple)) and demos:
+                prompt.examples = dspy_demos_to_examples(prompt, demos)
+            optimized_prompts[prompt_name] = prompt
 
             logger.info(
-                f"Optimized prompt for {prompt_name}: {optimized_instruction[:100]}..."
+                f"Optimized prompt for {prompt_name}: {prompt.instruction[:100]}..."
             )
 
         if self.cache is not None:
             cache_key = self._generate_cache_key(dataset, loss, config)
-            self.cache.set(cache_key, optimized_prompts)
+            self.cache.set(cache_key, self._to_cacheable(optimized_prompts))
             logger.info("Cached optimization results")
 
         return optimized_prompts
+
+    @staticmethod
+    def _to_cacheable(prompts: t.Mapping[str, BasePrompt]) -> t.Dict[str, t.Any]:
+        return {
+            name: {
+                "instruction": prompt.instruction,
+                "examples": [
+                    [inp.model_dump(), out.model_dump()] for inp, out in prompt.examples
+                ],
+            }
+            for name, prompt in prompts.items()
+        }
+
+    def _from_cacheable(self, cached: t.Mapping[str, t.Any]) -> t.Dict[str, BasePrompt]:
+        """Cached results as copies of the metric's prompts."""
+        if self.metric is None:
+            raise ValueError("No metric provided for optimization.")
+        prompts = self.metric.get_prompts()
+        result: t.Dict[str, BasePrompt] = {}
+        for name, entry in cached.items():
+            prompt = prompts[name]
+            prompt.instruction = entry["instruction"]
+            prompt.examples = [
+                (
+                    prompt.input_model.model_validate(inp),
+                    prompt.output_model.model_validate(out),
+                )
+                for inp, out in entry["examples"]
+            ]
+            result[name] = prompt
+        return result
 
     def _extract_instruction(self, optimized_module: t.Any) -> str:
         """
@@ -292,6 +366,12 @@ class DSPyOptimizer(Optimizer):
 
         cache_data = {
             "metric_name": self.metric.name,
+            # the prompts being optimized: a changed definition or instruction
+            # must not hit an entry made from the old one
+            "prompts": {
+                name: str(hash(prompt))
+                for name, prompt in self.metric.get_prompts().items()
+            },
             "dataset_hash": hashlib.sha256(
                 json.dumps(dataset.model_dump(), sort_keys=True).encode()
             ).hexdigest(),

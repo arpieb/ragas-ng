@@ -4,11 +4,37 @@ Ragas provides optimizers to improve metric prompts through automated optimizati
 
 ## Overview
 
-Optimizers use annotated datasets with ground truth scores to refine metric prompts, improving accuracy through:
+Optimizers use annotated datasets with ground truth scores to refine the prompts of `ragas.metrics.collections` metrics, improving accuracy through:
 
 - **Instruction optimization**: Finding better prompt wording
 - **Demonstration optimization**: Selecting effective few-shot examples
 - **Search strategies**: Exploring the prompt space efficiently
+
+A collections metric lists its prompts with `get_prompts()` (copies, keyed by attribute name) and takes replacements with `set_prompts(**prompts)`. `Optimizer.optimize()` returns optimized copies of those prompts and never changes the metric; `metric.train()` runs an optimizer and applies the result.
+
+## Training a metric
+
+```python
+from ragas.config import DemonstrationConfig, InstructionConfig
+from ragas.embeddings import embedding_factory
+from ragas.llms import llm_factory
+from ragas.metrics.collections import AspectCritic
+
+llm = llm_factory("gpt-6-luna")
+metric = AspectCritic(name="helpfulness", definition="Is the response helpful?", llm=llm)
+
+metric.train(
+    "annotated_data.json",  # or dataset=SingleMetricAnnotation(...)
+    instruction_config=InstructionConfig(llm=llm),  # GeneticOptimizer by default
+    demonstration_config=DemonstrationConfig(
+        embedding=embedding_factory("openai", model="text-embedding-3-small")
+    ),
+)
+```
+
+`train(path=None, demonstration_config=None, instruction_config=None, *, dataset=None, run_config=None, batch_size=None, raise_exceptions=True)` optimizes the instructions first, then adds demonstrations; a config that is `None` or has `enabled=False` is skipped. The same function is `ragas.optimizers.train_metric(metric, ...)`; the two steps on their own are `optimize_instructions()` and `optimize_demonstrations()`, which return prompts for `set_prompts` without applying them.
+
+The default loss follows the metric's `output_type`: `BinaryMetricLoss` (accuracy) for a binary verdict such as AspectCritic's, `MSELoss` otherwise. Set `InstructionConfig(loss=...)` to choose another.
 
 ## Core Classes
 
@@ -18,44 +44,44 @@ Optimizers use annotated datasets with ground truth scores to refine metric prom
             - Optimizer
             - GeneticOptimizer
             - DSPyOptimizer
+            - train_metric
+            - optimize_instructions
+            - optimize_demonstrations
 
 ## GeneticOptimizer
 
-Simple evolutionary optimizer for prompt instructions.
+Simple evolutionary optimizer for prompt instructions. It takes no constructor parameters besides `metric` and `llm`, which `train()` sets; its options go in `InstructionConfig.optimizer_config`.
 
-### Parameters
+### Options
 
-| Parameter | Type | Default | Description |
+| Option | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `max_steps` | `int` | 50 | Maximum evolution steps |
-| `population_size` | `int` | 10 | Population size per generation |
-| `mutation_rate` | `float` | 0.2 | Probability of mutation |
+| `population_size` | `int` | 3 | Candidate instructions, including the metric's own |
+| `num_demonstrations` | `int` | 3 | Annotations per reverse-engineered instruction |
+| `sample_size` | `int` | 12 | Annotations per feedback mutation |
 
 ### Usage
 
 ```python
-from ragas.optimizers import GeneticOptimizer
 from ragas.config import InstructionConfig
+from ragas.optimizers import GeneticOptimizer
 
-optimizer = GeneticOptimizer(
-    max_steps=50,
-    population_size=10,
+config = InstructionConfig(
+    llm=llm,
+    optimizer=GeneticOptimizer(),
+    optimizer_config={"population_size": 4},
 )
-
-config = InstructionConfig(llm=llm, optimizer=optimizer)
-metric.optimize_prompts(dataset, config)
+metric.train(dataset=dataset, instruction_config=config)
 ```
 
 ### How it Works
 
-1. Generates population of prompt variations
-2. Evaluates each on annotated dataset
-3. Selects best performers
-4. Creates next generation via crossover and mutation
-5. Repeats for max_steps iterations
+1. Reverse-engineers candidate instructions from batches of annotations, and adds the metric's own
+2. Scores each candidate on a copy of the metric and asks the LLM for feedback on the samples it got wrong, then rewrites it
+3. Crosses each candidate with the one whose mistakes differ least
+4. Keeps the candidate with the best loss
 
-**Pros**: Simple, works with limited data
-**Cons**: Slower convergence, instruction-only
+It needs at least 10 annotations. **Pros**: Simple, works with limited data, scores the whole metric. **Cons**: Instruction-only.
 
 ## DSPyOptimizer
 
@@ -65,16 +91,18 @@ Advanced optimizer using DSPy's [MIPROv2](https://dspy.ai/api/optimizers/MIPROv2
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `num_candidates` | `int` | 10 | Number of prompt variants to try |
+| `auto` | `str` | `"light"` | MIPROv2's search size: `"light"`, `"medium"`, `"heavy"` or `None` |
+| `num_candidates` | `int` | 10 | Number of prompt variants to try, with `auto=None` |
 | `max_bootstrapped_demos` | `int` | 5 | Max auto-generated examples |
 | `max_labeled_demos` | `int` | 5 | Max human-annotated examples |
 | `init_temperature` | `float` | 1.0 | Exploration temperature (0.0-2.0) |
+| `lm` | DSPy LM | `None` | The LM DSPy uses, instead of one built from the LLM |
 
 ### Usage
 
 ```python
-from ragas.optimizers import DSPyOptimizer
 from ragas.config import InstructionConfig
+from ragas.optimizers import DSPyOptimizer
 
 optimizer = DSPyOptimizer(
     num_candidates=10,
@@ -83,7 +111,7 @@ optimizer = DSPyOptimizer(
 )
 
 config = InstructionConfig(llm=llm, optimizer=optimizer)
-metric.optimize_prompts(dataset, config)
+metric.train(dataset=dataset, instruction_config=config)
 ```
 
 ### How it Works
@@ -92,7 +120,9 @@ metric.optimize_prompts(dataset, config)
 2. Bootstraps few-shot demonstrations from data
 3. Selects best human-annotated examples
 4. Evaluates all combinations on dataset
-5. Returns best-performing configuration
+5. Returns, per annotated prompt, a copy with the best instruction and its demonstrations as examples
+
+DSPy calls the model the `llm_factory()` LLM calls, through a `dspy.LM` over the same LiteLLM model name and credentials. Pass `lm=` for an LLM over a `litellm.Router` or Azure client.
 
 Learn more about DSPy concepts:
 - [Signatures](https://dspy.ai/learn/programming/signatures/) - DSPy's approach to defining input/output specifications
@@ -138,23 +168,28 @@ Examples:
 
 ## Configuration
 
-Both optimizers are used with `InstructionConfig`:
+Both optimizers are used with `InstructionConfig`; few-shot demonstrations use `DemonstrationConfig`:
 
 ```python
-from ragas.config import InstructionConfig
+from ragas.config import DemonstrationConfig, InstructionConfig
 
 config = InstructionConfig(
-    llm=llm,  # LLM for optimization
-    optimizer=optimizer_instance,  # Optimizer to use
+    llm=llm,  # an llm_factory() LLM for the optimizer's own calls
+    optimizer=optimizer_instance,  # Optimizer to use (GeneticOptimizer by default)
+)
+demonstrations = DemonstrationConfig(
+    embedding=embeddings,  # an embedding_factory() model
+    top_k=3,  # examples shown per input
+    threshold=0.7,  # minimum cosine similarity
+    technique="similarity",  # or "random": a fixed random sample
 )
 
-# Use with metric
-metric.optimize_prompts(dataset, config)
+metric.train(dataset=dataset, instruction_config=config, demonstration_config=demonstrations)
 ```
 
 ## Dataset Format
 
-Optimizers require annotated datasets with ground truth scores:
+Optimizers require annotated datasets with ground truth scores. The keys of `prompts` are the metric's `get_prompts()` names:
 
 ```python
 from ragas.dataset_schema import (
@@ -166,20 +201,20 @@ from ragas.dataset_schema import (
 # Create annotated sample
 prompt_annotation = PromptAnnotation(
     prompt_input={"user_input": "...", "response": "..."},
-    prompt_output={"score": 0.9},
+    prompt_output={"reason": "...", "verdict": 1},
     edited_output=None,  # Optional: corrected output
 )
 
 sample = SampleAnnotation(
     metric_input={"user_input": "...", "response": "..."},
-    metric_output=0.9,  # Ground truth score
-    prompts={"metric_prompt": prompt_annotation},
+    metric_output=1,  # Ground truth score
+    prompts={"prompt": prompt_annotation},  # AspectCritic's prompt is "prompt"
     is_accepted=True,  # Include in optimization
 )
 
 # Create dataset
 dataset = SingleMetricAnnotation(
-    name="metric_name",
+    name="helpfulness",
     samples=[sample, ...],  # 20-50+ samples recommended
 )
 ```
@@ -189,13 +224,13 @@ dataset = SingleMetricAnnotation(
 Optimizers use loss functions to evaluate prompt quality:
 
 ```python
-from ragas.losses import MSELoss, HuberLoss
+from ragas.losses import BinaryMetricLoss, MSELoss
 
-# Mean Squared Error (default)
+# Mean Squared Error (default for continuous and discrete scores)
 loss = MSELoss()
 
-# Huber Loss (robust to outliers)
-loss = HuberLoss(delta=1.0)
+# Accuracy or F1 (default for binary verdicts)
+loss = BinaryMetricLoss(metric="f1_score")
 
 # Use with config
 config = InstructionConfig(llm=llm, optimizer=optimizer, loss=loss)

@@ -97,7 +97,7 @@ Ragas offers various model-based metrics that can be fine-tuned to align with hu
 
 
 ```python
-from ragas.metrics import AspectCritic
+from ragas.metrics.collections import AspectCritic
 
 helpfulness_critic = AspectCritic(
     name="helpfulness",
@@ -110,7 +110,7 @@ You can preview the prompt that will be passed to the LLM (before alignment) by 
 
 
 ```python
-print(helpfulness_critic.get_prompts()["single_turn_aspect_critic_prompt"].instruction)
+print(helpfulness_critic.get_prompts()["prompt"].instruction)
 ```
 Output
 ```
@@ -233,7 +233,7 @@ Here is a sample annotation for the above example. You can [download](../../_s
 
 ## Training and Alignment
 
-The next step is to train your metric using the annotated examples. This training process leverages a gradient-free prompt optimization approach that adjusts both instructions and few-shot demonstrations based on the annotated feedback.
+The next step is to train your metric using the annotated examples. This training process leverages a gradient-free prompt optimization approach that adjusts both instructions and few-shot demonstrations based on the annotated feedback. The optimized prompts replace the metric's own; the prompt objects it held before are left unchanged.
 
 
 ```python
@@ -250,15 +250,13 @@ helpfulness_critic.train(
 ```
 ```
 Overall Progress: 100%|██████████| 170/170 [00:00<?, ?it/s]
-
-Few-shot examples [single_turn_aspect_critic_prompt]: 100%|██████████| 16/16 [00:00<?, ?it/s]
 ```
 
 After training, review the updated instructions that have been optimized for the metric:
 
 
 ```python
-print(helpfulness_critic.get_prompts()["single_turn_aspect_critic_prompt"].instruction)
+print(helpfulness_critic.get_prompts()["prompt"].instruction)
 ```
 Output
 ```
