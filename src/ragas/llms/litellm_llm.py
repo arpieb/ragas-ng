@@ -10,6 +10,8 @@ from ragas.llms._retry import acall_with_retry, call_with_retry
 from ragas.llms.base import (
     InstructorBaseRagasLLM,
     InstructorTypeVar,
+    LLMInput,
+    _build_messages,
     is_reasoning_model,
 )
 
@@ -152,12 +154,8 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
         """
         return run_sync(coro)
 
-    def _messages(self, prompt: str) -> t.List[t.Dict[str, str]]:
-        messages = []
-        if self.system_prompt:
-            messages.append({"role": "system", "content": self.system_prompt})
-        messages.append({"role": "user", "content": prompt})
-        return messages
+    def _messages(self, prompt: LLMInput) -> t.List[t.Dict[str, t.Any]]:
+        return _build_messages(prompt, self.system_prompt)
 
     def _request_args(self, temperature: t.Optional[float]) -> t.Dict[str, t.Any]:
         """``model_args`` for one call.
@@ -185,7 +183,7 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
     def _call_sync(
         self,
         client: t.Any,
-        prompt: str,
+        prompt: LLMInput,
         response_model: t.Type[InstructorTypeVar],
         temperature: t.Optional[float],
     ) -> InstructorTypeVar:
@@ -198,7 +196,7 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
 
     def generate(
         self,
-        prompt: str,
+        prompt: LLMInput,
         response_model: t.Type[InstructorTypeVar],
         temperature: t.Optional[float] = None,
         sample_index: t.Optional[int] = None,
@@ -209,7 +207,7 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
         in the appropriate event loop.
 
         Args:
-            prompt: Input prompt
+            prompt: Input prompt, or a list of OpenAI-format chat messages
             response_model: Pydantic model for structured output
             temperature: Per-call temperature override (drops top_p)
             sample_index: Cache-key only; distinguishes repeated samples
@@ -239,7 +237,7 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
 
     async def _call_async(
         self,
-        prompt: str,
+        prompt: LLMInput,
         response_model: t.Type[InstructorTypeVar],
         temperature: t.Optional[float],
     ) -> InstructorTypeVar:
@@ -252,7 +250,7 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
 
     async def agenerate(
         self,
-        prompt: str,
+        prompt: LLMInput,
         response_model: t.Type[InstructorTypeVar],
         temperature: t.Optional[float] = None,
         sample_index: t.Optional[int] = None,
@@ -262,7 +260,7 @@ class LiteLLMStructuredLLM(InstructorBaseRagasLLM):
         A synchronous client is run on a worker thread (#68).
 
         Args:
-            prompt: Input prompt
+            prompt: Input prompt, or a list of OpenAI-format chat messages
             response_model: Pydantic model for structured output
             temperature: Per-call temperature override (drops top_p)
             sample_index: Cache-key only; distinguishes repeated samples

@@ -210,6 +210,38 @@ def _try_process_local_file(item: str) -> t.Optional[t.Dict[str, str]]:
         return None
 
 
+def build_multimodal_content(
+    prompt_text: str,
+    retrieved_contexts: t.List[str],
+    closing_text: str,
+) -> t.List[t.Dict[str, t.Any]]:
+    """OpenAI-format content parts: ``prompt_text``, each context, ``closing_text``.
+
+    A context that resolves to an image (see ``process_image_to_base64``) is
+    sent as an ``image_url`` part with a data URI, followed by an
+    ``[Image context N]`` label; any other context as ``Context N: ...`` text.
+    """
+    content: t.List[t.Dict[str, t.Any]] = [{"type": "text", "text": prompt_text}]
+
+    for i, ctx in enumerate(retrieved_contexts):
+        image_data = process_image_to_base64(ctx)
+        if image_data:
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{image_data['mime_type']};base64,{image_data['encoded_data']}"
+                    },
+                }
+            )
+            content.append({"type": "text", "text": f"[Image context {i + 1}]"})
+        else:
+            content.append({"type": "text", "text": f"Context {i + 1}: {ctx}"})
+
+    content.append({"type": "text", "text": closing_text})
+    return content
+
+
 def build_multimodal_message_content(
     instruction: str,
     response: str,
@@ -226,9 +258,6 @@ def build_multimodal_message_content(
     Returns:
         List of content blocks for the message
     """
-    content: t.List[t.Dict[str, t.Any]] = []
-
-    # Add instruction and response
     prompt_text = f"""{instruction}
 
 Response to evaluate:
@@ -236,37 +265,11 @@ Response to evaluate:
 
 Retrieved contexts:
 """
-    content.append({"type": "text", "text": prompt_text})
-
-    # Process each context
-    for i, ctx in enumerate(retrieved_contexts):
-        # Try to process as image
-        image_data = process_image_to_base64(ctx)
-
-        if image_data:
-            # Add as image
-            content.append(
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:{image_data['mime_type']};base64,{image_data['encoded_data']}"
-                    },
-                }
-            )
-            content.append({"type": "text", "text": f"[Image context {i + 1}]"})
-        else:
-            # Add as text
-            content.append({"type": "text", "text": f"Context {i + 1}: {ctx}"})
-
-    # Add closing instruction
-    content.append(
-        {
-            "type": "text",
-            "text": "\n\nBased on the above contexts (both visual and textual), determine if the response is faithful. A response is faithful if all claims can be inferred from the provided contexts.",
-        }
+    return build_multimodal_content(
+        prompt_text,
+        retrieved_contexts,
+        "\n\nBased on the above contexts (both visual and textual), determine if the response is faithful. A response is faithful if all claims can be inferred from the provided contexts.",
     )
-
-    return content
 
 
 # Instruction for the prompt

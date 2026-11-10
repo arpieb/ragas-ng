@@ -41,6 +41,60 @@ logger = logging.getLogger(__name__)
 # TypeVar for Instructor LLM response models
 InstructorTypeVar = t.TypeVar("T", bound=BaseModel)  # type: ignore
 
+# One chat message in OpenAI format: ``{"role": ..., "content": ...}``, where
+# ``content`` is a string or a list of content parts (``{"type": "text", ...}``,
+# ``{"type": "image_url", ...}``). LiteLLM translates these for each provider.
+ChatMessage = t.Dict[str, t.Any]
+# What ``generate``/``agenerate`` take: a prompt string, sent as one user
+# message, or a list of chat messages sent as given (#214).
+LLMInput = t.Union[str, t.Sequence[ChatMessage]]
+
+
+def _build_messages(
+    prompt: LLMInput, system_prompt: t.Optional[str]
+) -> t.List[ChatMessage]:
+    """The messages sent for ``prompt``, with ``system_prompt`` prepended.
+
+    A string becomes one user message. A list of messages is sent as given
+    (copied, never mutated); ``system_prompt`` is prepended unless the list
+    already has a system message, which then takes precedence.
+    """
+    if isinstance(prompt, str):
+        messages: t.List[ChatMessage] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+        return messages
+    if not isinstance(prompt, t.Sequence) or isinstance(prompt, (bytes, bytearray)):
+        raise TypeError(
+            "prompt must be a string or a list of chat messages "
+            f"({{'role': ..., 'content': ...}}), not {type(prompt).__name__}"
+        )
+    messages = []
+    for message in prompt:
+        if not isinstance(message, t.Mapping) or "role" not in message:
+            raise TypeError(
+                "each chat message must be a dict with 'role' and 'content', "
+                f"got {message!r:.200}"
+            )
+        messages.append(dict(message))
+    if not messages:
+        raise ValueError("prompt is an empty list of chat messages")
+    if system_prompt and not any(m["role"] == "system" for m in messages):
+        messages.insert(0, {"role": "system", "content": system_prompt})
+    return messages
+
+
+def _content_for_span(content: t.Any) -> str:
+    """A message's content as a span attribute: text as is, parts as JSON."""
+    if isinstance(content, str):
+        return clip_for_span(content)
+    try:
+        text = json.dumps(content, default=repr)
+    except Exception:
+        text = repr(content)
+    return clip_for_span(text)
+
 
 @dataclass
 class BaseRagasLLM(ABC):
@@ -591,7 +645,7 @@ class InstructorBaseRagasLLM(ABC):
     @abstractmethod
     def generate(
         self,
-        prompt: str,
+        prompt: LLMInput,
         response_model: t.Type[InstructorTypeVar],
         temperature: t.Optional[float] = None,
         sample_index: t.Optional[int] = None,
@@ -599,6 +653,13 @@ class InstructorBaseRagasLLM(ABC):
         """Generate a response using the configured LLM.
 
         For async clients, this will run the async method in the appropriate event loop.
+
+        ``prompt`` is a string, sent as one user message, or a list of
+        OpenAI-format chat messages (content may be a list of text and
+        ``image_url`` parts) sent as given; ``system_prompt`` is prepended to
+        either unless the messages carry their own system message. Both go
+        through the same retries, cache, rate limit, tracing and usage
+        recording (#214).
 
         ``temperature`` overrides the configured temperature for this call, for
         metrics that deliberately draw several samples (``strictness``).
@@ -609,7 +670,7 @@ class InstructorBaseRagasLLM(ABC):
     @abstractmethod
     async def agenerate(
         self,
-        prompt: str,
+        prompt: LLMInput,
         response_model: t.Type[InstructorTypeVar],
         temperature: t.Optional[float] = None,
         sample_index: t.Optional[int] = None,
@@ -1027,7 +1088,7 @@ class InstructorLLM(InstructorBaseRagasLLM):
 
     @contextlib.contextmanager
     def _traced_call(
-        self, prompt: str, response_model: t.Type[BaseModel]
+        self, prompt: LLMInput, response_model: t.Type[BaseModel]
     ) -> t.Iterator[t.Any]:
         """One LLM run: a span (kind LLM) and a run-tree node (#196).
 
@@ -1044,7 +1105,8 @@ class InstructorLLM(InstructorBaseRagasLLM):
                     prefix = f"llm.input_messages.{i}.message"
                     span.set_attribute(f"{prefix}.role", message["role"])
                     span.set_attribute(
-                        f"{prefix}.content", clip_for_span(message["content"])
+                        f"{prefix}.content",
+                        _content_for_span(message.get("content")),
                     )
             yield run
 
@@ -1070,12 +1132,8 @@ class InstructorLLM(InstructorBaseRagasLLM):
         """The enclosing run's collector, else one attached to this LLM."""
         return scoped_usage_collector() or self.usage_collector
 
-    def _messages(self, prompt: str) -> t.List[t.Dict[str, str]]:
-        messages = []
-        if self.system_prompt:
-            messages.append({"role": "system", "content": self.system_prompt})
-        messages.append({"role": "user", "content": prompt})
-        return messages
+    def _messages(self, prompt: LLMInput) -> t.List[ChatMessage]:
+        return _build_messages(prompt, self.system_prompt)
 
     def _target(self, client: t.Any) -> t.Any:
         return client if self.provider.lower() == "google" else client.chat.completions
@@ -1083,7 +1141,7 @@ class InstructorLLM(InstructorBaseRagasLLM):
     def _call_sync(
         self,
         client: t.Any,
-        prompt: str,
+        prompt: LLMInput,
         response_model: t.Type[InstructorTypeVar],
         temperature: t.Optional[float],
     ) -> InstructorTypeVar:
@@ -1116,7 +1174,7 @@ class InstructorLLM(InstructorBaseRagasLLM):
 
     def generate(
         self,
-        prompt: str,
+        prompt: LLMInput,
         response_model: t.Type[InstructorTypeVar],
         temperature: t.Optional[float] = None,
         sample_index: t.Optional[int] = None,
@@ -1157,7 +1215,7 @@ class InstructorLLM(InstructorBaseRagasLLM):
 
     async def _call_async(
         self,
-        prompt: str,
+        prompt: LLMInput,
         response_model: t.Type[InstructorTypeVar],
         temperature: t.Optional[float],
     ) -> InstructorTypeVar:
@@ -1186,7 +1244,7 @@ class InstructorLLM(InstructorBaseRagasLLM):
 
     async def agenerate(
         self,
-        prompt: str,
+        prompt: LLMInput,
         response_model: t.Type[InstructorTypeVar],
         temperature: t.Optional[float] = None,
         sample_index: t.Optional[int] = None,
