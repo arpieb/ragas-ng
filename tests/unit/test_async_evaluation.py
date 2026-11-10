@@ -36,15 +36,22 @@ class TestEvaluateAsyncControl:
     """The sync evaluate() runs aevaluate() on the shared background loop."""
 
     def _evaluate(self, **kwargs):
+        def fake_run_sync(coro):
+            # close the coroutine the mock won't run: left to the garbage
+            # collector, its "never awaited" warning fires later, in
+            # whichever test is running then (#207's CI failure)
+            coro.close()
+            return MagicMock()
+
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
                 category=RuntimeWarning,
                 message=".*coroutine.*was never awaited",
             )
-            with patch("ragas.async_utils.run_sync") as mock_run_sync:
-                mock_run_sync.return_value = MagicMock()
-
+            with patch(
+                "ragas.async_utils.run_sync", side_effect=fake_run_sync
+            ) as mock_run_sync:
                 from ragas import evaluate
 
                 evaluate(

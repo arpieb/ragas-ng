@@ -2,6 +2,7 @@
 
 import asyncio
 import concurrent.futures
+import contextlib
 import contextvars
 import inspect
 import logging
@@ -191,6 +192,10 @@ def as_completed(
     def _iter_with_cancel():
         for future in ac_iter:
             if cancel_check():
+                # the waiter we pulled but won't hand out: close it, or it
+                # warns "never awaited" (#207)
+                if inspect.iscoroutine(future):
+                    future.close()
                 if cancel_pending:
                     for t in tasks:
                         if not t.done():
@@ -199,6 +204,110 @@ def as_completed(
             yield future
 
     return _iter_with_cancel()
+
+
+_SKIPPED: t.Any = object()
+
+# How often concurrent_results() checks cancel_check while every running task
+# is still waiting: cancel() takes effect within this, not at the next result.
+_CANCEL_POLL_SECONDS = 0.05
+
+
+@contextlib.asynccontextmanager
+async def concurrent_results(
+    coroutines: t.Sequence[t.Coroutine],
+    max_workers: int = -1,
+    *,
+    cancel_check: t.Optional[t.Callable[[], bool]] = None,
+    fail_fast: bool = False,
+) -> t.AsyncIterator[t.AsyncIterator[t.Any]]:
+    """Run ``coroutines`` concurrently; iterate their results as they finish.
+
+    ::
+
+        async with concurrent_results(coros, max_workers) as results:
+            async for result in results:
+                ...
+
+    A coroutine that raises yields its exception as the result. At most
+    ``max_workers`` run at once (``-1``: no limit). Leaving the block for any
+    reason -- the end, the caller raising or breaking, or cancellation --
+    cancels the tasks still running and waits for them, and closes the
+    coroutines that never started, so nothing keeps running (and calling an
+    LLM) after the caller has moved on (#207).
+
+    Args:
+        cancel_check: Polled while waiting; once it returns True, iteration
+            stops and the rest are cancelled. Checked at least every
+            ``_CANCEL_POLL_SECONDS``, not only when a task finishes.
+        fail_fast: After the first exception, start no further coroutine
+            (the flag is set before that task gives up its worker slot) and
+            stop iterating once its exception has been yielded.
+    """
+    coros = list(coroutines)
+    semaphore = None if max_workers == -1 else asyncio.Semaphore(max_workers)
+    stop = False
+
+    def should_stop() -> bool:
+        return stop or (cancel_check is not None and cancel_check())
+
+    async def one(coro: t.Coroutine) -> t.Any:
+        nonlocal stop
+        if should_stop():
+            coro.close()
+            return _SKIPPED
+        try:
+            return await coro
+        except Exception:
+            if fail_fast:
+                stop = True
+            raise
+
+    async def bounded(coro: t.Coroutine) -> t.Any:
+        if semaphore is None:
+            return await one(coro)
+        async with semaphore:
+            return await one(coro)
+
+    tasks = [asyncio.create_task(bounded(coro)) for coro in coros]
+
+    async def results() -> t.AsyncIterator[t.Any]:
+        pending: t.Set[asyncio.Task] = set(tasks)
+        timeout = _CANCEL_POLL_SECONDS if cancel_check is not None else None
+        while pending:
+            if cancel_check is not None and cancel_check():
+                return
+            done, pending = await asyncio.wait(
+                pending, timeout=timeout, return_when=asyncio.FIRST_COMPLETED
+            )
+            for task in done:
+                if task.cancelled():
+                    continue
+                error = task.exception()
+                if error is None:
+                    result = task.result()
+                    if result is not _SKIPPED:
+                        yield result
+                elif isinstance(error, Exception):
+                    yield error
+                    if fail_fast:
+                        return
+                else:  # KeyboardInterrupt, SystemExit: not a job result
+                    raise error
+
+    try:
+        yield results()
+    finally:
+        stop = True
+        running = [task for task in tasks if not task.done()]
+        for task in running:
+            task.cancel()
+        if running:
+            await asyncio.gather(*running, return_exceptions=True)
+        # a task cancelled before it started never ran its coroutine
+        for coro in coros:
+            if inspect.getcoroutinestate(coro) == inspect.CORO_CREATED:
+                coro.close()
 
 
 async def process_futures(
@@ -284,28 +393,22 @@ def run_async_tasks(
         first_exception = None
         pbm = ProgressBarManager(progress_bar_desc, show_progress)
 
-        def _stop() -> bool:
-            if fail_fast and first_exception is not None:
-                return True
-            return cancel_check is not None and cancel_check()
-
-        stop_check = _stop if (fail_fast or cancel_check is not None) else None
-
         if not batch_size:
             with pbm.create_single_bar(total_tasks) as pbar:
-                async for result in process_futures(
-                    as_completed(tasks, max_workers, cancel_check=stop_check)
-                ):
-                    if isinstance(result, Exception):
-                        logger.error(
-                            f"Task failed with {type(result).__name__}: {result}",
-                            exc_info=False,
-                        )
-                        # Store first exception to raise after all tasks complete
-                        if first_exception is None:
-                            first_exception = result
-                    results.append(result)
-                    pbar.update(1)
+                async with concurrent_results(
+                    tasks, max_workers, cancel_check=cancel_check, fail_fast=fail_fast
+                ) as finished:
+                    async for result in finished:
+                        if isinstance(result, Exception):
+                            logger.error(
+                                f"Task failed with {type(result).__name__}: {result}",
+                                exc_info=False,
+                            )
+                            # the first exception is raised once all are done
+                            if first_exception is None:
+                                first_exception = result
+                        results.append(result)
+                        pbar.update(1)
         else:
             total_tasks = len(tasks)
             batches = batched(tasks, batch_size)
@@ -317,19 +420,26 @@ def run_async_tasks(
                     if fail_fast and first_exception is not None:
                         break
                     pbm.update_batch_bar(batch_pbar, i, n_batches, len(batch))
-                    async for result in process_futures(
-                        as_completed(batch, max_workers, cancel_check=stop_check)
-                    ):
-                        if isinstance(result, Exception):
-                            logger.error(
-                                f"Task failed with {type(result).__name__}: {result}",
-                                exc_info=False,
-                            )
-                            # Store first exception to raise after all tasks complete
-                            if first_exception is None:
-                                first_exception = result
-                        results.append(result)
-                        batch_pbar.update(1)
+                    if cancel_check is not None and cancel_check():
+                        break
+                    async with concurrent_results(
+                        batch,
+                        max_workers,
+                        cancel_check=cancel_check,
+                        fail_fast=fail_fast,
+                    ) as finished:
+                        async for result in finished:
+                            if isinstance(result, Exception):
+                                logger.error(
+                                    f"Task failed with {type(result).__name__}: "
+                                    f"{result}",
+                                    exc_info=False,
+                                )
+                                # the first exception is raised once all are done
+                                if first_exception is None:
+                                    first_exception = result
+                            results.append(result)
+                            batch_pbar.update(1)
                     overall_pbar.update(len(batch))
 
         # Close coroutines that never started (cancelled before running or in
