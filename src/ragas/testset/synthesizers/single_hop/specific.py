@@ -10,31 +10,17 @@ import numpy as np
 from ragas.prompt import PydanticPrompt
 from ragas.testset.graph import KnowledgeGraph, Node
 from ragas.testset.persona import Persona
-from ragas.testset.synthesizers.base import BaseScenario
 from ragas.testset.synthesizers.prompts import (
     ThemesPersonasInput,
     ThemesPersonasMatchingPrompt,
 )
 
-from .base import SingleHopQuerySynthesizer
+from .base import SingleHopQuerySynthesizer, SingleHopScenario
 
 if t.TYPE_CHECKING:
     from ragas.callbacks import Callbacks
 
 logger = logging.getLogger(__name__)
-
-
-class SingleHopScenario(BaseScenario):
-    """
-    Scenario for single-hop queries.
-
-    Attributes
-    ----------
-    term: str
-        The theme of the query.
-    """
-
-    term: str
 
 
 @dataclass

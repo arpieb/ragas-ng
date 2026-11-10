@@ -10,6 +10,9 @@ from ragas.executor import run_async_batch
 from ragas.llms.base import BaseRagasLLM
 from ragas.prompt import PydanticPrompt, StringIO
 from ragas.testset.graph import KnowledgeGraph, Node
+from ragas.testset.transforms.relationship_builders.cosine import (
+    cosine_similarity_matrix,
+)
 
 if t.TYPE_CHECKING:
     from ragas.callbacks import Callbacks
@@ -131,31 +134,40 @@ def generate_personas_from_kg(
             "No nodes that satisfied the given filer. Try changing the filter."
         )
 
-    summaries = [node.properties.get("summary") for node in nodes]
-    summaries = [summary for summary in summaries if isinstance(summary, str)]
+    # Keep each summary paired with its own node's embedding, so the similarity
+    # matrix and the summaries list share indices.
+    summaries: t.List[str] = []
+    embeddings: t.List[t.Any] = []
+    for node in nodes:
+        summary = node.properties.get("summary")
+        if not isinstance(summary, str):
+            continue
+        embedding = node.properties.get("summary_embedding")
+        if embedding is None:
+            raise ValueError(f"Node {node.id} has a summary but no summary_embedding")
+        summaries.append(summary)
+        embeddings.append(embedding)
     num_personas = min(num_personas, len(summaries))
 
-    embeddings = []
-    for node in nodes:
-        embeddings.append(node.properties.get("summary_embedding"))
-
-    embeddings = np.array(embeddings)
-    cosine_similarities = np.dot(embeddings, embeddings.T)
-
     groups = []
-    visited = set()
-    threshold = 0.75
+    if summaries:
+        embedding_matrix = np.asarray(embeddings, dtype=float)
+        cosine_similarities = cosine_similarity_matrix(
+            embedding_matrix, embedding_matrix
+        )
+        visited = set()
+        threshold = 0.75
 
-    for i, _ in enumerate(summaries):
-        if i in visited:
-            continue
-        group = [i]
-        visited.add(i)
-        for j in range(i + 1, len(summaries)):
-            if cosine_similarities[i, j] > threshold:
-                group.append(j)
-                visited.add(j)
-        groups.append(group)
+        for i in range(len(summaries)):
+            if i in visited:
+                continue
+            group = [i]
+            visited.add(i)
+            for j in range(i + 1, len(summaries)):
+                if cosine_similarities[i, j] > threshold:
+                    group.append(j)
+                    visited.add(j)
+            groups.append(group)
 
     top_summaries = []
     for group in groups:

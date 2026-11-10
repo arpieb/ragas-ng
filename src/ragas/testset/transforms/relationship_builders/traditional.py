@@ -58,25 +58,6 @@ class JaccardSimilarityBuilder(RelationshipBuilder):
             for i, j, similarity_float in similar_pairs
         ]
 
-    def generate_execution_plan(self, kg: KnowledgeGraph) -> t.List[t.Coroutine]:
-        """
-        Generates a coroutine task for finding similar pairs, which can be scheduled/executed by an Executor.
-        """
-
-        async def find_and_add_relationships():
-            similar_pairs = self._find_similar_embedding_pairs(kg)
-            for i, j, similarity_float in similar_pairs:
-                rel = Relationship(
-                    source=kg.nodes[i],
-                    target=kg.nodes[j],
-                    type=self.new_property_name,
-                    properties={self.new_property_name: similarity_float},
-                    bidirectional=True,
-                )
-                kg.relationships.append(rel)
-
-        return [find_and_add_relationships()]
-
 
 @dataclass
 class OverlapScoreBuilder(RelationshipBuilder):
@@ -88,6 +69,7 @@ class OverlapScoreBuilder(RelationshipBuilder):
     threshold: float = 0.01
 
     def __post_init__(self):
+        super().__post_init__()
         rapidfuzz_distances(DistanceMeasure)  # rapidfuzz is installed
 
     @property
@@ -119,9 +101,6 @@ class OverlapScoreBuilder(RelationshipBuilder):
         return noisy_list
 
     async def transform(self, kg: KnowledgeGraph) -> t.List[Relationship]:
-        if self.property_name is None:
-            self.property_name
-
         distance_measure = self.distance_measure_map[self.distance_measure]
         noisy_items = self._get_noisy_items(kg.nodes, self.property_name)
         relationships = []
