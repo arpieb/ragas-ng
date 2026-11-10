@@ -141,15 +141,15 @@ class AnswerCorrectness(BaseMetric):
         super().__init__(name=name, **kwargs)
 
     def _validate_embeddings(self) -> None:
-        """Override base validation to allow optional embeddings.
+        """Validate embeddings when given; None is allowed.
 
-        AnswerCorrectness metric allows embeddings to be None when using
-        pure factuality evaluation (weights=[1.0, 0.0]). The main validation
-        of embeddings availability happens in __init__ based on weights.
+        AnswerCorrectness allows ``embeddings=None`` for pure factuality
+        evaluation (weights=[1.0, 0.0]); __init__ already requires embeddings
+        when the similarity weight is > 0. Anything else passed as embeddings
+        must be a modern embedding, as for every collections metric.
         """
-        # Only validate embeddings if similarity weight > 0
-        # (validation logic already in __init__)
-        pass
+        if self.embeddings is not None:
+            super()._validate_embeddings()
 
     async def ascore(
         self, user_input: str, response: str, reference: str
@@ -292,4 +292,7 @@ class AnswerCorrectness(BaseMetric):
             norm_response[0] * norm_reference[0]
         )
 
-        return float(cosine_similarity)
+        # Cosine similarity spans [-1, 1]; the similarity term is defined on
+        # [0, 1]. Unclipped, a negative cosine pulled the final score below 0.
+        # Same clipping as SemanticSimilarity (#107).
+        return float(np.clip(cosine_similarity, 0.0, 1.0))
