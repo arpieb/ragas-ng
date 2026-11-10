@@ -3,13 +3,11 @@ import typing as t
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
-from ragas.llms import BaseRagasLLM, default_llm
-from ragas.prompt import PromptMixin
+from ragas.llms import default_llm
+from ragas.llms.base import InstructorBaseRagasLLM
+from ragas.testset._modern import TestsetPromptMixin, require_llm
 from ragas.testset.graph import KnowledgeGraph, Node, Relationship
 from ragas.tokenizers import DEFAULT_TOKENIZER, BaseTokenizer
-
-if t.TYPE_CHECKING:
-    from ragas.llms.base import InstructorBaseRagasLLM
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +16,7 @@ def default_filter(node: Node) -> bool:
     return True
 
 
-def _default_llm_factory() -> t.Union[BaseRagasLLM, "InstructorBaseRagasLLM"]:
+def _default_llm_factory() -> InstructorBaseRagasLLM:
     """The default LLM, shared with ``evaluate()``. See ``ragas.llms.default_llm``."""
     return default_llm()
 
@@ -210,13 +208,15 @@ class Extractor(BaseGraphTransformation):
 
 
 @dataclass
-class LLMBasedExtractor(Extractor, PromptMixin):
-    llm: t.Union[BaseRagasLLM, "InstructorBaseRagasLLM"] = field(
-        default_factory=_default_llm_factory
-    )
+class LLMBasedExtractor(Extractor, TestsetPromptMixin):
+    llm: InstructorBaseRagasLLM = field(default_factory=_default_llm_factory)
     merge_if_possible: bool = True
     max_token_limit: int = 32000
     tokenizer: BaseTokenizer = field(default_factory=lambda: DEFAULT_TOKENIZER)
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.llm = require_llm(self.llm, type(self).__name__)
 
     def split_text_by_token_limit(self, text, max_token_limit):
         tokens = self.tokenizer.encode(text)
@@ -432,7 +432,9 @@ class NodeFilter(BaseGraphTransformation):
 
 
 @dataclass
-class LLMBasedNodeFilter(NodeFilter, PromptMixin):
-    llm: t.Union[BaseRagasLLM, "InstructorBaseRagasLLM"] = field(
-        default_factory=_default_llm_factory
-    )
+class LLMBasedNodeFilter(NodeFilter, TestsetPromptMixin):
+    llm: InstructorBaseRagasLLM = field(default_factory=_default_llm_factory)
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.llm = require_llm(self.llm, type(self).__name__)

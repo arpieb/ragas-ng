@@ -23,35 +23,47 @@ from llama_index.core import SimpleDirectoryReader
 documents = SimpleDirectoryReader("./nyc_wikipedia").load_data()
 ```
 
-Now let's initialize the `TestsetGenerator` object with the corresponding generator and critic LLMs
+Now let's initialize the `TestsetGenerator`. It takes an `llm_factory()` LLM
+and a ragas embedding model; LiteLLM reaches the same providers LlamaIndex
+does, so no LlamaIndex LLM wrapper is needed.
 
 
 ```python
+from ragas.embeddings import embedding_factory
+from ragas.llms import llm_factory
 from ragas.testset import TestsetGenerator
 
-from llama_index.llms.openai import OpenAI
-from llama_index.embeddings.openai import OpenAIEmbedding
+# generator with openai models, credentials from OPENAI_API_KEY
+generator_llm = llm_factory("gpt-6-luna")
+embeddings = embedding_factory("openai", model="text-embedding-3-large")
 
-# generator with openai models
-generator_llm = OpenAI(model="gpt-6-luna")
-embeddings = OpenAIEmbedding(model="text-embedding-3-large")
-
-generator = TestsetGenerator.from_llama_index(
-    llm=generator_llm,
-    embedding_model=embeddings,
-)
+generator = TestsetGenerator(llm=generator_llm, embedding_model=embeddings)
 ```
 
-Now you are all set to generate the dataset
+Now you are all set to generate the dataset. A LlamaIndex `Document` keeps its
+text in `text` rather than `page_content`, so pass a `document_adapter` that
+converts each one to a ragas `Document`. Documents with no text are skipped.
 
 
 ```python
+from ragas.testset.document import Document
+
+
+def from_llama_index(doc):
+    return Document(page_content=doc.text, metadata=doc.metadata)
+
+
 # generate testset
-testset = generator.generate_with_llamaindex_docs(
+testset = generator.generate_with_docs(
     documents,
     testset_size=5,
+    document_adapter=from_llama_index,
 )
 ```
+
+The same adapter works for `generate_with_chunks()` if your LlamaIndex nodes
+are already chunked, and the same pattern works for documents from any other
+framework: return an object with `page_content` and `metadata`.
 
 
 ```python
@@ -197,6 +209,7 @@ from ragas.metrics import (
 )
 
 # init metrics with evaluator LLM
+from llama_index.llms.openai import OpenAI
 from ragas.llms import LlamaIndexLLMWrapper
 
 evaluator_llm = LlamaIndexLLMWrapper(OpenAI(model="gpt-6-luna"))

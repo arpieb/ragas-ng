@@ -1,6 +1,13 @@
 import pytest
 
 from ragas.testset.synthesizers.multi_hop import MultiHopAbstractQuerySynthesizer
+from tests.unit import testset_fakes
+
+
+@pytest.fixture
+def fake_llm():
+    """An llm_factory() LLM stand-in; testset rejects legacy LLMs (#214)."""
+    return testset_fakes.fake_llm()
 
 
 def test_prompt_save_load(tmp_path, fake_llm):

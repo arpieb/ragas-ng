@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ragas.prompt import PydanticPrompt
+from ragas.prompt.metrics.base_prompt import BasePrompt
 from ragas.testset.graph import KnowledgeGraph, Node
 from ragas.testset.persona import Persona
 from ragas.testset.synthesizers.multi_hop.base import (
@@ -35,8 +35,8 @@ class MultiHopAbstractQuerySynthesizer(MultiHopQuerySynthesizer):
     name: str = "multi_hop_abstract_query_synthesizer"
     relation_property: str = "summary_similarity"
     abstract_property_name: str = "themes"
-    concept_combination_prompt: PydanticPrompt = ConceptCombinationPrompt()
-    theme_persona_matching_prompt: PydanticPrompt = ThemesPersonasMatchingPrompt()
+    concept_combination_prompt: BasePrompt = ConceptCombinationPrompt()
+    theme_persona_matching_prompt: BasePrompt = ThemesPersonasMatchingPrompt()
 
     def get_node_clusters(
         self,

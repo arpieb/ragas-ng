@@ -20,9 +20,10 @@ retrieval pipeline, and scores them with the same retrieval metrics.
 
 ## Load your documents
 
-Any object exposing `page_content` and `metadata` works, so LangChain and
-LlamaIndex loaders are both fine. Here we build ragas `Document` objects
-directly, which needs no extra dependency.
+Any object exposing `page_content` and `metadata` works, so LangChain
+loaders are fine; LlamaIndex documents need a `document_adapter` (see
+[LlamaIndex](../integrations/llamaindex.md)). Here we build ragas `Document`
+objects directly, which needs no extra dependency.
 
 ```python
 from pathlib import Path

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ragas.prompt import PydanticPrompt
+from ragas.prompt.metrics.base_prompt import BasePrompt
 from ragas.testset.graph import KnowledgeGraph, Node
 from ragas.testset.persona import Persona
 from ragas.testset.synthesizers.prompts import (
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SingleHopSpecificQuerySynthesizer(SingleHopQuerySynthesizer):
     name: str = "single_hop_specific_query_synthesizer"
-    theme_persona_matching_prompt: PydanticPrompt = ThemesPersonasMatchingPrompt()
+    theme_persona_matching_prompt: BasePrompt = ThemesPersonasMatchingPrompt()
     property_name: str = "entities"
 
     def _extract_themes_from_items(self, items: t.Any) -> t.List[str]:

@@ -9,13 +9,9 @@ from dataclasses import dataclass, field
 from ragas.callbacks import new_group
 from ragas.cost import TokenUsageParser
 from ragas.dataset_schema import MultiTurnSample, SingleTurnSample, _json_safe
-from ragas.embeddings.base import (
-    BaseRagasEmbeddings,
-    LlamaIndexEmbeddingsWrapper,
-)
 from ragas.executor import Executor
-from ragas.llms import BaseRagasLLM, LlamaIndexLLMWrapper
 from ragas.run_config import RunConfig, run_scope
+from ragas.testset._modern import optional, require_embedding, require_llm
 from ragas.testset.document import Document, DocumentLike
 from ragas.testset.graph import KnowledgeGraph, Node, NodeType
 from ragas.testset.graph_queries import get_parent_nodes
@@ -31,21 +27,18 @@ from ragas.testset.transforms import (
 )
 
 if t.TYPE_CHECKING:
-    from llama_index.core.base.embeddings.base import (
-        BaseEmbedding as LlamaIndexEmbedding,
-    )
-    from llama_index.core.base.llms.base import BaseLLM as LlamaIndexLLM
-    from llama_index.core.schema import Document as LlamaIndexDocument
-
     from ragas.callbacks import Callbacks
-    from ragas.embeddings.base import BaseRagasEmbedding, BaseRagasEmbeddings
-    from ragas.llms.base import BaseRagasLLM, InstructorBaseRagasLLM
+    from ragas.embeddings.base import BaseRagasEmbedding
+    from ragas.llms.base import InstructorBaseRagasLLM
     from ragas.testset.synthesizers import QueryDistribution
     from ragas.testset.synthesizers.base import BaseScenario
 
 
 RAGAS_TESTSET_GENERATION_GROUP_NAME = "ragas testset generation"
 logger = logging.getLogger(__name__)
+
+DocumentAdapter = t.Callable[[t.Any], DocumentLike]
+"""Converts one of your documents to a ``DocumentLike``; see ``generate_with_docs``."""
 
 
 @dataclass
@@ -55,12 +48,12 @@ class TestsetGenerator:
 
     Attributes
     ----------
-    llm : BaseRagasLLM or InstructorBaseRagasLLM
-        The language model to use for the generation process, such as the
-        output of ``llm_factory``.
-    embedding_model : BaseRagasEmbeddings or BaseRagasEmbedding
+    llm : InstructorBaseRagasLLM
+        The language model to use for the generation process: the output of
+        ``llm_factory()``.
+    embedding_model : BaseRagasEmbedding
         The embedding model used to build the knowledge graph, such as the
-        output of ``embedding_factory``.
+        output of ``embedding_factory()``.
     knowledge_graph : KnowledgeGraph, default empty
         The knowledge graph to use for the generation process.
     llm_context : Optional[str], default None
@@ -68,42 +61,25 @@ class TestsetGenerator:
         This context will be used to guide how the LLM generates queries and answers.
     """
 
-    llm: t.Union[BaseRagasLLM, InstructorBaseRagasLLM]
-    embedding_model: t.Union[BaseRagasEmbeddings, BaseRagasEmbedding]
+    llm: InstructorBaseRagasLLM
+    embedding_model: BaseRagasEmbedding
     knowledge_graph: KnowledgeGraph = field(default_factory=KnowledgeGraph)
     persona_list: t.Optional[t.List[Persona]] = None
     llm_context: t.Optional[str] = None
 
-    @classmethod
-    def from_llama_index(
-        cls,
-        llm: LlamaIndexLLM,
-        embedding_model: LlamaIndexEmbedding,
-        knowledge_graph: t.Optional[KnowledgeGraph] = None,
-        llm_context: t.Optional[str] = None,
-    ) -> TestsetGenerator:
-        """
-        Creates a `TestsetGenerator` from a LlamaIndex LLM and embedding model.
-        """
-        knowledge_graph = knowledge_graph or KnowledgeGraph()
-        return cls(
-            LlamaIndexLLMWrapper(llm),
-            LlamaIndexEmbeddingsWrapper(embedding_model),
-            knowledge_graph,
-            llm_context=llm_context,
-        )
+    def __post_init__(self):
+        # None is let through: the generate_with_* methods say which one is
+        # missing, and generate() on a prebuilt graph needs no embeddings.
+        optional(require_llm, self.llm, "TestsetGenerator")
+        optional(require_embedding, self.embedding_model, "TestsetGenerator")
 
     def generate_with_docs(
         self,
-        documents: t.Sequence[DocumentLike],
+        documents: t.Sequence[t.Any],
         testset_size: int,
         transforms: t.Optional[Transforms] = None,
-        transforms_llm: t.Optional[
-            t.Union[BaseRagasLLM, InstructorBaseRagasLLM]
-        ] = None,
-        transforms_embedding_model: t.Optional[
-            t.Union[BaseRagasEmbeddings, BaseRagasEmbedding]
-        ] = None,
+        transforms_llm: t.Optional[InstructorBaseRagasLLM] = None,
+        transforms_embedding_model: t.Optional[BaseRagasEmbedding] = None,
         query_distribution: t.Optional[QueryDistribution] = None,
         run_config: t.Optional[RunConfig] = None,
         callbacks: t.Optional[Callbacks] = None,
@@ -111,21 +87,28 @@ class TestsetGenerator:
         with_debugging_logs=False,
         raise_exceptions: bool = True,
         return_executor: bool = False,
+        document_adapter: t.Optional[DocumentAdapter] = None,
     ) -> t.Union[Testset, Executor]:
         """
-        Generates an evaluation dataset based on given Langchain documents and parameters.
+        Generates an evaluation dataset from whole documents.
+
+        ``transforms`` split, enrich and link the documents into a knowledge
+        graph, then queries are generated from it.
 
         Parameters
         ----------
-        documents : Sequence[DocumentLike]
-            A sequence of Langchain documents to use as source material
+        documents : Sequence
+            The source documents: objects with ``page_content`` and
+            ``metadata`` attributes (``ragas.testset.document.Document``, a
+            LangChain ``Document``), strings, or objects that
+            ``document_adapter`` converts. Documents with no text are skipped.
         testset_size : int
             The number of test samples to generate
         transforms : Optional[Transforms], optional
             Custom transforms to apply to the documents, by default None
-        transforms_llm : Optional[BaseRagasLLM or InstructorBaseRagasLLM], optional
+        transforms_llm : Optional[InstructorBaseRagasLLM], optional
             LLM to use for transforms if different from instance LLM, by default None
-        transforms_embedding_model : Optional[BaseRagasEmbeddings or BaseRagasEmbedding], optional
+        transforms_embedding_model : Optional[BaseRagasEmbedding], optional
             Embedding model to use for transforms if different from instance model, by default None
         query_distribution : Optional[QueryDistribution], optional
             Distribution of query types to generate, by default None
@@ -144,6 +127,12 @@ class TestsetGenerator:
             If True, returns the Executor instance instead of running generation.
             The returned executor can be used to cancel execution by calling executor.cancel().
             To get results, call executor.results(). Default is False.
+        document_adapter : Optional[Callable[[Any], DocumentLike]], optional
+            Converts each document that is not a string to an object with
+            ``page_content`` and ``metadata``, for documents whose type uses
+            other names. For LlamaIndex documents:
+            ``lambda d: Document(page_content=d.text, metadata=d.metadata)``.
+            By default the documents are used as they are.
 
         Returns
         -------
@@ -155,6 +144,9 @@ class TestsetGenerator:
         ------
         ValueError
             If no LLM or embedding model is provided either during initialization or as arguments
+        TypeError
+            If an LLM is not an ``llm_factory()`` LLM, or an embedding model
+            is not a ``BaseRagasEmbedding``
         """
 
         # force the user to provide an llm and embedding client to prevent use of default LLMs
@@ -168,27 +160,20 @@ class TestsetGenerator:
             raise ValueError(
                 """An embedding client was not provided. Provide an embedding through the transforms_embedding_model parameter. Alternatively you can provide your own transforms through the `transforms` parameter."""
             )
+        transforms_llm = optional(require_llm, transforms_llm, "transforms_llm")
+        transforms_embedding_model = optional(
+            require_embedding, transforms_embedding_model, "transforms_embedding_model"
+        )
 
+        docs = _to_documents(documents, document_adapter)
         if not transforms:
             transforms = default_transforms(
-                documents=list(documents),
+                documents=docs,
                 llm=transforms_llm or self.llm,
                 embedding_model=transforms_embedding_model or self.embedding_model,
             )
 
-        # convert the documents to Ragas nodes
-        nodes = []
-        for doc in documents:
-            node = Node(
-                type=NodeType.DOCUMENT,
-                properties={
-                    "page_content": doc.page_content,
-                    "document_metadata": doc.metadata,
-                },
-            )
-            nodes.append(node)
-
-        kg = KnowledgeGraph(nodes=nodes)
+        kg = KnowledgeGraph(nodes=_to_nodes(docs, NodeType.DOCUMENT))
 
         # transforms and generation share one run scope (#90)
         return self._transform_and_generate(
@@ -221,94 +206,13 @@ class TestsetGenerator:
         )
         return self.generate_with_docs(*args, **kwargs)
 
-    def generate_with_llamaindex_docs(
-        self,
-        documents: t.Sequence[LlamaIndexDocument],
-        testset_size: int,
-        transforms: t.Optional[Transforms] = None,
-        transforms_llm: t.Optional[LlamaIndexLLM] = None,
-        transforms_embedding_model: t.Optional[LlamaIndexEmbedding] = None,
-        query_distribution: t.Optional[QueryDistribution] = None,
-        run_config: t.Optional[RunConfig] = None,
-        callbacks: t.Optional[Callbacks] = None,
-        token_usage_parser: t.Optional[TokenUsageParser] = None,
-        with_debugging_logs=False,
-        raise_exceptions: bool = True,
-    ):
-        """
-        Generates an evaluation dataset based on given scenarios and parameters.
-        """
-
-        # force the user to provide an llm and embedding client to prevent use of default LLMs
-        if not self.llm and not transforms_llm:
-            raise ValueError(
-                "An llm client was not provided. Provide an LLM on TestsetGenerator instantiation or as an argument for transforms_llm parameter. Alternatively you can provide your own transforms through the `transforms` parameter."
-            )
-        if not self.embedding_model and not transforms_embedding_model:
-            raise ValueError(
-                "An embedding client was not provided. Provide an embedding through the transforms_embedding_model parameter. Alternatively you can provide your own transforms through the `transforms` parameter."
-            )
-
-        if not transforms:
-            # use TestsetGenerator's LLM and embedding model if no transforms_llm or transforms_embedding_model is provided
-            if transforms_llm is None:
-                llm_for_transforms = self.llm
-            else:
-                llm_for_transforms = LlamaIndexLLMWrapper(transforms_llm)
-            if transforms_embedding_model is None:
-                embedding_model_for_transforms = self.embedding_model
-            else:
-                embedding_model_for_transforms = LlamaIndexEmbeddingsWrapper(
-                    transforms_embedding_model
-                )
-
-            # create the transforms
-            transforms = default_transforms(
-                documents=[Document(page_content=doc.text) for doc in documents],
-                llm=llm_for_transforms,
-                embedding_model=embedding_model_for_transforms,
-            )
-
-        # convert the documents to Ragas nodes
-        nodes = []
-        for doc in documents:
-            if doc.text is not None and doc.text.strip() != "":
-                node = Node(
-                    type=NodeType.DOCUMENT,
-                    properties={
-                        "page_content": doc.text,
-                        "document_metadata": doc.metadata,
-                    },
-                )
-                nodes.append(node)
-
-        kg = KnowledgeGraph(nodes=nodes)
-
-        # transforms and generation share one run scope (#90)
-        return self._transform_and_generate(
-            kg,
-            transforms,
-            testset_size=testset_size,
-            query_distribution=query_distribution,
-            run_config=run_config,
-            callbacks=callbacks,
-            token_usage_parser=token_usage_parser,
-            with_debugging_logs=with_debugging_logs,
-            raise_exceptions=raise_exceptions,
-            return_executor=False,
-        )
-
     def generate_with_chunks(
         self,
-        chunks: t.Sequence[t.Union[DocumentLike, str]],
+        chunks: t.Sequence[t.Any],
         testset_size: int,
         transforms: t.Optional[Transforms] = None,
-        transforms_llm: t.Optional[
-            t.Union[BaseRagasLLM, InstructorBaseRagasLLM]
-        ] = None,
-        transforms_embedding_model: t.Optional[
-            t.Union[BaseRagasEmbeddings, BaseRagasEmbedding]
-        ] = None,
+        transforms_llm: t.Optional[InstructorBaseRagasLLM] = None,
+        transforms_embedding_model: t.Optional[BaseRagasEmbedding] = None,
         query_distribution: t.Optional[QueryDistribution] = None,
         run_config: t.Optional[RunConfig] = None,
         callbacks: t.Optional[Callbacks] = None,
@@ -316,6 +220,7 @@ class TestsetGenerator:
         with_debugging_logs=False,
         raise_exceptions: bool = True,
         return_executor: bool = False,
+        document_adapter: t.Optional[DocumentAdapter] = None,
     ) -> t.Union[Testset, Executor]:
         """
         Generates an evaluation dataset based on provided pre-chunked documents.
@@ -326,16 +231,17 @@ class TestsetGenerator:
 
         Parameters
         ----------
-        chunks : Sequence[Union[DocumentLike, str]]
-            A sequence of Langchain documents or strings to use as chunks.
-            Strings will be automatically converted to Documents.
+        chunks : Sequence
+            The chunks: strings, objects with ``page_content`` and
+            ``metadata`` attributes, or objects that ``document_adapter``
+            converts. Chunks with no text are skipped.
         testset_size : int
             The number of test samples to generate
         transforms : Optional[Transforms], optional
             Custom transforms to apply to the chunks, by default None
-        transforms_llm : Optional[BaseRagasLLM or InstructorBaseRagasLLM], optional
+        transforms_llm : Optional[InstructorBaseRagasLLM], optional
             LLM to use for transforms if different from instance LLM, by default None
-        transforms_embedding_model : Optional[BaseRagasEmbeddings or BaseRagasEmbedding], optional
+        transforms_embedding_model : Optional[BaseRagasEmbedding], optional
             Embedding model to use for transforms if different from instance model, by default None
         query_distribution : Optional[QueryDistribution], optional
             Distribution of query types to generate, by default None
@@ -351,6 +257,9 @@ class TestsetGenerator:
             Whether to raise exceptions during generation, by default True
         return_executor : bool, optional
             If True, returns the Executor instance instead of running generation.
+        document_adapter : Optional[Callable[[Any], DocumentLike]], optional
+            Converts each chunk that is not a string, as in
+            :meth:`generate_with_docs`.
 
         Returns
         -------
@@ -370,6 +279,10 @@ class TestsetGenerator:
             raise ValueError(
                 """An embedding client was not provided. Provide an embedding through the transforms_embedding_model parameter. Alternatively you can provide your own transforms through the `transforms` parameter."""
             )
+        transforms_llm = optional(require_llm, transforms_llm, "transforms_llm")
+        transforms_embedding_model = optional(
+            require_embedding, transforms_embedding_model, "transforms_embedding_model"
+        )
 
         if transforms is None:
             transforms = default_transforms_for_prechunked(
@@ -377,27 +290,8 @@ class TestsetGenerator:
                 embedding_model=transforms_embedding_model or self.embedding_model,
             )
 
-        # convert the chunks to Ragas nodes
-        nodes = []
-        for chunk in chunks:
-            if isinstance(chunk, str):
-                page_content = chunk
-                metadata = {}
-            else:
-                page_content = chunk.page_content
-                metadata = chunk.metadata
-
-            if page_content is not None and page_content.strip() != "":
-                node = Node(
-                    type=NodeType.CHUNK,
-                    properties={
-                        "page_content": page_content,
-                        "document_metadata": metadata,
-                    },
-                )
-                nodes.append(node)
-
-        kg = KnowledgeGraph(nodes=nodes)
+        docs = _to_documents(chunks, document_adapter)
+        kg = KnowledgeGraph(nodes=_to_nodes(docs, NodeType.CHUNK))
 
         # transforms and generation share one run scope (#90)
         return self._transform_and_generate(
@@ -700,6 +594,39 @@ class TestsetGenerator:
         testset_generation_rm.on_chain_end({"testset": testset})
 
         return testset
+
+
+def _to_documents(
+    items: t.Iterable[t.Any], adapter: t.Optional[DocumentAdapter]
+) -> t.List[DocumentLike]:
+    """``items`` as documents, leaving out those with no text.
+
+    A string becomes a ``Document``; anything else goes through ``adapter``
+    when one is given, else is used as it is.
+    """
+    docs: t.List[DocumentLike] = []
+    for item in items:
+        if isinstance(item, str):
+            doc: DocumentLike = Document(page_content=item)
+        else:
+            doc = adapter(item) if adapter is not None else item
+        text = doc.page_content
+        if text is not None and text.strip():
+            docs.append(doc)
+    return docs
+
+
+def _to_nodes(docs: t.Sequence[DocumentLike], node_type: NodeType) -> t.List[Node]:
+    return [
+        Node(
+            type=node_type,
+            properties={
+                "page_content": doc.page_content,
+                "document_metadata": doc.metadata,
+            },
+        )
+        for doc in docs
+    ]
 
 
 def _source_metadata(node: Node, kg: KnowledgeGraph) -> t.Dict[str, t.Any]:

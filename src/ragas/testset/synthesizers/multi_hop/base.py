@@ -7,7 +7,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 
 from ragas import SingleTurnSample
-from ragas.prompt import PydanticPrompt
+from ragas.prompt.metrics.base_prompt import BasePrompt
 from ragas.testset.persona import Persona, PersonaList
 from ragas.testset.synthesizers.base import (
     BaseScenario,
@@ -49,7 +49,7 @@ class MultiHopScenario(BaseScenario):
 
 @dataclass
 class MultiHopQuerySynthesizer(BaseSynthesizer[Scenario]):
-    generate_query_reference_prompt: PydanticPrompt = QueryAnswerGenerationPrompt()
+    generate_query_reference_prompt: BasePrompt = QueryAnswerGenerationPrompt()
 
     def prepare_combinations(
         self,

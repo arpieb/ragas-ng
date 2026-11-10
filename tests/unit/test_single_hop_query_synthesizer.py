@@ -2,16 +2,23 @@ import typing as t
 
 import pytest
 
-from ragas.prompt import PydanticPrompt
+from ragas.prompt.metrics.base_prompt import BasePrompt
 from ragas.testset.graph import KnowledgeGraph, Node, NodeType
 from ragas.testset.persona import Persona
 from ragas.testset.synthesizers.prompts import PersonaThemesMapping, ThemesPersonasInput
 from ragas.testset.synthesizers.single_hop.specific import (
     SingleHopSpecificQuerySynthesizer,
 )
+from tests.unit import testset_fakes
 
 
-class MockThemePersonaMatchingPrompt(PydanticPrompt):
+@pytest.fixture
+def fake_llm():
+    """An llm_factory() LLM stand-in; testset rejects legacy LLMs (#214)."""
+    return testset_fakes.fake_llm()
+
+
+class MockThemePersonaMatchingPrompt(BasePrompt):
     async def generate(self, data: ThemesPersonasInput, llm, callbacks=None):
         themes: t.List[str] = data.themes
         personas: t.List[Persona] = data.personas
@@ -125,7 +132,7 @@ async def test_generate_sample_includes_metadata(fake_llm):
     synthesizer = SingleHopSpecificQuerySynthesizer(llm=fake_llm)
 
     # Stub the prompt to avoid LLM dependency and return deterministic values
-    class StubPrompt(PydanticPrompt):
+    class StubPrompt(BasePrompt):
         async def generate(self, data, llm, callbacks=None):  # type: ignore[override]
             class R:
                 query = "What is microservices?"

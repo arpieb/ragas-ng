@@ -124,11 +124,12 @@ def test_prompt_hash():
     assert p != p_copy
 
 
-def test_prompt_hash_in_ragas(fake_llm):
+def test_prompt_hash_in_ragas():
     # check with a prompt inside ragas
     from ragas.testset.synthesizers.multi_hop import MultiHopAbstractQuerySynthesizer
+    from tests.unit.testset_fakes import fake_llm
 
-    synthesizer = MultiHopAbstractQuerySynthesizer(llm=fake_llm)
+    synthesizer = MultiHopAbstractQuerySynthesizer(llm=fake_llm())
     prompts = synthesizer.get_prompts()
     for prompt in prompts.values():
         assert hash(prompt) == hash(prompt)

@@ -2,7 +2,7 @@ import typing as t
 
 import pytest
 
-from ragas.prompt import PydanticPrompt
+from ragas.prompt.metrics.base_prompt import BasePrompt
 from ragas.testset.persona import Persona
 from ragas.testset.synthesizers.base import QueryLength, QueryStyle
 from ragas.testset.synthesizers.multi_hop.abstract import (
@@ -13,6 +13,7 @@ from ragas.testset.synthesizers.multi_hop.prompts import (
     ConceptsList,
 )
 from ragas.testset.synthesizers.prompts import PersonaThemesMapping, ThemesPersonasInput
+from tests.unit import testset_fakes
 from tests.unit.test_knowledge_graph_clusters import (
     build_knowledge_graph,
     create_chain_of_similarities,
@@ -20,14 +21,20 @@ from tests.unit.test_knowledge_graph_clusters import (
 )
 
 
-class MockConceptCombinationPrompt(PydanticPrompt):
+@pytest.fixture
+def fake_llm():
+    """An llm_factory() LLM stand-in; testset rejects legacy LLMs (#214)."""
+    return testset_fakes.fake_llm()
+
+
+class MockConceptCombinationPrompt(BasePrompt):
     async def generate(self, data: ConceptsList, llm, callbacks=None):
         concepts: t.List[t.List[str]] = data.lists_of_concepts
         max_combinations: int = data.max_combinations
         return ConceptCombinations(combinations=concepts[:max_combinations])
 
 
-class MockThemePersonaMatchingPrompt(PydanticPrompt):
+class MockThemePersonaMatchingPrompt(BasePrompt):
     async def generate(self, data: ThemesPersonasInput, llm, callbacks=None):
         themes: t.List[str] = data.themes
         personas: t.List[Persona] = data.personas
