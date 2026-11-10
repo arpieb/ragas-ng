@@ -623,7 +623,7 @@ Metrics that take the LLM per call now work in `evaluate()`: `NumericMetric` (an
 
 ## Prompt optimization moves to collections metrics ([#214](https://github.com/arpieb/ragas-ng/issues/214))
 
-`metric.train()`, `GeneticOptimizer` and `DSPyOptimizer` now tune the metrics in `ragas.metrics.collections`. The legacy `ragas.metrics` classes are being removed (#215), and their `train()` no longer works: `InstructionConfig` and `DemonstrationConfig` now take only `llm_factory()` LLMs and `embedding_factory()` embeddings, and raise a `ValidationError` for legacy wrappers.
+`metric.train()`, `GeneticOptimizer` and `DSPyOptimizer` now tune the metrics in `ragas.metrics.collections`. The legacy `ragas.metrics` classes are being removed (#215), and their `train()` is removed with this change. `InstructionConfig` and `DemonstrationConfig` now take only `llm_factory()` LLMs and `embedding_factory()` embeddings, and raise a `ValidationError` for legacy wrappers.
 
 - Collections metrics gain `get_prompts()` and `set_prompts(**prompts)`. Prompts are keyed by attribute name (`prompt` for `AspectCritic`; `statement_generator_prompt` and `nli_statement_prompt` for `Faithfulness`). `get_prompts()` returns copies, so to change a prompt you edit the copy and pass it to `set_prompts()`. `set_prompts()` copies what it is given, rejects unknown names with `ValueError`, and rejects a non-`BasePrompt`, or a prompt with different input or output models, with `TypeError`.
 - Annotation files key each sample's `prompts` by those names. Legacy names such as `single_turn_aspect_critic_prompt` raise a `ValueError` that lists the metric's names. The sample file for the Vertex AI alignment guide uses the new names.

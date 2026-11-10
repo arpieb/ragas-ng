@@ -1,8 +1,8 @@
 """Few-shot example selection.
 
 Covers #92 (``[-n:]`` with n == 0 returned everything), #93 (the threshold
-never reached the example store), the below-threshold fallback, and
-annotation pairing in ``_optimize_demonstration``.
+never reached the example store), and the below-threshold fallback.
+Annotation pairing is covered in ``test_optimizers_collections.py``.
 """
 
 from __future__ import annotations
@@ -215,42 +215,3 @@ def test_dynamic_prompt_works_with_a_store_without_threshold():
     with pytest.warns(UserWarning, match="threshold is ignored"):
         text = prompt.format(text="cat")
     assert "Example 1" in text
-
-
-# --- annotations stay paired ----------------------------------------------------
-
-
-def test_invalid_output_annotation_does_not_shift_later_pairs():
-    from ragas.dataset_schema import PromptAnnotation
-    from ragas.metrics._aspect_critic import AspectCritic
-
-    metric = AspectCritic(name="critic", definition="Is it polite?")
-    prompt_name = "single_turn_aspect_critic_prompt"
-    builtin_examples = len(metric.get_prompts()[prompt_name].examples)
-
-    def ann(q: str, verdict: t.Any) -> PromptAnnotation:
-        return PromptAnnotation(
-            prompt_input={"user_input": q, "response": f"answer to {q}"},
-            prompt_output={"reason": f"because {q}", "verdict": verdict},
-        )
-
-    annotations = [
-        ann("first", 1),
-        ann("broken", "not an int"),  # valid input, invalid output
-        ann("third", 0),
-    ]
-    dataset = {
-        "critic": SimpleNamespace(
-            get_prompt_annotations=lambda: {prompt_name: annotations}
-        )
-    }
-    config = SimpleNamespace(embedding=_AxisEmbeddings(), top_k=3, threshold=0.0)
-
-    metric._optimize_demonstration(t.cast(t.Any, config), t.cast(t.Any, dataset))
-
-    store = metric.get_prompts()[prompt_name].example_store
-    pairs = [(i.user_input, o.reason) for i, o in store._examples_list]
-    annotated = [(q, r) for q, r in pairs if r.startswith("because ")]
-    # every annotated input kept its own output
-    assert annotated == [("first", "because first"), ("third", "because third")]
-    assert len(pairs) == 2 + builtin_examples
