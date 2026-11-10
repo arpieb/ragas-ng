@@ -7,6 +7,13 @@ from ragas.testset.graph import KnowledgeGraph, NodeType, Relationship
 from ragas.testset.transforms.base import RelationshipBuilder
 
 
+def cosine_similarity_matrix(i: np.ndarray, j: np.ndarray) -> np.ndarray:
+    """Cosine similarity matrix between the rows of ``i`` and the rows of ``j``."""
+    i_norm = i / np.linalg.norm(i, axis=1, keepdims=True)
+    j_norm = j / np.linalg.norm(j, axis=1, keepdims=True)
+    return np.dot(i_norm, j_norm.T)
+
+
 @dataclass
 class CosineSimilarityBuilder(RelationshipBuilder):
     property_name: str = "embedding"
@@ -16,9 +23,7 @@ class CosineSimilarityBuilder(RelationshipBuilder):
 
     def _block_cosine_similarity(self, i: np.ndarray, j: np.ndarray):
         """Calculate cosine similarity matrix between two sets of embeddings."""
-        i_norm = i / np.linalg.norm(i, axis=1, keepdims=True)
-        j_norm = j / np.linalg.norm(j, axis=1, keepdims=True)
-        return np.dot(i_norm, j_norm.T)
+        return cosine_similarity_matrix(i, j)
 
     def _find_similar_embedding_pairs(
         self, embeddings: np.ndarray, threshold: float
@@ -130,6 +135,14 @@ class SummaryCosineSimilarityBuilder(CosineSimilarityBuilder):
                     raise ValueError(f"Node {node.id} has no {self.property_name}")
                 nodes.append(node)
         return KnowledgeGraph(nodes=nodes)
+
+    def generate_execution_plan(self, kg: KnowledgeGraph) -> t.Sequence[t.Coroutine]:
+        """
+        Applies ``filter_nodes`` and then runs ``transform``, which keeps only the
+        document nodes. The parent's plan bypasses ``transform`` and would build
+        relationships between every node with a summary embedding.
+        """
+        return RelationshipBuilder.generate_execution_plan(self, kg)
 
     async def transform(self, kg: KnowledgeGraph) -> t.List[Relationship]:
         filtered_kg = self._document_summary_filter(kg)

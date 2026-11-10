@@ -32,5 +32,5 @@ class InstructionConfig(BaseModel):
     loss: t.Optional[Loss] = None
     optimizer: Optimizer = GeneticOptimizer()
     optimizer_config: t.Dict[str, t.Any] = Field(
-        default_factory=lambda: DEFAULT_OPTIMIZER_CONFIG
+        default_factory=lambda: dict(DEFAULT_OPTIMIZER_CONFIG)
     )

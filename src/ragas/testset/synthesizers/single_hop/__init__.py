@@ -1,3 +1,3 @@
-from .specific import SingleHopQuerySynthesizer, SingleHopScenario
+from .base import SingleHopQuerySynthesizer, SingleHopScenario
 
 __all__ = ["SingleHopQuerySynthesizer", "SingleHopScenario"]

@@ -287,10 +287,11 @@ class ContextPrecision(ContextPrecisionWithReference):
     def __init__(
         self,
         llm: "InstructorBaseRagasLLM",
+        name: str = "context_precision",
         **kwargs,
     ):
         """Initialize ContextPrecision with the legacy default name."""
-        super().__init__(llm, name="context_precision", **kwargs)
+        super().__init__(llm, name=name, **kwargs)
 
 
 class ContextUtilization(ContextPrecisionWithoutReference):
@@ -323,10 +324,11 @@ class ContextUtilization(ContextPrecisionWithoutReference):
     def __init__(
         self,
         llm: "InstructorBaseRagasLLM",
+        name: str = "context_utilization",
         **kwargs,
     ):
         """Initialize ContextUtilization with the legacy default name."""
-        super().__init__(llm, name="context_utilization", **kwargs)
+        super().__init__(llm, name=name, **kwargs)
 
 
 def _ranking_reason(contexts: List[str], results: List[ContextPrecisionOutput]) -> str:

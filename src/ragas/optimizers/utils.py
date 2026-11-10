@@ -3,13 +3,14 @@ import numpy as np
 
 def hamming_distance(vectors: np.ndarray) -> np.ndarray:
     """
-    Calculate the Hamming distance between pairs of vectors in a list of lists.
+    Calculate the pairwise Hamming distances between vectors.
 
     Args:
-    vectors (list of lists): A list where each inner list is a vector.
+    vectors: A 2-D array (or list of lists) where each row is a vector.
 
     Returns:
-    list of tuples: A list of tuples containing the pair indices and their Hamming distance.
+    A symmetric ``(n, n)`` integer matrix whose ``[i, j]`` entry is the
+    Hamming distance between vectors ``i`` and ``j``. The diagonal is 0.
     """
 
     # Validate that all vectors have the same dimension
@@ -23,5 +24,6 @@ def hamming_distance(vectors: np.ndarray) -> np.ndarray:
         for j in range(i + 1, len(vectors)):
             distance = np.sum(vectors[i] != vectors[j])
             distances[i][j] = distance
+            distances[j][i] = distance
 
     return distances

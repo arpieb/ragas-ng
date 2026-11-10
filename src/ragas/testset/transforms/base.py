@@ -376,17 +376,24 @@ class RelationshipBuilder(BaseGraphTransformation):
 @dataclass
 class NodeFilter(BaseGraphTransformation):
     async def transform(self, kg: KnowledgeGraph) -> KnowledgeGraph:
+        """
+        Returns a copy of ``kg`` without every node that ``custom_filter`` flags,
+        matching what ``generate_execution_plan`` does in place. ``kg`` itself is
+        returned unchanged when nothing is flagged.
+        """
         filtered = self.filter(kg)
 
-        for node in filtered.nodes:
-            flag = await self.custom_filter(node, kg)
-            if flag:
-                kg_ = kg.remove_node(node, inplace=False)
-                if isinstance(kg_, KnowledgeGraph):
-                    return kg_
-                else:
-                    raise ValueError("Error in removing node")
-        return kg
+        flagged = [
+            node for node in filtered.nodes if await self.custom_filter(node, kg)
+        ]
+        if not flagged:
+            return kg
+        kg_ = kg.remove_node(flagged[0], inplace=False)
+        if not isinstance(kg_, KnowledgeGraph):
+            raise ValueError("Error in removing node")
+        for node in flagged[1:]:
+            kg_.remove_node(node)
+        return kg_
 
     @abstractmethod
     async def custom_filter(self, node: Node, kg: KnowledgeGraph) -> bool:

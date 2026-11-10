@@ -105,7 +105,19 @@ class BaseMetric(SimpleBaseMetric, NumericValidator):
         allowed_values: t.Tuple[float, float] = (0.0, 1.0),
         **kwargs,
     ):
-        """Initialize the base metric with validation."""
+        """Initialize the base metric with validation.
+
+        Raises:
+            TypeError: for any keyword argument no constructor in the class
+                chain consumed. They used to be dropped silently, so a typo
+                such as ``AspectCritic(..., strictnes=3)`` built a metric with
+                the default strictness.
+        """
+        if kwargs:
+            unknown = ", ".join(repr(k) for k in sorted(kwargs))
+            raise TypeError(
+                f"{type(self).__name__}() got unexpected keyword argument(s): {unknown}"
+            )
         super().__init__(name=name, allowed_values=allowed_values)
 
         # Validate components only if the metric defines them
@@ -114,19 +126,6 @@ class BaseMetric(SimpleBaseMetric, NumericValidator):
             self._validate_llm()
         if hasattr(self, "embeddings"):
             self._validate_embeddings()
-
-    async def ascore(self, **kwargs) -> MetricResult:
-        """
-        Default async scoring method - subclasses should override this.
-
-        This base implementation just returns a placeholder result.
-        Subclasses should override this method with their specific logic.
-
-        The base class handles component validation in __post_init__.
-        """
-        return MetricResult(
-            value=0.0, reason="Base metric placeholder - override ascore() in subclass"
-        )
 
     def score(self, **kwargs) -> MetricResult:
         """
