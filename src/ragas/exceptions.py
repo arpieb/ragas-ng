@@ -116,3 +116,16 @@ class DuplicateExperimentError(DuplicateResourceError):
     """Exception raised when multiple experiments exist with the same name."""
 
     pass
+
+
+class ThresholdError(RagasError, AssertionError):
+    """``EvaluationResult.check()`` found metrics outside their thresholds.
+
+    An ``AssertionError``, so pytest reports it as a failed assertion. The
+    message is a per-metric table; ``failures`` holds the same as
+    ``(metric, problem)`` pairs.
+    """
+
+    def __init__(self, message: str, failures: "list[tuple[str, str]]"):
+        super().__init__(message)
+        self.failures = failures

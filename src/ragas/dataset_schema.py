@@ -545,6 +545,123 @@ class EvaluationResult:
             for name in self._repr_dict
         }
 
+    def check(
+        self,
+        min_mean: t.Union[float, t.Mapping[str, float], None] = None,
+        max_mean: t.Union[float, t.Mapping[str, float], None] = None,
+        allow_missing: t.Optional[int] = 0,
+    ) -> None:
+        """Raise ``ThresholdError`` unless every metric meets its thresholds.
+
+        The one-call CI check (#169)::
+
+            result.check(min_mean={"answer_relevancy": 0.9, "faithfulness": 0.3})
+            # a range, like assert_in_range: both bounds
+            result.check(min_mean={"faithfulness": 0.3}, max_mean={"faithfulness": 0.5})
+
+        Args:
+            min_mean: Lowest acceptable mean, per metric (``{name: bound}``)
+                or one number for every metric.
+            max_mean: Highest acceptable mean, the same way.
+            allow_missing: How many rows per metric may be without a score
+                (errored, or undefined -- see ``summary()``). The default, 0,
+                fails on any: a missing row is left out of the mean, so the
+                mean alone would hide it. ``None`` doesn't check.
+
+        A metric named in a bound but not in the result is an error, so a
+        typo can't pass silently. A metric with no scored row fails any bound.
+
+        Raises:
+            ThresholdError: an ``AssertionError`` whose message is a table of
+                every checked metric's mean, bounds, count and missing rows.
+        """
+        from ragas.exceptions import ThresholdError
+
+        summary = self.summary()
+
+        def per_metric(
+            bound: t.Union[float, t.Mapping[str, float], None], arg: str
+        ) -> t.Dict[str, float]:
+            if bound is None:
+                return {}
+            if isinstance(bound, bool) or not isinstance(
+                bound, (int, float, t.Mapping)
+            ):
+                raise TypeError(
+                    f"check({arg}=...) takes a number or {{metric: bound}}, "
+                    f"not {type(bound).__name__}"
+                )
+            if not isinstance(bound, t.Mapping):
+                return {name: float(bound) for name in summary}
+            unknown = sorted(set(bound) - set(summary))
+            if unknown:
+                raise ValueError(
+                    f"check({arg}=...) names metrics not in this result: "
+                    f"{', '.join(unknown)}. Metrics: {', '.join(summary)}"
+                )
+            return {name: float(value) for name, value in bound.items()}
+
+        lows = per_metric(min_mean, "min_mean")
+        highs = per_metric(max_mean, "max_mean")
+        if allow_missing is not None and allow_missing < 0:
+            raise ValueError("check(allow_missing=...) must be >= 0 or None")
+
+        failures: t.List[t.Tuple[str, str]] = []
+        rows = []
+        for name, stats in summary.items():
+            low, high = lows.get(name), highs.get(name)
+            mean, missing = stats["mean"], stats["missing"]
+            problems = []
+            scored = not math.isnan(mean)
+            if low is not None and not (scored and mean >= low):
+                problems.append(f"mean below {low:g}" if scored else "no scores")
+            if high is not None and not (scored and mean <= high):
+                problem = f"mean above {high:g}" if scored else "no scores"
+                if problem not in problems:
+                    problems.append(problem)
+            if allow_missing is not None and missing > allow_missing:
+                rows_word = "row" if missing == 1 else "rows"
+                problems.append(
+                    f"{missing} {rows_word} missing (allowed {allow_missing})"
+                )
+            failures.extend((name, p) for p in problems)
+            if low is None and high is None and allow_missing is None:
+                continue
+            bounds = (
+                f"{low:g} .. {high:g}"
+                if low is not None and high is not None
+                else f">= {low:g}"
+                if low is not None
+                else f"<= {high:g}"
+                if high is not None
+                else ""
+            )
+            rows.append(
+                (
+                    name,
+                    "nan" if not scored else f"{mean:.4f}",
+                    bounds,
+                    str(stats["count"]),
+                    str(missing),
+                    "; ".join(problems) or "ok",
+                )
+            )
+
+        if not failures:
+            return
+        header = ("metric", "mean", "required", "count", "missing", "result")
+        widths = [max(len(r[i]) for r in [header, *rows]) for i in range(6)]
+        lines = [
+            "  ".join(cell.ljust(w) for cell, w in zip(row, widths)).rstrip()
+            for row in [header, *rows]
+        ]
+        failed = len({name for name, _ in failures})
+        message = (
+            f"{failed} of {len(rows)} {'metric' if len(rows) == 1 else 'metrics'} "
+            "failed their thresholds:\n" + "\n".join(lines)
+        )
+        raise ThresholdError(message, failures)
+
     def __getitem__(self, key: str) -> t.List[float]:
         return self._scores_dict[key]
 

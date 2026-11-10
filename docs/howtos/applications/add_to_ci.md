@@ -7,7 +7,7 @@ search:
 
 You can add Ragas evaluations to your continuous integration pipeline to track the quality of your RAG pipeline over time. Treat them as part of your end-to-end test suite, and run them before major changes and releases.
 
-A Ragas CI test is an ordinary Pytest test that runs `evaluate()` and asserts on `result.summary()`. That gives each metric's mean, and how many rows it covers.
+A Ragas CI test is an ordinary Pytest test that runs `evaluate()` and checks the result with `result.check()`: a lower or upper bound on each metric's mean, and no unscored rows.
 
 !!! note
     This example uses a dataset that already holds outputs from a reference RAG pipeline. When testing your own system, generate the `response` and `retrieved_contexts` columns with the pipeline you want to test. See [Evaluation Dataset](../../concepts/components/eval_dataset.md) for how to build one from your own data.
@@ -26,11 +26,6 @@ from ragas.metrics.collections import (
     ContextRecall,
     Faithfulness,
 )
-
-
-def assert_in_range(score: float, value: float, plus_or_minus: float):
-    """Check that score is within value +/- plus_or_minus."""
-    assert value - plus_or_minus <= score <= value + plus_or_minus
 
 
 def test_amnesty_e2e():
@@ -54,20 +49,31 @@ def test_amnesty_e2e():
             ContextPrecision(llm=llm),
         ],
     )
-    summary = result.summary()
-
-    # every row must be scored: a metric that errors or can't judge a row
-    # is left out of the mean, so check coverage before trusting it
-    for name, stats in summary.items():
-        assert stats["missing"] == 0, f"{name}: {stats['missing']} rows unscored"
-
-    assert summary["answer_relevancy"]["mean"] >= 0.9
-    assert summary["context_recall"]["mean"] >= 0.95
-    assert summary["context_precision"]["mean"] >= 0.95
-    assert_in_range(summary["faithfulness"]["mean"], value=0.4, plus_or_minus=0.1)
+    result.check(
+        min_mean={
+            "answer_relevancy": 0.9,
+            "context_recall": 0.95,
+            "context_precision": 0.95,
+            "faithfulness": 0.3,
+        },
+        max_mean={"faithfulness": 0.5},  # with min_mean: a range, 0.4 +/- 0.1
+    )
 ```
 
-`result["faithfulness"]` is the list of per-row scores, so compare it per row, or use `summary()` for the mean as above.
+`check()` also fails if any row of any metric has no score. A metric that errors or can't judge a row (a NaN score) is left out of the mean, so the mean alone would hide it. Pass `allow_missing=n` to allow up to `n` per metric, or `allow_missing=None` not to check. A metric name that isn't in the result raises `ValueError`, so a typo can't pass silently. `min_mean=0.8` (one number) applies to every metric.
+
+When a check fails, `check()` raises `ThresholdError`, an `AssertionError`, so pytest shows it as a failed assertion with a table:
+
+```
+1 of 4 metrics failed their thresholds:
+metric             mean    required    count  missing  result
+answer_relevancy   0.9312  >= 0.9      50     0        ok
+context_recall     0.9600  >= 0.95     50     0        ok
+context_precision  0.9533  >= 0.95     50     0        ok
+faithfulness       0.5800  0.3 .. 0.5  48     2        mean above 0.5; 2 rows missing (allowed 0)
+```
+
+For other checks, `result.summary()` gives each metric's `mean`, `count` and `missing`, and `result["faithfulness"]` the per-row scores.
 
 ## Keeping CI scores stable
 
@@ -75,8 +81,8 @@ LLM-judged scores vary a little from run to run. To keep CI from flapping:
 
 - **Pin the judge model and its version**, as above. A model upgrade is a deliberate change, and you re-baseline your thresholds when you make it.
 - **Keep the defaults deterministic.** `llm_factory()` defaults to a low temperature. Metrics that sample on purpose (`strictness` > 1) average or vote over several samples, which smooths the result at the cost of more calls.
-- **Assert with tolerances**, not exact values: a lower bound, or `assert_in_range` around a baseline you measured.
-- **Fail on missing rows**, as above. A provider outage or parse failure otherwise shows up only as a smaller `count`.
+- **Assert with tolerances**, not exact values: a lower bound, or a `min_mean`/`max_mean` range around a baseline you measured.
+- **Fail on missing rows**, as `check()` does by default. A provider outage or parse failure otherwise shows up only as a smaller `count`.
 
 ## Using Pytest Markers for Ragas E2E tests
 

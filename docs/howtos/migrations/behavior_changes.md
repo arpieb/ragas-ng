@@ -553,3 +553,7 @@ Add `save_partial=True` (decorator or `arun`) to save the rows that finished bef
 ## Requests and tokens per minute: `RateLimit` ([#171](https://github.com/arpieb/ragas-ng/issues/171))
 
 New: `llm_factory(..., rate_limit=RateLimit(rpm=..., tpm=...))` (from `ragas.rate_limit`) paces every request the LLM sends, waiting until the limit has room instead of hitting a 429. `max_workers` only limited jobs at once. Pass the same `RateLimit` to every LLM that shares an API key; `LiteLLMEmbeddings(rate_limit=...)` takes one too. Without `rate_limit` nothing changes. It adds one dependency, [`pyrate-limiter`](https://pypi.org/project/pyrate-limiter/) (pure Python, no dependencies of its own). See [Requests and tokens per minute](../customizations/run_config.md#requests-and-tokens-per-minute).
+
+## `EvaluationResult.check()`: thresholds for CI ([#169](https://github.com/arpieb/ragas-ng/issues/169))
+
+New: `result.check(min_mean=..., max_mean=..., allow_missing=0)` raises `ThresholdError` (an `AssertionError`, from `ragas.exceptions`) unless each metric's mean is within its bounds and no row is unscored. The message is a per-metric table of mean, bounds, count and missing rows. A bound for a metric the result doesn't have raises `ValueError`. See [Adding to your CI pipeline](../applications/add_to_ci.md).
