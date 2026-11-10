@@ -685,3 +685,27 @@ def get_test_directory():
     os.makedirs(test_dir, exist_ok=True)
 
     return test_dir
+
+
+_RAPIDFUZZ_DISTANCES = {
+    "LEVENSHTEIN": "Levenshtein",
+    "HAMMING": "Hamming",
+    "JARO": "Jaro",
+    "JARO_WINKLER": "JaroWinkler",
+}
+
+
+def rapidfuzz_distances(measures: t.Iterable[t.Any]) -> t.Dict[t.Any, t.Any]:
+    """``{measure: rapidfuzz.distance.<module>}`` for a ``DistanceMeasure`` enum.
+
+    Built on each call rather than stored on the metric: a dict of modules on
+    an instance made ``copy.deepcopy`` of the metric fail (#211).
+    """
+    try:
+        from rapidfuzz import distance
+    except ImportError:
+        raise ImportError(
+            "rapidfuzz is required for string distance. "
+            "Please install it using `pip install rapidfuzz`"
+        )
+    return {m: getattr(distance, _RAPIDFUZZ_DISTANCES[m.name]) for m in measures}

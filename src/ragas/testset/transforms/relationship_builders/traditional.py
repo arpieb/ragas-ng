@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from ragas.metrics._string import DistanceMeasure
 from ragas.testset.graph import KnowledgeGraph, Node, Relationship
 from ragas.testset.transforms.base import RelationshipBuilder
+from ragas.utils import rapidfuzz_distances
 
 
 @dataclass
@@ -87,20 +88,11 @@ class OverlapScoreBuilder(RelationshipBuilder):
     threshold: float = 0.01
 
     def __post_init__(self):
-        try:
-            from rapidfuzz import distance
+        rapidfuzz_distances(DistanceMeasure)  # rapidfuzz is installed
 
-        except ImportError:
-            raise ImportError(
-                "rapidfuzz is required for string distance. Please install it using `pip install rapidfuzz`"
-            )
-
-        self.distance_measure_map = {
-            DistanceMeasure.LEVENSHTEIN: distance.Levenshtein,
-            DistanceMeasure.HAMMING: distance.Hamming,
-            DistanceMeasure.JARO: distance.Jaro,
-            DistanceMeasure.JARO_WINKLER: distance.JaroWinkler,
-        }
+    @property
+    def distance_measure_map(self) -> t.Dict[DistanceMeasure, t.Any]:
+        return rapidfuzz_distances(DistanceMeasure)
 
     def _overlap_score(self, overlaps: t.List[bool]) -> float:
         return sum(overlaps) / len(overlaps) if len(overlaps) > 0 else 0.0

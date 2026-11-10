@@ -557,3 +557,11 @@ New: `llm_factory(..., rate_limit=RateLimit(rpm=..., tpm=...))` (from `ragas.rat
 ## `EvaluationResult.check()`: thresholds for CI ([#169](https://github.com/arpieb/ragas-ng/issues/169))
 
 New: `result.check(min_mean=..., max_mean=..., allow_missing=0)` raises `ThresholdError` (an `AssertionError`, from `ragas.exceptions`) unless each metric's mean is within its bounds and no row is unscored. The message is a per-metric table of mean, bounds, count and missing rows. A bound for a metric the result doesn't have raises `ValueError`. See [Adding to your CI pipeline](../applications/add_to_ci.md).
+
+## Copying LLMs, embeddings and metrics ([#211](https://github.com/arpieb/ragas-ng/issues/211))
+
+`copy.deepcopy()` of an `llm_factory()` LLM raised `RecursionError`, and of `LiteLLMEmbeddings`, of a metric holding either, or of a string-distance metric (`NonLLMStringSimilarity`, `NonLLMContextRecall`, ...) raised `TypeError: cannot pickle 'module' object`. They now copy. A copy has its own settings (`model_args`, `system_prompt`, run config, ...) and **shares** the provider clients, the cache and the `RateLimit`: a copied LLM goes to the same provider, under the same rate limit.
+
+A copy (deep or shallow) of an LLM or embeddings with a `cache` used to keep the original's cached `generate` / `embed_text`, so its calls ran on the original object, with the original's settings. They now run on the copy.
+
+`distance_measure_map` on the string-distance metrics and `OverlapScoreBuilder` is now a read-only property rather than an instance attribute.
