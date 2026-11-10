@@ -17,6 +17,7 @@ from types import SimpleNamespace
 import pytest
 from pydantic import BaseModel, ValidationError
 
+import ragas.prompt.metrics.base_prompt as bp
 import ragas.prompt.pydantic_prompt as pp
 from ragas.exceptions import RagasOutputParserException
 from ragas.llms.base import InstructorBaseRagasLLM
@@ -80,6 +81,9 @@ class RecordingGroups:
 @pytest.fixture
 def groups(monkeypatch) -> RecordingGroups:
     rec = RecordingGroups()
+    # The prompt's own run starts in the shared BasePrompt (#214); the legacy
+    # fix-the-format retries still start theirs in pydantic_prompt.
+    monkeypatch.setattr(bp, "new_group", rec)
     monkeypatch.setattr(pp, "new_group", rec)
     return rec
 
