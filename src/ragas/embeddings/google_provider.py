@@ -21,7 +21,10 @@ class GoogleEmbeddings(BaseRagasEmbedding):
     The client parameter is flexible:
     - For new SDK: genai.Client(api_key="...") instance
     - For old SDK: None (auto-imports), the genai module, or a GenerativeModel instance
-    - For Vertex: Should be the configured vertex client
+    - For Vertex (required): a google-genai ``genai.Client(vertexai=True, ...)``,
+      a ``vertexai.language_models.TextEmbeddingModel`` instance, or any other
+      object once ``vertexai.init()`` has been called (the model named by
+      ``model`` is then loaded once, on first use, and reused)
 
     Note: Unlike LLM generation, embeddings work correctly with both SDKs.
     The known instructor safety settings issue (github.com/567-labs/instructor/issues/1658)
@@ -46,6 +49,12 @@ class GoogleEmbeddings(BaseRagasEmbedding):
     REQUIRES_CLIENT = False  # Client is optional for Gemini (can auto-import)
     DEFAULT_MODEL = "gemini-embedding-001"
 
+    # The loaded Vertex model is a client too: copies share it.
+    _SHARED_ON_COPY = BaseRagasEmbedding._SHARED_ON_COPY | {
+        "_original_client",
+        "_vertex_model",
+    }
+
     def __init__(
         self,
         client: t.Optional[t.Any] = None,
@@ -66,6 +75,8 @@ class GoogleEmbeddings(BaseRagasEmbedding):
 
         # Track which SDK is being used (new google-genai vs old google-generativeai)
         self._use_new_sdk = False
+        # Vertex TextEmbeddingModel, loaded once by _get_vertex_model() (#216)
+        self._vertex_model: t.Any = None
 
         # Resolve the actual client to use
         self.client = self._resolve_client(client, use_vertex)
@@ -73,7 +84,9 @@ class GoogleEmbeddings(BaseRagasEmbedding):
     def _resolve_client(self, client: t.Optional[t.Any], use_vertex: bool) -> t.Any:
         """Resolve the client to use for embeddings.
 
-        For Vertex AI: Returns the client as-is (must be provided).
+        For Vertex AI: Returns the client as-is (must be provided). A
+            google-genai Client (``genai.Client(vertexai=True)``) is called
+            through its ``models.embed_content``, like the Gemini path.
         For Gemini: Handles multiple scenarios:
             - New SDK (google-genai): genai.Client() instance
             - Old SDK: None (auto-imports), genai module, or GenerativeModel instance
@@ -95,6 +108,8 @@ class GoogleEmbeddings(BaseRagasEmbedding):
                     "Vertex AI embeddings require a client. "
                     "Please provide a configured Vertex AI client."
                 )
+            if self._is_new_genai_client(client):
+                self._use_new_sdk = True
             return client
 
         # Check if it's the new google-genai SDK Client
@@ -203,24 +218,45 @@ class GoogleEmbeddings(BaseRagasEmbedding):
             "  - google-generativeai (deprecated): pip install google-generativeai"
         )
 
+    def _uses_vertex_sdk(self) -> bool:
+        """Whether calls go through the vertexai SDK's TextEmbeddingModel.
+
+        A google-genai Client for Vertex uses the same calls as for Gemini.
+        """
+        return self.use_vertex and not self._use_new_sdk
+
+    def _get_vertex_model(self) -> t.Any:
+        """The Vertex TextEmbeddingModel to call, loaded at most once.
+
+        The client itself when it is one (it has ``get_embeddings``); otherwise
+        ``TextEmbeddingModel.from_pretrained(self.model)``, which used to run
+        on every call while the client went unused (#216).
+        """
+        if callable(getattr(self.client, "get_embeddings", None)):
+            return self.client
+        if self._vertex_model is None:
+            try:
+                from vertexai.language_models import (  # type: ignore
+                    TextEmbeddingModel,
+                )
+            except ImportError:
+                raise ImportError(
+                    "Vertex AI support requires google-cloud-aiplatform. "
+                    "Install with: pip install google-cloud-aiplatform"
+                )
+            self._vertex_model = TextEmbeddingModel.from_pretrained(self.model)
+        return self._vertex_model
+
     def embed_text(self, text: str, **kwargs: t.Any) -> t.List[float]:
         """Embed a single text using Google's embedding service."""
-        if self.use_vertex:
+        if self._uses_vertex_sdk():
             return self._embed_text_vertex(text, **kwargs)
         else:
             return self._embed_text_genai(text, **kwargs)
 
     def _embed_text_vertex(self, text: str, **kwargs: t.Any) -> t.List[float]:
         """Embed text using Vertex AI."""
-        try:
-            from vertexai.language_models import TextEmbeddingModel  # type: ignore
-        except ImportError:
-            raise ImportError(
-                "Vertex AI support requires google-cloud-aiplatform. "
-                "Install with: pip install google-cloud-aiplatform"
-            )
-
-        model = TextEmbeddingModel.from_pretrained(self.model)
+        model = self._get_vertex_model()
         merged_kwargs = {**self.kwargs, **kwargs}
         embeddings = model.get_embeddings([text], **merged_kwargs)
         return embeddings[0].values
@@ -259,7 +295,7 @@ class GoogleEmbeddings(BaseRagasEmbedding):
         if not texts:
             return []
 
-        if self.use_vertex:
+        if self._uses_vertex_sdk():
             return self._embed_texts_vertex(texts, **kwargs)
         else:
             return self._embed_texts_genai(texts, **kwargs)
@@ -268,15 +304,7 @@ class GoogleEmbeddings(BaseRagasEmbedding):
         self, texts: t.List[str], **kwargs: t.Any
     ) -> t.List[t.List[float]]:
         """Embed multiple texts using Vertex AI batch processing."""
-        try:
-            from vertexai.language_models import TextEmbeddingModel  # type: ignore
-        except ImportError:
-            raise ImportError(
-                "Vertex AI support requires google-cloud-aiplatform. "
-                "Install with: pip install google-cloud-aiplatform"
-            )
-
-        model = TextEmbeddingModel.from_pretrained(self.model)
+        model = self._get_vertex_model()
         merged_kwargs = {**self.kwargs, **kwargs}
         embeddings = model.get_embeddings(texts, **merged_kwargs)
         return [emb.values for emb in embeddings]

@@ -11,6 +11,19 @@ from .base import BaseRagasEmbedding
 from .utils import batch_texts, get_optimal_batch_size, safe_import, validate_texts
 
 
+def _litellm_provider(litellm: t.Any, model: str) -> str:
+    """The provider LiteLLM routes ``model`` to, e.g. "openai" or "vertex_ai".
+
+    Reads the prefix ("cohere/embed-english-v3.0") and knows bare names
+    ("text-embedding-3-small" is OpenAI). An unknown model gives "litellm",
+    which get_optimal_batch_size treats as unknown.
+    """
+    try:
+        return litellm.get_llm_provider(model)[1]
+    except Exception:
+        return "litellm"
+
+
 class LiteLLMEmbeddings(BaseRagasEmbedding):
     """Universal embedding interface using LiteLLM.
 
@@ -45,7 +58,13 @@ class LiteLLMEmbeddings(BaseRagasEmbedding):
         self.api_version = api_version
         self.timeout = timeout
         self.max_retries = max_retries
-        self.batch_size = batch_size or get_optimal_batch_size("litellm", model)
+        # The table is keyed by the real provider ("openai", "cohere", ...),
+        # which LiteLLM reads from the model string. Passing "litellm" made
+        # every model get the fallback of 10 (#216).
+        self._default_batch_size = get_optimal_batch_size(
+            _litellm_provider(self.litellm, model), model
+        )
+        self.batch_size = batch_size or self._default_batch_size
         self.litellm_params = litellm_params
         self.rate_limit = rate_limit
 
@@ -140,7 +159,7 @@ class LiteLLMEmbeddings(BaseRagasEmbedding):
         if self.api_base:
             config_parts.append(f"api_base='{self.api_base}'")
 
-        if self.batch_size != 10:  # Only show if different from default
+        if self.batch_size != self._default_batch_size:  # unless the provider's
             config_parts.append(f"batch_size={self.batch_size}")
 
         if self.timeout != 600:  # Only show if different from default
