@@ -25,6 +25,9 @@ dependencies = [
     # configures an SDK, which is how a library should behave. EvaluationResult
     # .traces comes from the native run tree, so it works without one.
     "opentelemetry-api",
+    # Requests/tokens-per-minute limits for LLM calls (RateLimit, #171). Pure
+    # Python, no required dependencies.
+    "pyrate-limiter>=4.5,<5",
 ]
 dynamic = ["version", "readme"]
 

@@ -33,6 +33,7 @@ if t.TYPE_CHECKING:
 
     from ragas.callbacks import Callbacks
     from ragas.prompt.value import PromptValue
+    from ragas.rate_limit import RateLimit
 
 
 logger = logging.getLogger(__name__)
@@ -384,6 +385,7 @@ def llm_factory(
     adapter: str = "auto",
     cache: t.Optional[CacheInterface] = None,
     mode: t.Optional[instructor.Mode] = None,
+    rate_limit: t.Optional["RateLimit"] = None,
     **kwargs: t.Any,
 ) -> InstructorBaseRagasLLM:
     """
@@ -414,6 +416,10 @@ def llm_factory(
         mode: instructor mode. Defaults to ``Mode.JSON`` for OpenAI/Azure
             clients and for Claude, otherwise instructor's default. Native
             modes (``Mode.ANTHROPIC_*``, ``Mode.GENAI_*``, ...) raise.
+        rate_limit: Optional ``ragas.rate_limit.RateLimit``: requests (and
+            tokens) per minute. Every request this LLM sends waits for it,
+            including retries; pass the same object to LLMs that share an
+            API key (#171).
         **kwargs: Model arguments (``temperature``, ``top_p``, ``max_tokens``,
             ``system_prompt``, ``reasoning``, ...) and LiteLLM call
             arguments (``api_key``, ``api_base``, ``extra_headers``, ...).
@@ -469,6 +475,13 @@ def llm_factory(
         async_fn = functools.partial(async_fn, **call_defaults)
         if sync_fn is not None:
             sync_fn = functools.partial(sync_fn, **call_defaults)
+    if rate_limit is not None:
+        # paced below instructor, so its validation retries are counted too
+        from ragas.rate_limit import limit_completion_calls
+
+        async_fn = limit_completion_calls(async_fn, rate_limit)
+        if sync_fn is not None:
+            sync_fn = limit_completion_calls(sync_fn, rate_limit)
     primary = _instructor.from_litellm(async_fn, **_mode_kwargs(mode))
     sync_twin = (
         _instructor.from_litellm(sync_fn, **_mode_kwargs(mode))
@@ -486,6 +499,7 @@ def llm_factory(
         **kwargs,
     )
     llm._litellm = True
+    llm.rate_limit = rate_limit
     if kind in ("openai", "azure"):
         llm.source_client = client
     return llm
@@ -672,6 +686,8 @@ class InstructorLLM(InstructorBaseRagasLLM):
     # evaluate() builds default embeddings from it (same base_url, proxy,
     # credentials); ``client`` is the instructor wrapper around LiteLLM.
     source_client: t.Optional[t.Any] = None
+    # The RateLimit llm_factory() paced this LLM's requests with, if any.
+    rate_limit: t.Optional["RateLimit"] = None
 
     def __init__(
         self,

@@ -145,7 +145,7 @@ Without them, ragas sends near-deterministic defaults (`temperature=0.01`, `top_
 ## Troubleshooting
 
 - **Missing key:** set `GOOGLE_API_KEY` or `GEMINI_API_KEY`, or pass `api_key=` to `llm_factory`.
-- **Rate limits:** ragas retries transient errors (rate limits, timeouts, 5xx) with backoff according to `RunConfig`. Lower `RunConfig(max_workers=...)` if you still hit quota limits.
+- **Rate limits:** ragas retries transient errors (rate limits, timeouts, 5xx) with backoff according to `RunConfig`. To stay under your quota, pass `rate_limit=RateLimit(rpm=...)` to `llm_factory` (see [Requests and tokens per minute](../customizations/run_config.md#requests-and-tokens-per-minute)), or lower `RunConfig(max_workers=...)`.
 - **Model not available:** check your region and quota, and that the model is on Google's current [models page](https://aistudio.google.com/docs/models).
 
 ## Migrating

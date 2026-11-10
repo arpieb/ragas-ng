@@ -549,3 +549,7 @@ Add `save_partial=True` (decorator or `arun`) to save the rows that finished bef
 - The cancel path no longer leaves a coroutine un-awaited (`RuntimeWarning: coroutine ... was never awaited`).
 
 `ragas.async_utils.as_completed` is unchanged apart from that warning; ragas itself now uses `concurrent_results`.
+
+## Requests and tokens per minute: `RateLimit` ([#171](https://github.com/arpieb/ragas-ng/issues/171))
+
+New: `llm_factory(..., rate_limit=RateLimit(rpm=..., tpm=...))` (from `ragas.rate_limit`) paces every request the LLM sends, waiting until the limit has room instead of hitting a 429. `max_workers` only limited jobs at once. Pass the same `RateLimit` to every LLM that shares an API key; `LiteLLMEmbeddings(rate_limit=...)` takes one too. Without `rate_limit` nothing changes. It adds one dependency, [`pyrate-limiter`](https://pypi.org/project/pyrate-limiter/) (pure Python, no dependencies of its own). See [Requests and tokens per minute](../customizations/run_config.md#requests-and-tokens-per-minute).
