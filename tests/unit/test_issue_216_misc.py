@@ -191,3 +191,15 @@ def test_litellm_unknown_model_falls_back_to_the_default():
     from ragas.embeddings import LiteLLMEmbeddings
 
     assert LiteLLMEmbeddings(model="no-such-model-xyz").batch_size == 10
+
+
+def test_litellm_unknown_model_prints_nothing_and_restores_setting(capsys):
+    import litellm
+
+    from ragas.embeddings import LiteLLMEmbeddings
+
+    before = litellm.suppress_debug_info
+    LiteLLMEmbeddings(model="no-such-model-xyz")
+    out = capsys.readouterr()
+    assert "Provider List" not in out.out + out.err
+    assert litellm.suppress_debug_info == before

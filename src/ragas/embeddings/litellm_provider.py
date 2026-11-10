@@ -17,11 +17,18 @@ def _litellm_provider(litellm: t.Any, model: str) -> str:
     Reads the prefix ("cohere/embed-english-v3.0") and knows bare names
     ("text-embedding-3-small" is OpenAI). An unknown model gives "litellm",
     which get_optimal_batch_size treats as unknown.
+
+    LiteLLM prints a "Provider List" banner when it can't resolve a model; that
+    is noise for a batch-size lookup, so it is suppressed for this one call.
     """
+    suppress = getattr(litellm, "suppress_debug_info", False)
+    litellm.suppress_debug_info = True
     try:
         return litellm.get_llm_provider(model)[1]
     except Exception:
         return "litellm"
+    finally:
+        litellm.suppress_debug_info = suppress
 
 
 class LiteLLMEmbeddings(BaseRagasEmbedding):
