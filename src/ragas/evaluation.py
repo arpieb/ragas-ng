@@ -113,7 +113,46 @@ async def aevaluate(
         DeprecationWarning,
         stacklevel=2,
     )
+    return await _aevaluate_in_run_scope(
+        dataset=dataset,
+        metrics=metrics,
+        llm=llm,
+        embeddings=embeddings,
+        experiment_name=experiment_name,
+        run_config=run_config,
+        token_usage_parser=token_usage_parser,
+        raise_exceptions=raise_exceptions,
+        column_map=column_map,
+        show_progress=show_progress,
+        batch_size=batch_size,
+        _run_id=_run_id,
+        _pbar=_pbar,
+        _callbacks=_callbacks,
+        return_executor=return_executor,
+    )
 
+
+async def _aevaluate_in_run_scope(
+    dataset: t.Union[Dataset, EvaluationDataset],
+    metrics: t.Optional[t.Sequence[Metric]],
+    llm: t.Optional[BaseRagasLLM | InstructorBaseRagasLLM],
+    embeddings: t.Optional[BaseRagasEmbeddings | BaseRagasEmbedding],
+    experiment_name: t.Optional[str],
+    run_config: t.Optional[RunConfig],
+    token_usage_parser: t.Optional[TokenUsageParser],
+    raise_exceptions: bool,
+    column_map: t.Optional[t.Dict[str, str]],
+    show_progress: bool,
+    batch_size: t.Optional[int],
+    _run_id: t.Optional[UUID],
+    _pbar: t.Optional[tqdm],
+    _callbacks: Callbacks,
+    return_executor: bool,
+) -> t.Union[EvaluationResult, Executor]:
+    """aevaluate() without its deprecation warning, so evaluate() warns once.
+
+    Opens the run scope (RunConfig and token collector) and runs _aevaluate.
+    """
     # Token accounting. Not a callback handler: ragas never fired on_llm_end,
     # so that path only ever worked for LangChain LLMs. The collector is
     # run-scoped and every LLM called inside the run records into it.
@@ -484,9 +523,10 @@ def evaluate(
         stacklevel=2,
     )
 
-    # Create async wrapper for aevaluate
+    # The private path: the public aevaluate() would warn a second time, with
+    # a stacklevel pointing inside ragas (#216).
     async def _async_wrapper():
-        return await aevaluate(
+        return await _aevaluate_in_run_scope(
             dataset=dataset,
             metrics=metrics,
             llm=llm,

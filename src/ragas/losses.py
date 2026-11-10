@@ -8,23 +8,40 @@ from pydantic_core import CoreSchema, core_schema
 class Loss(ABC):
     """
     Abstract base class for all loss functions.
+
+    A loss is called as ``loss(predicted, actual)``. Subclasses declare whether
+    a larger value is better with the ``higher_is_better`` class attribute:
+    an error such as ``MSELoss`` is lower-is-better, while a score such as
+    ``BinaryMetricLoss`` (accuracy or F1) is higher-is-better. Optimizers
+    rank candidates with :meth:`fitness`, which accounts for the direction.
     """
+
+    higher_is_better: t.ClassVar[bool] = False
 
     @abstractmethod
     def __call__(self, predicted: t.List, actual: t.List) -> float:
         raise NotImplementedError
+
+    def fitness(self, predicted: t.List, actual: t.List) -> float:
+        """
+        Return the loss as a higher-is-better fitness value.
+
+        This is the loss value itself when ``higher_is_better`` is true, and
+        its negation otherwise.
+        """
+        value = float(self(predicted, actual))
+        return value if self.higher_is_better else -value
 
     @classmethod
     def __get_pydantic_core_schema__(
         cls, source_type: t.Any, handler: GetCoreSchemaHandler
     ) -> CoreSchema:
         """
-        Define how Pydantic generates a schema for BaseRagasEmbeddings.
+        Define how Pydantic generates a schema for Loss.
+
+        Instances are accepted as they are, not re-constructed.
         """
-        return core_schema.no_info_after_validator_function(
-            cls,
-            core_schema.is_instance_schema(cls),  # The validator function
-        )
+        return core_schema.is_instance_schema(cls)
 
 
 class MSELoss(Loss):
@@ -32,7 +49,15 @@ class MSELoss(Loss):
     Mean Squared Error loss function.
     """
 
-    reduction: t.Literal["mean", "sum"] = "mean"
+    higher_is_better: t.ClassVar[bool] = False
+
+    def __init__(self, reduction: t.Literal["mean", "sum"] = "mean"):
+        if reduction not in ("mean", "sum"):
+            raise ValueError(f"Invalid reduction method: {reduction}")
+        self.reduction = reduction
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(reduction={self.reduction!r})"
 
     def __call__(self, predicted: t.List[float], actual: t.List[float]) -> float:
         errors = [(p - a) ** 2 for p, a in zip(predicted, actual)]
@@ -50,7 +75,15 @@ class BinaryMetricLoss(Loss):
     Supports accuracy and F1-score.
     """
 
-    metric: t.Literal["accuracy", "f1_score"] = "accuracy"
+    higher_is_better: t.ClassVar[bool] = True
+
+    def __init__(self, metric: t.Literal["accuracy", "f1_score"] = "accuracy"):
+        if metric not in ("accuracy", "f1_score"):
+            raise ValueError(f"Unsupported metric: {metric}")
+        self.metric = metric
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(metric={self.metric!r})"
 
     def __call__(self, predicted: t.List[int], actual: t.List[int]) -> float:
         """

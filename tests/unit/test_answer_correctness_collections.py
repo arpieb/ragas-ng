@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from ragas.embeddings.base import BaseRagasEmbedding
 from ragas.llms.base import InstructorLLM
 from ragas.metrics.collections import AnswerCorrectness
 from ragas.metrics.collections.answer_correctness.util import (
@@ -57,3 +58,52 @@ async def test_no_statements_is_undefined_not_a_perfect_match(resp, ref):
 async def test_factuality_is_fbeta_of_the_classification():
     value, _ = await score(["a"], ["b"])
     assert value == pytest.approx(0.5)  # TP=FP=FN=1 -> P=R=0.5 -> F1=0.5
+
+
+def fixed_embeddings(vectors: t.Dict[str, t.List[float]]):
+    emb = MagicMock(spec=BaseRagasEmbedding)
+
+    async def aembed_text(text, **kw):
+        return vectors[text]
+
+    emb.aembed_text = aembed_text
+    return emb
+
+
+@pytest.mark.asyncio
+async def test_negative_cosine_is_clipped_so_the_score_stays_in_range():
+    # Opposite embeddings: cosine -1. Unclipped, the similarity term was -1 and
+    # 0.5 * 0.5 + 0.5 * -1 = -0.25. Clipped like SemanticSimilarity (#107) it is
+    # 0, giving 0.5 * 0.5 = 0.25.
+    emb = fixed_embeddings({"RESPONSE": [1.0, 0.0], "REF": [-1.0, 0.0]})
+    metric = AnswerCorrectness(
+        llm=scripted_llm(["a"], ["b"]), embeddings=emb, weights=[0.5, 0.5]
+    )
+    result = await metric.ascore(user_input="q", response="RESPONSE", reference="REF")
+    assert result.value == pytest.approx(0.25)
+
+
+@pytest.mark.asyncio
+async def test_positive_cosine_is_unchanged():
+    emb = fixed_embeddings({"RESPONSE": [1.0, 0.0], "REF": [1.0, 1.0]})
+    metric = AnswerCorrectness(
+        llm=scripted_llm(["a"], ["b"]), embeddings=emb, weights=[0.5, 0.5]
+    )
+    result = await metric.ascore(user_input="q", response="RESPONSE", reference="REF")
+    assert result.value == pytest.approx(0.5 * 0.5 + 0.5 * math.sqrt(0.5))
+
+
+@pytest.mark.parametrize("weights", [[1.0, 0.0], [0.75, 0.25]])
+def test_non_embedding_object_is_rejected(weights):
+    # _validate_embeddings was `pass`, so any object was accepted
+    with pytest.raises(ValueError, match="modern embeddings"):
+        AnswerCorrectness(
+            llm=scripted_llm([], []),
+            embeddings=t.cast(t.Any, object()),
+            weights=weights,
+        )
+
+
+def test_no_embeddings_is_fine_for_pure_factuality():
+    metric = AnswerCorrectness(llm=scripted_llm([], []), weights=[1.0, 0.0])
+    assert metric.embeddings is None

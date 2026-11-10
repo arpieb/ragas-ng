@@ -566,6 +566,38 @@ A copy (deep or shallow) of an LLM or embeddings with a `cache` used to keep the
 
 `distance_measure_map` on the string-distance metrics and `OverlapScoreBuilder` is now a read-only property rather than an instance attribute.
 
+## Prompt optimizers rank losses by their direction ([#216](https://github.com/arpieb/ragas-ng/issues/216))
+
+`Loss` now declares its direction with a `higher_is_better` class attribute: `False` for `MSELoss` (an error), `True` for `BinaryMetricLoss` (accuracy or F1). `Loss.fitness(predicted, actual)` returns a value where higher is always better, and both optimizers rank by it.
+
+- **⚠ silent:** `GeneticOptimizer` kept the prompt with the *highest* MSE, and passed `(actual, predicted)` to the loss. It now keeps the best prompt and passes `(predicted, actual)`. Cross-over paired every candidate with the first one, including the first with itself; each candidate now crosses with its nearest other candidate. Optimized prompts will differ.
+- **⚠ silent:** the DSPy metric negated every loss, so under `BinaryMetricLoss` `DSPyOptimizer` minimised accuracy. It now maximises it. Under `MSELoss` it still returns the negated error.
+- `GeneticOptimizer.evaluate_fitness()` now returns fitness values (higher is better), not raw losses.
+- `MSELoss(reduction="sum")`, `BinaryMetricLoss(metric="f1_score")` and `InstructionConfig(loss=MSELoss())` raised `TypeError` and now work. An unknown option raises `ValueError`.
+- A custom `Loss` that is higher-is-better must set `higher_is_better = True`; the default is lower-is-better.
+- Each `InstructionConfig` gets its own copy of `optimizer_config`, so editing one no longer changes the others.
+
+## Collections metric constructors: unknown arguments raise ([#216](https://github.com/arpieb/ragas-ng/issues/216))
+
+- Any `ragas.metrics.collections` metric now raises `TypeError` for a keyword argument it doesn't take. They used to be dropped, so `AspectCritic(..., strictnes=3)` silently built a metric with `strictness=1`. Fix the spelling or remove the argument.
+- `ContextPrecision(llm, name="x")` and `ContextUtilization(llm, name="x")` raised `TypeError: multiple values for keyword argument 'name'`. They now accept `name`; the defaults are unchanged.
+- A custom `BaseMetric` subclass that doesn't define `ascore` can no longer be instantiated (`TypeError`). It used to score `0.0` from a placeholder.
+- `AnswerCorrectness(embeddings=...)` now checks that the embeddings are a modern `BaseRagasEmbedding`, as every other collections metric does; anything else raises `ValueError`. `embeddings=None` with `weights=[1.0, 0.0]` still works.
+
+## Testset generation: scenarios, filters and personas ([#216](https://github.com/arpieb/ragas-ng/issues/216))
+
+- `SingleHopScenario` is now defined once. The class exported from `ragas.testset.synthesizers.single_hop` was a different class from the one the synthesizer checks for, so passing a scenario you built yourself raised `TypeError: scenario type should be SingleHopScenario`.
+- **⚠ silent:** `JaccardSimilarityBuilder` now honours `filter_nodes` in a transform pipeline. It compared every node in the graph, so with `filter_nodes` set you now get fewer relationships, limited to the nodes you selected. `SummaryCosineSimilarityBuilder` now links only document nodes in a pipeline, as documented; it linked every node with a summary embedding, chunks included. Neither is in the default transforms.
+- `OverlapScoreBuilder().name` is now `"OverlapScoreBuilder"`. It was an empty string.
+- **⚠ silent:** `NodeFilter.transform()` now removes every node its filter flags, as the pipeline does. It removed only the first.
+- **⚠ silent:** `generate_personas_from_kg()` now groups similar summaries by true cosine similarity, comparing each summary with its own node's embedding. It used an unnormalised dot product, and when some nodes had no summary it could compare a summary with another node's embedding. You may get different personas from the same graph. A node with a summary but no `summary_embedding` now raises a clear `ValueError`.
+
+## One deprecation warning, Vertex clients used, LiteLLM batch sizes per provider ([#216](https://github.com/arpieb/ragas-ng/issues/216))
+
+- `evaluate()` now emits one `DeprecationWarning`, pointing at your call. It added a second one from `aevaluate()` that pointed inside ragas. `aevaluate()` called directly still warns once.
+- `GoogleEmbeddings(use_vertex=True, client=...)` now uses the client you pass. A `TextEmbeddingModel` is called directly, and a google-genai `genai.Client(vertexai=True, ...)` goes through `models.embed_content`. Any other client loads `model` once and reuses it; `TextEmbeddingModel.from_pretrained` used to run on every call, ignoring the client.
+- **⚠ silent:** `LiteLLMEmbeddings` without `batch_size=` now picks its batch size from the model's provider: 100 for OpenAI, 96 for Cohere, 5 for Vertex AI, 32 for Hugging Face, and 10 otherwise. Every model got 10. OpenAI and Cohere users see fewer, larger embedding requests. Pass `batch_size=` to keep the old behaviour.
+
 ## The LLM takes chat messages, and the multimodal metrics use them ([#214](https://github.com/arpieb/ragas-ng/issues/214))
 
 `generate()` and `agenerate()` on `llm_factory()` LLMs now accept a list of OpenAI-format chat messages as well as a prompt string; message content can be a list of text and `image_url` parts. A messages list takes the same path as a string: retries, cache, rate limit, tracing, token usage, provider parameter mapping, and sync or async clients. The LLM's `system_prompt` is prepended unless the list already has a system message. String prompts are sent and cached exactly as before, so existing caches still hit.

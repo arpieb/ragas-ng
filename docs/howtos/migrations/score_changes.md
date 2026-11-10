@@ -295,3 +295,9 @@ Without a `mode`, Claude now returns structured output as JSON, not through a fo
 ## Default embeddings for Gemini and Vertex LLMs ([#190](https://github.com/arpieb/ragas-ng/issues/190))
 
 With `llm_factory("gemini/...")` or `llm_factory("vertex_ai/...")` and no `embeddings=`, `evaluate()` now uses `gemini-embedding-2` instead of OpenAI's `text-embedding-ada-002` (see [Behavior changes](behavior_changes.md#evaluate-default-embeddings-follow-a-litellm-llms-provider-190)). Embedding-based scores (`AnswerRelevancy`, `AnswerCorrectness`'s similarity part, `SemanticSimilarity`) change, because a different model gives different similarities. Those runs needed `OPENAI_API_KEY` before. Pass `embeddings=` to keep a fixed model across runs.
+
+## AnswerCorrectness: similarity clipped to [0, 1] ([#216](https://github.com/arpieb/ragas-ng/issues/216))
+
+The semantic-similarity part of `AnswerCorrectness` was the raw cosine, which spans `[-1, 1]`, so the weighted score could go below 0. It is now clipped to `[0, 1]`, the same as `SemanticSimilarity` ([#107](https://github.com/arpieb/ragas-ng/issues/107)).
+
+Only samples whose response and reference embeddings have a negative cosine score differently (unrelated texts, with some embedding models), and only when the similarity weight is above 0. The score rises by `similarity_weight × |cosine|`, divided by the sum of the weights. For example, factuality 0.5, cosine −1 and `weights=[0.5, 0.5]` scored −0.25 and now scores 0.25. With the default weights `[0.75, 0.25]` and cosine −0.1, the score rises by 0.025.
