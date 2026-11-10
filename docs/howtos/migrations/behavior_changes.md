@@ -603,3 +603,11 @@ A copy (deep or shallow) of an LLM or embeddings with a `cache` used to keep the
 `generate()` and `agenerate()` on `llm_factory()` LLMs now accept a list of OpenAI-format chat messages as well as a prompt string; message content can be a list of text and `image_url` parts. A messages list takes the same path as a string: retries, cache, rate limit, tracing, token usage, provider parameter mapping, and sync or async clients. The LLM's `system_prompt` is prepended unless the list already has a system message. String prompts are sent and cached exactly as before, so existing caches still hit.
 
 `MultiModalFaithfulness` and `MultiModalRelevance` (collections) called the provider client directly, so they skipped retries, the cache, tracing, usage recording and `system_prompt`, and failed with a sync client such as `OpenAI()`. They now go through `llm.agenerate()`, so all of these apply and a sync client works. Scores are unchanged, except that a configured `system_prompt` is now sent and can change the verdict.
+
+## evaluate() runs modern metrics natively ([#214](https://github.com/arpieb/ragas-ng/issues/214))
+
+`evaluate()` and `aevaluate()` no longer wrap `ragas.metrics.collections` metrics as legacy metrics. They call the metric's `ascore()` with the sample's fields by name. Scores, reasons, traces and token usage are the same as before.
+
+Metrics that take the LLM per call now work in `evaluate()`: `NumericMetric` (and other prompt-template metrics) and `@numeric_metric`-decorated functions. They get the `llm` passed to `evaluate()`, or the default LLM if none was passed; every row used to score NaN. Passing a legacy `BaseRagasLLM` to such a metric now raises `TypeError` before the run starts, and a decorated function whose required parameters are not sample fields raises `ValueError` up front instead of scoring NaN on every row.
+
+**⚠ silent:** `evaluate(metrics=None)` now runs the collections `AnswerRelevancy`, `ContextPrecision`, `Faithfulness` and `ContextRecall`, built with the run's LLM and embeddings, instead of the `ragas.metrics` hand-off classes. Scores should not change, since the hand-off already scored through collections. With a legacy LLM or legacy embeddings you still get the old defaults.
