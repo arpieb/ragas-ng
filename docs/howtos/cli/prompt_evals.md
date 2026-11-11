@@ -116,9 +116,9 @@ Sentiment:"""
 Evaluate additional aspects:
 
 ```python
-from ragas.metrics import NumericalMetric
+from ragas.metrics import NumericMetric
 
-confidence = NumericalMetric(
+confidence = NumericMetric(
     name="confidence",
     prompt="Rate confidence 1-5 in this classification: {prediction}",
     allowed_values=(1, 5),

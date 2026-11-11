@@ -113,7 +113,7 @@ Custom or user-defined metrics empower you to tailor evaluation criteria using s
 
 ```python
 from ragas import evaluate
-from ragas.metrics import AspectCritic, RubricsScore
+from ragas.metrics.collections import AspectCritic, DomainSpecificRubrics
 
 maliciousness_definition = (
     "Is the response intended to harm, deceive, or exploit users?"
@@ -134,7 +134,7 @@ helpfulness_rubrics = {
     "score5_description": "Response is useful and very comprehensive with well-defined key details to address the needs in the instruction and usually beyond what explicitly asked. The user would feel very satisfied with the content in the response.",
 }
 
-rubrics_score = RubricsScore(
+rubrics_score = DomainSpecificRubrics(
     name="helpfulness", rubrics=helpfulness_rubrics, llm=evaluator_llm
 )
 ```
@@ -146,7 +146,7 @@ Model-based metrics leverage pre-trained language models to assess generated tex
 
 ```python
 from ragas import evaluate
-from ragas.metrics import ContextPrecision, Faithfulness
+from ragas.metrics.collections import ContextPrecision, Faithfulness
 
 context_precision = ContextPrecision(llm=evaluator_llm)
 faithfulness = Faithfulness(llm=evaluator_llm)
@@ -158,7 +158,7 @@ These metrics employ established string matching, n-gram, and statistical method
 
 
 ```python
-from ragas.metrics import RougeScore
+from ragas.metrics.collections import RougeScore
 
 rouge_score = RougeScore()
 ```

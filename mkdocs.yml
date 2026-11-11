@@ -196,10 +196,8 @@ not_in_nav: |
   extra/components/running_async.md
   extra/components/earlier_run_outputs.md
 
-  # Documents a shipped integration -- ragas.integrations.helicone (which
-  # evaluate() reads) -- but isn't in the sidebar. Its imports resolve; what it
-  # still uses is the legacy metric-injection pattern, so it wants modernising
-  # before promotion.
+  # Documents routing ragas' LLM calls through the Helicone gateway, but isn't
+  # in the sidebar: it hasn't been checked against a live Helicone account.
   howtos/integrations/helicone.md
 
   # Stubs and internal notes, not user-facing documentation.

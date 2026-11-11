@@ -204,7 +204,7 @@ Rating:""",
 Create additional metrics for different evaluation aspects:
 
 ```python
-from ragas.metrics import DiscreteMetric, NumericalMetric
+from ragas.metrics import DiscreteMetric, NumericMetric
 
 correctness = DiscreteMetric(
     name="correctness",
@@ -212,7 +212,7 @@ correctness = DiscreteMetric(
     allowed_values=["correct", "incorrect"],
 )
 
-relevance = NumericalMetric(
+relevance = NumericMetric(
     name="relevance",
     prompt="Rate relevance 1-5: {response} for question: {question}",
     allowed_values=(1, 5),

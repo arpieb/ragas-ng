@@ -261,7 +261,11 @@ ragas_eval_dataset.to_pandas()
 
 
 ```python
-from ragas.metrics import AnswerAccuracy, Faithfulness, ResponseGroundedness
+from ragas.metrics.collections import (
+    AnswerAccuracy,
+    Faithfulness,
+    ResponseGroundedness,
+)
 from ragas.llms import llm_factory
 
 evaluator_llm = llm_factory(
@@ -312,9 +316,9 @@ Evaluating: 100%|██████████| 9/9 [00:04<00:00,  2.03it/s]
       <th>retrieved_contexts</th>
       <th>response</th>
       <th>reference</th>
-      <th>nv_accuracy</th>
+      <th>answer_accuracy</th>
       <th>faithfulness</th>
-      <th>nv_response_groundedness</th>
+      <th>response_groundedness</th>
     </tr>
   </thead>
   <tbody>

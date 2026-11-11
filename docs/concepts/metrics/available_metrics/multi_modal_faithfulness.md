@@ -4,16 +4,14 @@
 
 The generated answer is regarded as faithful if all the claims made in the answer can be inferred from either the visual or textual context provided. To determine this, the response is directly evaluated against the provided contexts, and the faithfulness score is either 0 or 1.
 
-### Example (Recommended - Collections API)
+### Example
 
 ```python
-from openai import AsyncOpenAI
 from ragas.llms.base import llm_factory
 from ragas.metrics.collections import MultiModalFaithfulness
 
 # Setup - use a vision-capable model
-client = AsyncOpenAI()
-llm = llm_factory("gpt-6-luna", client=client)  # Vision-capable model required
+llm = llm_factory("gpt-6-luna")  # Vision-capable model required
 
 # Create metric instance
 metric = MultiModalFaithfulness(llm=llm)
@@ -27,24 +25,6 @@ result = await metric.ascore(
     ],
 )
 print(f"Faithfulness Score: {result.value}")  # 1.0 (faithful) or 0.0 (not faithful)
-```
-
-### Example (Legacy API - Deprecated)
-
-!!! warning "Deprecated"
-    The legacy API is deprecated and will be removed in a future version. Please migrate to the Collections API shown above.
-
-```python
-from ragas.dataset_schema import SingleTurnSample
-from ragas.metrics import MultiModalFaithfulness
-
-sample = SingleTurnSample(
-    user_input="What about the Tesla Model X?",
-    response="Cats are cute.",
-    retrieved_contexts=["custom_eval/multimodal/images/tesla.jpg"],
-)
-scorer = MultiModalFaithfulness()
-await scorer.single_turn_ascore(sample)
 ```
 
 ### How It's Calculated
@@ -86,5 +66,5 @@ The metric supports multiple types of context inputs:
 
 ### Requirements
 
-- A vision-capable LLM is required (e.g., `gpt-6-luna`, `gpt-6-luna`, `claude-opus-5-5`, `gemini-3.6-flash`)
-- For the Collections API, use `llm_factory` to create the LLM instance
+- A vision-capable LLM is required (e.g., `gpt-6-luna`, `claude-opus-5-5`, `gemini-3.6-flash`)
+- Use `llm_factory` to create the LLM instance

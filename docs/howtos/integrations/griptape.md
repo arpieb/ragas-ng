@@ -215,7 +215,7 @@ We will use `ContextPrecision`, `ContextRecall` and `ContextRelevance` to measur
 
 
 ```python
-from ragas.metrics import ContextPrecision, ContextRecall, ContextRelevance
+from ragas.metrics.collections import ContextPrecision, ContextRecall, ContextRelevance
 from ragas import evaluate
 from openai import OpenAI
 from ragas.llms import llm_factory
@@ -259,7 +259,7 @@ Evaluating: 100%|██████████| 9/9 [00:15<00:00,  1.77s/it]
       <th>reference</th>
       <th>context_precision</th>
       <th>context_recall</th>
-      <th>nv_context_relevance</th>
+      <th>context_relevance</th>
     </tr>
   </thead>
   <tbody>
@@ -309,7 +309,11 @@ To measure the generation performance we will use `FactualCorrectness`, `Faithfu
 
 
 ```python
-from ragas.metrics import FactualCorrectness, Faithfulness, ResponseGroundedness
+from ragas.metrics.collections import (
+    FactualCorrectness,
+    Faithfulness,
+    ResponseGroundedness,
+)
 
 ragas_metrics = [
     FactualCorrectness(llm=evaluator_llm),
@@ -348,7 +352,7 @@ Evaluating: 100%|██████████| 9/9 [00:17<00:00,  1.90s/it]
       <th>reference</th>
       <th>factual_correctness(mode=f1)</th>
       <th>faithfulness</th>
-      <th>nv_response_groundedness</th>
+      <th>response_groundedness</th>
     </tr>
   </thead>
   <tbody>

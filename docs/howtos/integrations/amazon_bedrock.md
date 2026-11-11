@@ -575,7 +575,7 @@ evaluator_llm = llm_factory(f"bedrock/{model_id}", aws_region_name=region_name)
 
 
 ```python
-from ragas.metrics import AspectCritic, RubricsScore
+from ragas.metrics.collections import AspectCritic, DomainSpecificRubrics
 from ragas.dataset_schema import SingleTurnSample, MultiTurnSample, EvaluationDataset
 from ragas import evaluate
 
@@ -591,7 +591,7 @@ rubrics = {
     ),
 }
 
-recommendations = RubricsScore(
+recommendations = DomainSpecificRubrics(
     rubrics=rubrics, llm=evaluator_llm, name="Recommendations"
 )
 
@@ -851,7 +851,11 @@ In this tutorial, we will use the following RAG metrics:
 
 
 ```python
-from ragas.metrics import ContextRelevance, Faithfulness, ResponseGroundedness
+from ragas.metrics.collections import (
+    ContextRelevance,
+    Faithfulness,
+    ResponseGroundedness,
+)
 
 metrics = [
     ContextRelevance(llm=evaluator_llm),
@@ -914,9 +918,9 @@ Evaluating: 100%|██████████| 6/6 [00:00<?, ?it/s]
       <th>retrieved_contexts</th>
       <th>response</th>
       <th>reference</th>
-      <th>nv_context_relevance</th>
+      <th>context_relevance</th>
       <th>faithfulness</th>
-      <th>nv_response_groundedness</th>
+      <th>response_groundedness</th>
     </tr>
   </thead>
   <tbody>
@@ -951,7 +955,7 @@ To evaluate whether the agent is able to achieve its goal, we can use the follow
 
 
 ```python
-from ragas.metrics import (
+from ragas.metrics.collections import (
     AgentGoalAccuracyWithoutReference,
     AgentGoalAccuracyWithReference,
 )

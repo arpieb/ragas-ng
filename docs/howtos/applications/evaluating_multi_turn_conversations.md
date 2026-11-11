@@ -40,7 +40,7 @@ evaluator_llm = llm_factory("gpt-6-luna", client=OpenAI())
 
 
 ```python
-from ragas.metrics import AspectCritic, SimpleCriteriaScore
+from ragas.metrics.collections import AspectCritic
 from ragas.dataset_schema import MultiTurnSample, EvaluationDataset
 from ragas.messages import HumanMessage, AIMessage
 from ragas import evaluate

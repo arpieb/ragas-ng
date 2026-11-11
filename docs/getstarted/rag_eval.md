@@ -179,13 +179,17 @@ from ragas import evaluate
 from ragas.llms import llm_factory
 
 
+from ragas.metrics.collections import ContextRecall, FactualCorrectness, Faithfulness
+
 evaluator_llm = llm_factory("gpt-6-luna", client=openai_client)
-from ragas.metrics import LLMContextRecall, Faithfulness, FactualCorrectness
 
 result = evaluate(
     dataset=evaluation_dataset,
-    metrics=[LLMContextRecall(), Faithfulness(), FactualCorrectness()],
-    llm=evaluator_llm,
+    metrics=[
+        ContextRecall(llm=evaluator_llm),
+        Faithfulness(llm=evaluator_llm),
+        FactualCorrectness(llm=evaluator_llm),
+    ],
 )
 result
 ```

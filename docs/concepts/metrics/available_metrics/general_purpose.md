@@ -60,7 +60,6 @@ Critics are essentially basic LLM calls using the defined criteria. `strictness`
 
 An even `strictness` is raised to the next odd number, so the vote can't tie.
 
-
 ## Simple Criteria Scoring
 
 Simple Criteria Scoring is an evaluation metric that can be used to score responses based on predefined criteria. The output can be an integer score within a specified range or custom categorical values. It's useful for coarse-grained evaluations with flexible scoring scales.
@@ -175,7 +174,6 @@ result = await similarity_metric.ascore(
 print(f"Similarity Score: {result.value}")
 ```
 
-
 ## Rubrics based scoring
 
 The Rubric-Based Criteria Scoring Metric is used to do evaluations based on user-defined rubrics. Each rubric defines a detailed score description, typically ranging from 1 to 5. The LLM assesses and scores responses according to these descriptions, ensuring a consistent and objective evaluation.
@@ -259,118 +257,3 @@ Output:
 ```
 
 See [Instance-Specific Rubrics](rubrics_based.md#instance-specific-rubrics) for more examples.
-
-## Legacy Metrics API
-
-The following examples use the legacy metrics API pattern. For new projects, we recommend using the collections-based API shown above.
-
-!!! warning "Deprecation Timeline"
-    This API will be deprecated in version 0.4 and removed in version 1.0. Please migrate to the collections-based API shown above.
-
-### Aspect Critic (legacy)
-
-```python
-from ragas.dataset_schema import SingleTurnSample
-from ragas.metrics import AspectCritic
-
-sample = SingleTurnSample(
-    user_input="Where is the Eiffel Tower located?",
-    response="The Eiffel Tower is located in Paris.",
-)
-
-scorer = AspectCritic(
-    name="maliciousness",
-    definition="Is the submission intended to harm, deceive, or exploit users?",
-    llm=evaluator_llm,
-)
-await scorer.single_turn_ascore(sample)
-```
-Output
-```
-0
-```
-
-### Rubrics based scoring (legacy)
-
-```python
-from ragas.dataset_schema import SingleTurnSample
-from ragas.metrics import RubricsScore
-
-sample = SingleTurnSample(
-    response="The Earth is flat and does not orbit the Sun.",
-    reference="Scientific consensus, supported by centuries of evidence, confirms that the Earth is a spherical planet that orbits the Sun. This has been demonstrated through astronomical observations, satellite imagery, and gravity measurements.",
-)
-
-rubrics = {
-    "score1_description": "The response is entirely incorrect and fails to address any aspect of the reference.",
-    "score2_description": "The response contains partial accuracy but includes major errors or significant omissions that affect its relevance to the reference.",
-    "score3_description": "The response is mostly accurate but lacks clarity, thoroughness, or minor details needed to fully address the reference.",
-    "score4_description": "The response is accurate and clear, with only minor omissions or slight inaccuracies in addressing the reference.",
-    "score5_description": "The response is completely accurate, clear, and thoroughly addresses the reference without any errors or omissions.",
-}
-
-
-scorer = RubricsScore(rubrics=rubrics, llm=evaluator_llm)
-await scorer.single_turn_ascore(sample)
-```
-
-Output
-```
-1
-```
-
-### Instance specific rubrics scoring (legacy)
-
-```python
-from ragas import EvaluationDataset, evaluate
-from ragas.metrics import InstanceRubrics
-
-dataset = [
-    # Relevance to Query
-    {
-        "user_input": "How do I handle exceptions in Python?",
-        "response": "To handle exceptions in Python, use the `try` and `except` blocks to catch and handle errors.",
-        "reference": "Proper error handling in Python involves using `try`, `except`, and optionally `else` and `finally` blocks to handle specific exceptions or perform cleanup tasks.",
-        "rubrics": {
-            "score0_description": "The response is off-topic or irrelevant to the user query.",
-            "score1_description": "The response is fully relevant and focused on the user query.",
-        },
-    },
-    # Code Efficiency
-    {
-        "user_input": "How can I create a list of squares for numbers 1 through 5 in Python?",
-        "response": """
-            # Using a for loop
-            squares = []
-            for i in range(1, 6):
-                squares.append(i ** 2)
-            print(squares)
-                """,
-        "reference": """
-            # Using a list comprehension
-            squares = [i ** 2 for i in range(1, 6)]
-            print(squares)
-                """,
-        "rubrics": {
-            "score0_description": "The code is inefficient and has obvious performance issues (e.g., unnecessary loops or redundant calculations).",
-            "score1_description": "The code is efficient, optimized, and performs well even with larger inputs.",
-        },
-    },
-]
-
-
-evaluation_dataset = EvaluationDataset.from_list(dataset)
-
-result = evaluate(
-    dataset=evaluation_dataset,
-    metrics=[InstanceRubrics(llm=evaluator_llm)],
-    llm=evaluator_llm,
-)
-
-result
-```
-Output
-
-```
-{'instance_rubrics': 0.5000}
-```

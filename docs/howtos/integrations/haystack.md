@@ -10,13 +10,15 @@ The underlying concept of Haystack is that all individual tasks, such as storing
 
 ## Overview
 
-In this tutorial, we will build a RAG pipeline using Haystack and evaluate it with Ragas. We’ll start by setting up the various components of the RAG pipeline, and for evaluations, we will initialize the RagasEvaluator component. Once the components are set up, we'll connect the components to form the complete pipeline. Later in the tutorial, we will explore how to perform evaluations using custom-defined metrics in Ragas.
+In this tutorial, we will build a RAG pipeline using Haystack and evaluate it with Ragas. We’ll start by setting up the various components of the RAG pipeline and connect them to form the complete pipeline. Then we run it, collect the question, the retrieved documents and the answer, and score them with Ragas metrics. Later in the tutorial, we will explore how to evaluate with custom-defined metrics in Ragas.
+
+The `ragas-haystack` package's `RagasEvaluator` component is built for upstream Ragas' metric classes, so this guide scores the pipeline's outputs with Ragas directly instead.
 
 ## Installing Dependencies
 
 
 ```python
-%pip install ragas-haystack
+%pip install ragas haystack-ai
 ```
 
 #### Getting the data
@@ -112,34 +114,6 @@ from haystack.components.generators.chat import OpenAIChatGenerator
 chat_generator = OpenAIChatGenerator(model="gpt-6-luna")
 ```
 
-#### Setting up the RagasEvaluator
-
-Pass all the Ragas metrics you want to use for evaluation, ensuring that all the necessary information to calculate each selected metric is provided.
-
-For example:
-
-- **AnswerRelevancy**: requires both the **query** and the **response**.
-- **ContextPrecision**: requires the **query**, **retrieved documents**, and the **reference**.
-- **Faithfulness**: requires the **query**, **retrieved documents**, and the **response**.
-
-Make sure to include all relevant data for each metric to ensure accurate evaluation.
-
-
-```python
-from haystack_integrations.components.evaluators.ragas import RagasEvaluator
-
-from openai import OpenAI
-from ragas.llms import llm_factory
-from ragas.metrics import AnswerRelevancy, ContextPrecision, Faithfulness
-
-evaluator_llm = llm_factory("gpt-6-luna", client=OpenAI())
-
-ragas_evaluator = RagasEvaluator(
-    ragas_metrics=[AnswerRelevancy(), ContextPrecision(), Faithfulness()],
-    evaluator_llm=evaluator_llm,
-)
-```
-
 ## Building and Assembling the Pipeline
 
 #### Creating the Pipeline
@@ -162,7 +136,6 @@ rag_pipeline.add_component("retriever", retriever)
 rag_pipeline.add_component("prompt_builder", prompt_builder)
 rag_pipeline.add_component("llm", chat_generator)
 rag_pipeline.add_component("answer_builder", AnswerBuilder())
-rag_pipeline.add_component("ragas_evaluator", ragas_evaluator)
 ```
 #### Connecting the components
 
@@ -172,15 +145,7 @@ rag_pipeline.connect("retriever", "prompt_builder")
 rag_pipeline.connect("prompt_builder.prompt", "llm.messages")
 rag_pipeline.connect("llm.replies", "answer_builder.replies")
 rag_pipeline.connect("retriever", "answer_builder.documents")
-rag_pipeline.connect("llm.replies", "answer_builder.replies")
-rag_pipeline.connect("retriever", "answer_builder.documents")
-rag_pipeline.connect("retriever", "ragas_evaluator.documents")
-rag_pipeline.connect("llm.replies", "ragas_evaluator.response")
 ```
-
-
-
-
 
 ## Running the Pipeline
 
@@ -196,38 +161,80 @@ result = rag_pipeline.run(
         "text_embedder": {"text": question},
         "prompt_builder": {"question": question},
         "answer_builder": {"query": question},
-        "ragas_evaluator": {"query": question, "reference": reference},
-        # Each metric expects a specific set of parameters as input. Refer to the
-        # Ragas class' documentation for more details.
     }
 )
 
-print(result["answer_builder"]["answers"][0].data, "\n")
-print(result["ragas_evaluator"]["result"])
+answer = result["answer_builder"]["answers"][0]
+print(answer.data)
+```
+Output
+```
+Meta AI's LLaMA models stand out due to their open-source nature, which allows researchers and developers easy access to high-quality language models without the need for expensive resources. This accessibility fosters innovation and experimentation, enabling collaboration across various industries. Moreover, the strong performance of the LLaMA models further enhances their appeal, making them valuable tools for advancing AI development.
+```
+
+## Evaluating with Ragas
+
+Ragas metrics score the pipeline's inputs and outputs directly. Each metric names what it needs:
+
+- **AnswerRelevancy**: the **query** and the **response**.
+- **ContextPrecision**: the **query**, the **retrieved documents**, and the **reference**.
+- **Faithfulness**: the **query**, the **retrieved documents**, and the **response**.
+
+The evaluator LLM and embeddings come from Ragas' own factories, not from Haystack: `llm_factory()` takes any [LiteLLM model string](../llm-adapters.md).
+
+```python
+from ragas import EvaluationDataset, evaluate
+from ragas.embeddings import LiteLLMEmbeddings
+from ragas.llms import llm_factory
+from ragas.metrics.collections import AnswerRelevancy, ContextPrecision, Faithfulness
+
+evaluator_llm = llm_factory("gpt-6-luna")
+evaluator_embeddings = LiteLLMEmbeddings(model="text-embedding-3-small")
+
+dataset = EvaluationDataset.from_list(
+    [
+        {
+            "user_input": question,
+            "retrieved_contexts": [doc.content for doc in answer.documents],
+            "response": answer.data,
+            "reference": reference,
+        }
+    ]
+)
+
+result = evaluate(
+    dataset,
+    metrics=[
+        AnswerRelevancy(llm=evaluator_llm, embeddings=evaluator_embeddings),
+        ContextPrecision(llm=evaluator_llm),
+        Faithfulness(llm=evaluator_llm),
+    ],
+)
+print(result)
 ```
 Output
 ```
 Evaluating: 100%|██████████| 3/3 [00:14<00:00,  4.72s/it]
 
-Meta AI's LLaMA models stand out due to their open-source nature, which allows researchers and developers easy access to high-quality language models without the need for expensive resources. This accessibility fosters innovation and experimentation, enabling collaboration across various industries. Moreover, the strong performance of the LLaMA models further enhances their appeal, making them valuable tools for advancing AI development.
-
 {'answer_relevancy': 0.9782, 'context_precision': 1.0000, 'faithfulness': 1.0000}
 ```
 
+To score many questions, run the pipeline once per question and add one row per run to the dataset.
+
 ## Advance Usage
 
-Instead of using the default ragas metrics, you can change them to fit your needs or even create your own custom metrics. After that, you can pass these to the RagasEvaluator component. To learn more about how to customize ragas metrics, check out the [docs](../customizations/index.md).
+Instead of using the default ragas metrics, you can change them to fit your needs or even create your own custom metrics. To learn more about how to customize ragas metrics, check out the [docs](../customizations/index.md).
 
 In the example below, we will define two custom Ragas metrics:
 
-1. **SportsRelevanceMetric**: This metric evaluates whether a question and its response are related to sports.
-2. **AnswerQualityMetric**: This metric measures how well the response provided by the LLM answers the user's question.
+1. **sports_relevance**: evaluates whether a question and its response are related to sports.
+2. **answer_quality**: measures how well the response answers the user's question, on a rubric.
 
 
 ```python
-from ragas.metrics import RubricsScore, AspectCritic
+from ragas.metrics.collections import AspectCritic, DomainSpecificRubrics
 
-SportsRelevanceMetric = AspectCritic(
+sports_relevance = AspectCritic(
     name="sports_relevance_metric",
     definition="Were the question and response related to sports?",
     llm=evaluator_llm,
@@ -238,33 +245,26 @@ rubrics = {
     "score2_description": "The response partially answers the user input.",
     "score3_description": "The response fully answer the user input",
 }
+answer_quality = DomainSpecificRubrics(llm=evaluator_llm, rubrics=rubrics)
 
-evaluator = RagasEvaluator(
-    ragas_metrics=[
-        SportsRelevanceMetric,
-        RubricsScore(llm=evaluator_llm, rubrics=rubrics),
-    ],
-    evaluator_llm=evaluator_llm,
-)
-
-output = evaluator.run(
-    query="Which is the most popular global sport?",
-    documents=[
+sample = {
+    "user_input": "Which is the most popular global sport?",
+    "retrieved_contexts": [
         "Football is undoubtedly the world's most popular sport with"
         " major events like the FIFA World Cup and sports personalities"
         " like Ronaldo and Messi, drawing a followership of more than 4"
         " billion people."
     ],
-    response="Football is the most popular sport with around 4 billion"
+    "response": "Football is the most popular sport with around 4 billion"
     " followers worldwide",
-)
+}
 
-output["result"]
+for metric in (sports_relevance, answer_quality):
+    result = await metric.ascore(**sample)
+    print(metric.name, result.value)
 ```
 Output
 ```
-Evaluating: 100%|██████████| 2/2 [00:01<00:00,  1.62it/s]
-
-{'sports_relevance_metric': 1.0000, 'domain_specific_rubrics': 3.0000}
+sports_relevance_metric 1.0
+domain_specific_rubrics 3.0
 ```
-

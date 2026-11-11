@@ -5,7 +5,7 @@ earlier_run_outputs.md
 --8<--
 
 !!! note "Formerly Response Relevancy"
-    This metric was also called **Response Relevancy**. The legacy class `ResponseRelevancy` is the same metric, and its score column is `answer_relevancy` too. Use `AnswerRelevancy` in new code.
+    This metric was also called **Response Relevancy** (class `ResponseRelevancy` in older Ragas versions). It is `AnswerRelevancy` in `ragas.metrics.collections`, and its score column is `answer_relevancy`.
 
 The **Answer Relevancy** metric measures how relevant a response is to the user input. It ranges from 0 to 1, with higher scores indicating better alignment with the user input.
 
@@ -92,35 +92,3 @@ To calculate the relevance of the answer to the given question, we follow two st
 - **Step 2:** Calculate the mean cosine similarity between the generated questions and the actual question.
 
 The underlying concept is that if the answer correctly addresses the question, it is highly probable that the original question can be reconstructed solely from the answer.
-
-
-## Legacy Metrics API
-
-The following examples use the legacy metrics API pattern. For new projects, we recommend using the collections-based API shown above.
-
-!!! warning "Deprecation Timeline"
-    This API will be deprecated in version 0.4 and removed in version 1.0. Please migrate to the collections-based API shown above.
-
-### Example with SingleTurnSample
-
-```python
-from ragas import SingleTurnSample
-from ragas.metrics import AnswerRelevancy
-
-sample = SingleTurnSample(
-    user_input="When was the first super bowl?",
-    response="The first superbowl was held on Jan 15, 1967",
-    retrieved_contexts=[
-        "The First AFL–NFL World Championship Game was an American football game played on January 15, 1967, at the Los Angeles Memorial Coliseum in Los Angeles."
-    ],
-)
-
-scorer = AnswerRelevancy(llm=evaluator_llm, embeddings=evaluator_embeddings)
-await scorer.single_turn_ascore(sample)
-```
-
-Output:
-
-```
-0.9165088378587264
-```

@@ -188,7 +188,12 @@ Select and define the metrics that are most relevant to your application.
 
 ```python
 from ragas import evaluate
-from ragas.metrics import ContextPrecision, Faithfulness, RubricsScore, RougeScore
+from ragas.metrics.collections import (
+    ContextPrecision,
+    DomainSpecificRubrics,
+    Faithfulness,
+    RougeScore,
+)
 
 rouge_score = RougeScore()
 
@@ -200,7 +205,9 @@ helpfulness_rubrics = {
     "score5_description": "Response is useful and very comprehensive with well-defined key details to address the needs in the instruction and usually beyond what explicitly asked. The user would feel very satisfied with the content in the response.",
 }
 
-rubrics_score = RubricsScore(name="helpfulness", rubrics=helpfulness_rubrics)
+rubrics_score = DomainSpecificRubrics(
+    name="helpfulness", rubrics=helpfulness_rubrics, llm=evaluator_llm
+)
 context_precision = ContextPrecision(llm=evaluator_llm)
 faithfulness = Faithfulness(llm=evaluator_llm)
 ```
@@ -423,13 +430,9 @@ ragas_metrics = [
     rubrics_score,
 ]
 
-ragas_result_rag_a = evaluate(
-    dataset=ragas_eval_dataset_a, metrics=ragas_metrics, llm=evaluator_llm
-)
+ragas_result_rag_a = evaluate(dataset=ragas_eval_dataset_a, metrics=ragas_metrics)
 
-ragas_result_rag_b = evaluate(
-    dataset=ragas_eval_dataset_b, metrics=ragas_metrics, llm=evaluator_llm
-)
+ragas_result_rag_b = evaluate(dataset=ragas_eval_dataset_b, metrics=ragas_metrics)
 ```
 ```
 Evaluating: 100%|██████████| 12/12 [00:00<?, ?it/s]

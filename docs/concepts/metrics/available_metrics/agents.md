@@ -6,7 +6,6 @@ earlier_run_outputs.md
 
 Agentic or tool use workflows can be evaluated in multiple dimensions. Here are some of the metrics that can be used to evaluate the performance of agents or tools in a given task.
 
-
 ## Topic Adherence
 
 AI systems deployed in real-world applications are expected to adhere to domains of interest while interacting with users but LLMs sometimes may answer general queries by ignoring this limitation. The topic adherence metric evaluates the ability of the AI to stay on predefined domains during the interactions. This metric is particularly important in conversational AI systems, where the AI is expected to only provide assistance to queries related to predefined domains.
@@ -109,7 +108,6 @@ Output
 Topic Adherence (precision): 0.6666666666444444
 ```
 
-
 To change the mode to recall, set the `mode` parameter to `recall`.
 
 ```python
@@ -119,32 +117,6 @@ Output
 ```
 0.99999999995
 ```
-
-### Legacy API (Deprecated)
-
-!!! warning "Deprecation Notice"
-    The legacy `TopicAdherenceScore` from `ragas.metrics` is deprecated and will be removed in v1.0. Please migrate to `ragas.metrics.collections.TopicAdherence` which provides the same functionality with a modern API.
-
-The legacy API can still be used but requires `MultiTurnSample`:
-
-```python
-from ragas.dataset_schema import MultiTurnSample
-from ragas.messages import HumanMessage, AIMessage, ToolMessage, ToolCall
-from ragas.metrics import TopicAdherenceScore  # Legacy import
-from ragas.llms import llm_factory
-from openai import OpenAI
-
-evaluator_llm = llm_factory("gpt-6-luna", client=OpenAI())
-
-sample = MultiTurnSample(
-    user_input=[...],  # conversation messages
-    reference_topics=["science"],
-)
-scorer = TopicAdherenceScore(llm=evaluator_llm, mode="precision")
-score = await scorer.multi_turn_ascore(sample)
-```
-
-
 
 ## Tool call Accuracy
 
@@ -295,45 +267,6 @@ Score: 0.0 (sequence not aligned)
 
 **Example:** For "Book me a flight to Paris", if you only care that the booking succeeds (not which intermediate tools were called), use `AgentGoalAccuracyWithReference` instead.
 
-### Legacy API (Deprecated)
-
-!!! warning "Deprecation Notice"
-    The legacy `ToolCallAccuracy` from `ragas.metrics` is deprecated and will be removed in v1.0. Please migrate to `ragas.metrics.collections.ToolCallAccuracy` which provides the same functionality with a modern API.
-
-The legacy API can still be used but requires `MultiTurnSample`:
-
-```python
-from ragas.dataset_schema import MultiTurnSample
-from ragas.messages import AIMessage, HumanMessage, ToolCall
-from ragas.metrics import ToolCallAccuracy  # Legacy import
-
-sample = MultiTurnSample(
-    user_input=[
-        HumanMessage(content="What's the weather in New York?"),
-        AIMessage(
-            content="Checking weather...",
-            tool_calls=[ToolCall(name="weather_check", args={"location": "New York"})],
-        ),
-    ],
-    reference_tool_calls=[
-        ToolCall(name="weather_check", args={"location": "New York"}),
-    ],
-)
-
-scorer = ToolCallAccuracy()
-score = await scorer.multi_turn_ascore(sample)
-```
-
-The legacy version also supported custom argument comparison metrics:
-
-```python
-from ragas.metrics._string import NonLLMStringSimilarity
-from ragas.metrics._tool_call_accuracy import ToolCallAccuracy
-
-metric = ToolCallAccuracy()
-metric.arg_comparison_metric = NonLLMStringSimilarity()
-```
-
 ## Tool Call F1
 
 `ToolCallF1` is a metric that return F1-score based on precision and recall of tool calls made by an agent, comparing them to a set of expected calls (`reference_tool_calls`). While `ToolCallAccuracy` provides a binary score based on exact order and content match, `ToolCallF1` complements it by offering a softer evaluation useful for onboarding and iteration. It helps quantify how close the agent was to the expected behavior even if it over- or under-calls.
@@ -356,14 +289,14 @@ $$
 
 ### How is it different from Topic Adherence?
 
-While both `ToolCallF1` and `TopicAdherenceScore` uses precision, recall, and F1-score, they evaluate different aspects:
+While both `ToolCallF1` and `TopicAdherence` use precision, recall, and F1-score, they evaluate different aspects:
 
 | Metric                | Evaluates                               | Based on                     |
 | --------------------- | --------------------------------------- | ---------------------------- |
 | `ToolCallF1`          | Correctness of tool executions          | Structured tool call objects |
-| `TopicAdherenceScore` | Whether the conversation stays on-topic | Comparison of domain topics  |
+| `TopicAdherence`      | Whether the conversation stays on-topic | Comparison of domain topics  |
 
-Use `ToolCallF1` when you want to track whether the agent correctly **executed tools**. Use `TopicAdherenceScore` when evaluating whether the **content or intention** stays within allowed topics.
+Use `ToolCallF1` when you want to track whether the agent correctly **executed tools**. Use `TopicAdherence` when evaluating whether the **content or intention** stays within allowed topics.
 
 ### Example: Basic Usage
 
@@ -447,14 +380,14 @@ print(f"F1 Score: {result.value}")
 
 Output:
 ```
-F1 Score: 0.67
+F1 Score: 0.8
 ```
 
 In this case:
 - TP = 2 (weather_check, uv_index_lookup)
 - FP = 1 (air_quality)
 - FN = 0
-- Precision = 2/3 = 0.67, Recall = 2/2 = 1.0, F1 = 0.67
+- Precision = 2/3 = 0.67, Recall = 2/2 = 1.0, F1 = 2 × 0.67 × 1.0 / (0.67 + 1.0) = 0.8
 
 ### Scoring Examples
 
@@ -482,38 +415,7 @@ Got:       [weather_check(location="London")]
 F1 Score: 0.0 (no match, arguments must be exact)
 ```
 
-### Legacy API (Deprecated)
-
-!!! warning "Deprecation Notice"
-    The legacy `ToolCallF1` from `ragas.metrics` is deprecated and will be removed in v1.0. Please migrate to `ragas.metrics.collections.ToolCallF1` which provides the same functionality with a modern API.
-
-The legacy API can still be used but requires `MultiTurnSample`:
-
-```python
-from ragas.metrics import ToolCallF1  # Legacy import
-from ragas.dataset_schema import MultiTurnSample
-from ragas.messages import HumanMessage, AIMessage, ToolCall
-
-sample = MultiTurnSample(
-    user_input=[
-        HumanMessage(content="What's the weather like in Paris today?"),
-        AIMessage(
-            content="Let me check that for you.",
-            tool_calls=[ToolCall(name="weather_check", args={"location": "Paris"})],
-        ),
-    ],
-    reference_tool_calls=[
-        ToolCall(name="weather_check", args={"location": "Paris"}),
-    ],
-)
-
-scorer = ToolCallF1()
-score = await scorer.multi_turn_ascore(sample)
-```
-
-
 ## Agent Goal Accuracy
-
 
 Agent goal accuracy is a metric that can be used to evaluate the performance of the LLM in identifying and achieving the goals of the user. This is a binary metric, with 1 indicating that the AI has achieved the goal and 0 indicating that the AI has not achieved the goal.
 
@@ -646,28 +548,4 @@ if __name__ == "__main__":
 Output
 ```
 Agent Goal Accuracy: 1.0
-```
-
-### Legacy API (Deprecated)
-
-!!! warning "Deprecation Notice"
-    The legacy `AgentGoalAccuracyWithReference` and `AgentGoalAccuracyWithoutReference` from `ragas.metrics` are deprecated and will be removed in v1.0. Please migrate to `ragas.metrics.collections` which provides the same functionality with a modern API.
-
-The legacy API can still be used but requires `MultiTurnSample`:
-
-```python
-from ragas.dataset_schema import MultiTurnSample
-from ragas.messages import AIMessage, HumanMessage, ToolCall, ToolMessage
-from ragas.metrics import AgentGoalAccuracyWithReference  # Legacy import
-from ragas.llms import llm_factory
-from openai import OpenAI
-
-evaluator_llm = llm_factory("gpt-6-luna", client=OpenAI())
-
-sample = MultiTurnSample(
-    user_input=[...],  # conversation messages
-    reference="Table booked at one of the chinese restaurants at 8 pm",
-)
-scorer = AgentGoalAccuracyWithReference(llm=evaluator_llm)
-score = await scorer.multi_turn_ascore(sample)
 ```

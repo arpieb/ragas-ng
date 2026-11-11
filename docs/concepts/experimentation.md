@@ -257,7 +257,10 @@ async def robust_experiment(row):
 Experiments work seamlessly with Ragas metrics:
 
 ```python
-from ragas.metrics import FactualCorrectness
+from ragas.llms import llm_factory
+from ragas.metrics.collections import FactualCorrectness
+
+factual_correctness = FactualCorrectness(llm=llm_factory("gpt-6-luna"))
 
 
 @experiment()
@@ -265,7 +268,7 @@ async def evaluated_experiment(row):
     response = await my_system_function(row["input"])
 
     # Calculate metrics inline
-    factual_score = FactualCorrectness().score(
+    factual_score = await factual_correctness.ascore(
         response=response, reference=row["expected_output"]
     )
 

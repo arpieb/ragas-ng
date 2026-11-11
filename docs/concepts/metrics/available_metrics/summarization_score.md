@@ -34,13 +34,11 @@ $$
 ### Example
 
 ```python
-from openai import AsyncOpenAI
 from ragas.llms import llm_factory
 from ragas.metrics.collections import SummaryScore
 
 # Setup LLM
-client = AsyncOpenAI()
-llm = llm_factory("gpt-6-luna", client=client)
+llm = llm_factory("gpt-6-luna")
 
 # Create metric
 scorer = SummaryScore(llm=llm)
@@ -67,35 +65,3 @@ Summary Score: 0.6423387096775146
     ```python
     result = scorer.score(reference_contexts=[...], response="...")
     ```
-
-
-## Legacy Metrics API
-
-The following examples use the legacy metrics API pattern. For new projects, we recommend using the collections-based API shown above.
-
-!!! warning "Deprecation Timeline"
-    This API will be deprecated in version 0.4 and removed in version 1.0. Please migrate to the collections-based API shown above.
-
-### Example with SingleTurnSample
-
-```python
-from ragas.dataset_schema import SingleTurnSample
-from ragas.metrics import SummarizationScore
-
-
-sample = SingleTurnSample(
-    response="A company is launching a fitness tracking app that helps users set exercise goals, log meals, and track water intake, with personalized workout suggestions and motivational reminders.",
-    reference_contexts=[
-        "A company is launching a new product, a smartphone app designed to help users track their fitness goals. The app allows users to set daily exercise targets, log their meals, and track their water intake. It also provides personalized workout recommendations and sends motivational reminders throughout the day."
-    ],
-)
-
-scorer = SummarizationScore(llm=evaluator_llm)
-await scorer.single_turn_ascore(sample)
-```
-
-Output:
-
-```
-0.6423387096775146
-```

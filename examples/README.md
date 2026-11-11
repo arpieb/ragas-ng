@@ -56,7 +56,7 @@ Standalone scripts in this folder:
 
 - `iterate_prompt/`: the [prompt iteration guide](../docs/howtos/applications/iterate_prompt.md) example.
 - `gdrive_backend_example.py`, `gdrive_append_example.py`: datasets stored in Google Sheets. See [Storage backends](../docs/howtos/customizations/storage_backends.md#google-drive).
-- `oci_genai_example.py`: Oracle Cloud Infrastructure Generative AI models with `evaluate()`. See the [OCI guide](../docs/howtos/integrations/oci_genai.md).
+- `oci_genai_example.py`: Oracle Cloud Infrastructure Generative AI models through LiteLLM (`llm_factory("oci/...")`) with `evaluate()`. See the [OCI guide](../docs/howtos/integrations/oci_genai.md).
 
 ## Running an example
 

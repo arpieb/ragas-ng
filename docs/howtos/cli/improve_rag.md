@@ -240,9 +240,9 @@ rag = RAG(llm_client=client, retriever=retriever, model="claude-sonnet-5-5")
 Evaluate additional aspects:
 
 ```python
-from ragas.metrics import NumericalMetric
+from ragas.metrics import NumericMetric
 
-completeness = NumericalMetric(
+completeness = NumericMetric(
     name="completeness",
     prompt="""How complete is the response (1-5)?
     Question: {question}
@@ -252,11 +252,17 @@ completeness = NumericalMetric(
     allowed_values=(1, 5),
 )
 
-# Add to experiment
+# Inside evaluate_rag(), next to the correctness score
+completeness_score = await completeness.ascore(
+    question=question,
+    expected_answer=row["expected_answer"],
+    response=model_response,
+    llm=llm,
+)
 result = {
     **row,
-    "correctness": correctness_score.value,
-    "completeness": completeness.score(...).value,
+    "correctness_score": score.value,
+    "completeness_score": completeness_score.value,
 }
 ```
 

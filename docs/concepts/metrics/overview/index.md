@@ -54,41 +54,68 @@ Example:
 
 &nbsp;&nbsp;&nbsp;&nbsp; **LLM-based metrics**: These metrics use LLM underneath to do the evaluation. There might be one or more LLM calls that are performed to arrive at the score or result. These metrics can be somewhat non-deterministic as the LLM might not always return the same result for the same input. On the other hand, these metrics has shown to be more accurate and closer to human evaluation.
 
-All LLM based metrics in ragas are inherited from `MetricWithLLM` class. These metrics expects a LLM object to be set before scoring.
+The ready-made metrics live in `ragas.metrics.collections`. An LLM-based metric takes its LLM (and, if it needs one, its embedding model) when you construct it:
 
 ```python
-from ragas.metrics import FactualCorrectness
+from ragas.llms import llm_factory
+from ragas.metrics.collections import FactualCorrectness
 
-scorer = FactualCorrectness(llm=evaluation_llm)
+llm = llm_factory("gpt-6-luna")
+scorer = FactualCorrectness(llm=llm)
 ```
 
-Each LLM based metrics also will have prompts associated with it written using [Prompt Object](./../../components/prompt.md). You can customize these prompts to suit your domain and use-case. Learn more in the [Modifying Prompts in Metrics](../../../howtos/customizations/metrics/modifying-prompts-metrics.md) guide.
+Each LLM based metric also has prompts associated with it, written using the [Prompt Object](./../../components/prompt.md). `scorer.get_prompts()` returns them by name and `scorer.set_prompts(...)` replaces them, so you can customize them to suit your domain and use-case. Learn more in the [Modifying Prompts in Metrics](../../../howtos/customizations/metrics/modifying-prompts-metrics.md) guide.
 
 
-&nbsp;&nbsp;&nbsp;&nbsp; **Non-LLM-based metrics**: These metrics do not use LLM underneath to do the evaluation. These metrics are deterministic and can be used to evaluate the performance of the AI application without using LLM. These metrics rely on traditional methods to evaluate the performance of the AI application, such as string similarity, BLEU score, etc. Due to the same, these metrics are known to have a lower correlation with human evaluation.
+&nbsp;&nbsp;&nbsp;&nbsp; **Non-LLM-based metrics**: These metrics do not use LLM underneath to do the evaluation. These metrics are deterministic and can be used to evaluate the performance of the AI application without using LLM. These metrics rely on traditional methods to evaluate the performance of the AI application, such as string similarity, BLEU score, etc. Due to the same, these metrics are known to have a lower correlation with human evaluation. They are constructed without an LLM:
 
-All Non-LLM-based metrics in ragas are inherited from `Metric` class.
+```python
+from ragas.metrics.collections import BleuScore
+
+scorer = BleuScore()
+```
+
+All metrics in `ragas.metrics.collections` share one interface, from their `BaseMetric` base class: score one sample with `await scorer.ascore(...)` (or `scorer.score(...)` from synchronous code), passing the sample's fields as keyword arguments. Each metric's `ascore()` signature names the fields it needs. The result is a `MetricResult`, with the score in `.value` and, for LLM-judged metrics, an explanation in `.reason`.
+
+```python
+result = await scorer.ascore(
+    response="The Eiffel Tower is located in Paris.",
+    reference="The Eiffel Tower is located in Paris. It has a height of 1000ft.",
+)
+print(result.value)
+```
 
 **Metrics can be broadly classified into two categories based on the type of data they evaluate**:
 
-&nbsp;&nbsp;&nbsp;&nbsp; **Single turn metrics**: These metrics evaluate the performance of the AI application based on a single turn of interaction between the user and the AI. All metrics in ragas that supports single turn evaluation are inherited from [SingleTurnMetric][ragas.metrics.base.SingleTurnMetric] class and scored using `single_turn_ascore` method. It also expects a [Single Turn Sample][ragas.dataset_schema.SingleTurnSample] object as input.
+&nbsp;&nbsp;&nbsp;&nbsp; **Single turn metrics**: These metrics evaluate the performance of the AI application based on a single turn of interaction between the user and the AI. They take the turn's fields as strings and lists of strings, such as `user_input`, `response`, `retrieved_contexts` and `reference`.
 
 ```python
-from ragas.metrics import FactualCorrectness
+from ragas.metrics.collections import FactualCorrectness
 
-scorer = FactualCorrectness()
-await scorer.single_turn_ascore(sample)
+scorer = FactualCorrectness(llm=llm)
+result = await scorer.ascore(
+    response="The Eiffel Tower is in Paris.",
+    reference="The Eiffel Tower is in Paris, France.",
+)
 ```
 
-&nbsp;&nbsp;&nbsp;&nbsp; **Multi-turn metrics**: These metrics evaluate the performance of the AI application based on multiple turns of interaction between the user and the AI. All metrics in ragas that supports multi turn evaluation are inherited from [MultiTurnMetric][ragas.metrics.base.MultiTurnMetric] class and scored using `multi_turn_ascore` method. It also expects a [Multi Turn Sample][ragas.dataset_schema.MultiTurnSample] object as input.
+&nbsp;&nbsp;&nbsp;&nbsp; **Multi-turn metrics**: These metrics evaluate the performance of the AI application based on multiple turns of interaction between the user and the AI. They take the conversation as `user_input`, a list of `HumanMessage`, `AIMessage` and `ToolMessage` objects from `ragas.messages`.
 
 ```python
-from ragas.metrics import AgentGoalAccuracy
-from ragas import MultiTurnSample
+from ragas.messages import AIMessage, HumanMessage
+from ragas.metrics.collections import AgentGoalAccuracyWithReference
 
-scorer = AgentGoalAccuracy()
-await scorer.multi_turn_ascore(sample)
+scorer = AgentGoalAccuracyWithReference(llm=llm)
+result = await scorer.ascore(
+    user_input=[
+        HumanMessage(content="Book a table for two at 7pm."),
+        AIMessage(content="Your table for two at 7pm is booked."),
+    ],
+    reference="A table for two is booked at 7pm.",
+)
 ```
+
+To score a whole dataset, pass the metrics to `evaluate(dataset, metrics=[...])`. Each sample's fields are passed to `ascore()` by name.
 
 ### Output Types
 

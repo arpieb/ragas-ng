@@ -45,7 +45,7 @@ from ragas.metrics import Faithfulness
 # preffered way
 faithfulness_metric = Faithfulness(llm=your_evaluator_llm)
 ```
-Second is that `metrics.ascore` is now being deprecated in favor of [`metrics.single_score`][ragas.metrics.base.SingleTurnMetric.single_turn_ascore] . You can make the transition as such
+Second is that `metrics.ascore` is now being deprecated in favor of `metrics.single_turn_ascore` . You can make the transition as such
 
 ```python
 # create a Single Turn Sample

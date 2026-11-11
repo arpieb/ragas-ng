@@ -14,13 +14,11 @@ Use `DomainSpecificRubrics` when you want to apply the same evaluation criteria 
 ### Example
 
 ```python
-from openai import AsyncOpenAI
 from ragas.llms.base import llm_factory
 from ragas.metrics.collections import DomainSpecificRubrics
 
 # Setup
-client = AsyncOpenAI()
-llm = llm_factory("gpt-6-luna", client=client)
+llm = llm_factory("gpt-6-luna")
 
 # Reference-free evaluation (default)
 metric = DomainSpecificRubrics(llm=llm)
@@ -123,13 +121,11 @@ Use `InstanceSpecificRubrics` when different samples require different evaluatio
 ### Example
 
 ```python
-from openai import AsyncOpenAI
 from ragas.llms.base import llm_factory
 from ragas.metrics.collections import InstanceSpecificRubrics
 
 # Setup
-client = AsyncOpenAI()
-llm = llm_factory("gpt-6-luna", client=client)
+llm = llm_factory("gpt-6-luna")
 
 metric = InstanceSpecificRubrics(llm=llm)
 
@@ -185,57 +181,36 @@ result = await metric.ascore(
 
 ---
 
-## Legacy API
+## Evaluating a Dataset
 
-!!! warning "Deprecated"
-    The legacy API below is deprecated. Please use `ragas.metrics.collections.DomainSpecificRubrics` or `ragas.metrics.collections.InstanceSpecificRubrics` instead.
+Both metrics work with `evaluate()`, which passes each sample's columns to `ascore()` by name:
 
 ```python
-from ragas import evaluate
-from datasets import Dataset
+from ragas import EvaluationDataset, evaluate
+from ragas.metrics.collections import (
+    RubricsScoreWithoutReference,
+    RubricsScoreWithReference,
+)
 
-from ragas.metrics import rubrics_score_without_reference, rubrics_score_with_reference
-
-rows = {
-    "question": [
-        "What's the longest river in the world?",
-    ],
-    "ground_truth": [
-        "The Nile is a major north-flowing river in northeastern Africa.",
-    ],
-    "answer": [
-        "The longest river in the world is the Nile, stretching approximately 6,650 kilometers (4,130 miles) through northeastern Africa.",
-    ],
-    "contexts": [
-        [
-            "Scientists debate whether the Amazon or the Nile is the longest river in the world.",
-            "The Nile River was central to the Ancient Egyptians' rise to wealth and power.",
-        ],
-    ],
-}
-
-dataset = Dataset.from_dict(rows)
+dataset = EvaluationDataset.from_list(
+    [
+        {
+            "user_input": "What's the longest river in the world?",
+            "response": "The longest river in the world is the Nile, stretching approximately 6,650 kilometers (4,130 miles) through northeastern Africa.",
+            "reference": "The Nile is a major north-flowing river in northeastern Africa.",
+            "retrieved_contexts": [
+                "Scientists debate whether the Amazon or the Nile is the longest river in the world.",
+                "The Nile River was central to the Ancient Egyptians' rise to wealth and power.",
+            ],
+        }
+    ]
+)
 
 result = evaluate(
     dataset,
-    metrics=[rubrics_score_without_reference, rubrics_score_with_reference],
+    metrics=[
+        RubricsScoreWithoutReference(llm=llm),
+        RubricsScoreWithReference(llm=llm),
+    ],
 )
 ```
-
-Custom rubrics with legacy API:
-
-```python
-from ragas.metrics._domain_specific_rubrics import RubricsScore
-
-my_custom_rubrics = {
-    "score1_description": "answer and ground truth are completely different",
-    "score2_description": "answer and ground truth are somewhat different",
-    "score3_description": "answer and ground truth are somewhat similar",
-    "score4_description": "answer and ground truth are similar",
-    "score5_description": "answer and ground truth are exactly the same",
-}
-
-rubrics_score = RubricsScore(rubrics=my_custom_rubrics)
-```
-
-
