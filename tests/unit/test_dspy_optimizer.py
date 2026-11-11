@@ -31,7 +31,7 @@ class TestDSPyOptimizer:
     @pytest.mark.skipif(DSPY_AVAILABLE, reason="dspy-ai is installed")
     def test_import_error_without_dspy(self):
         """Test that DSPyOptimizer raises ImportError when dspy-ai is not installed."""
-        with pytest.raises(ImportError, match="DSPy optimizer requires dspy-ai"):
+        with pytest.raises(ImportError, match="DSPy optimizer requires dspy\\b"):
             from ragas.optimizers.dspy_optimizer import DSPyOptimizer
 
             DSPyOptimizer()
