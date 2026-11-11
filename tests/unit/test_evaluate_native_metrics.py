@@ -258,17 +258,9 @@ def test_a_metric_with_its_own_llm_does_not_build_the_default(monkeypatch):
     assert run(single_turn(1), [critic])["answers"] == [1.0]
 
 
-def test_a_legacy_llm_for_a_prompt_metric_is_rejected_up_front():
-    from ragas.llms.base import BaseRagasLLM
-
-    class Legacy(BaseRagasLLM):
-        def generate_text(self, *a, **k): ...  # pragma: no cover
-        async def agenerate_text(self, *a, **k): ...  # pragma: no cover
-        def is_finished(self, response):  # pragma: no cover
-            return True
-
-    with pytest.raises(TypeError, match="InstructorBaseRagasLLM"):
-        run(single_turn(1), [numeric()], llm=Legacy())
+def test_a_non_ragas_llm_for_a_prompt_metric_is_rejected_up_front():
+    with pytest.raises(TypeError, match="llm_factory"):
+        run(single_turn(1), [numeric()], llm=object())
 
 
 def test_a_decorated_metric_gets_sample_fields_and_the_llm():
@@ -334,18 +326,3 @@ def test_default_metrics_are_collections_metrics_built_with_the_runs_models():
     ]
     assert all(m.llm is llm for m in metrics)
     assert isinstance(metrics[0].embeddings, BaseRagasEmbedding)
-
-
-def test_default_metrics_for_a_legacy_llm_are_the_hand_off_classes():
-    from ragas.evaluation import _default_metrics_for, _Models
-    from ragas.llms.base import BaseRagasLLM
-    from ragas.metrics._legacy_handoff import _CollectionsHandoff
-
-    class Legacy(BaseRagasLLM):
-        def generate_text(self, *a, **k): ...  # pragma: no cover
-        async def agenerate_text(self, *a, **k): ...  # pragma: no cover
-        def is_finished(self, response):  # pragma: no cover
-            return True
-
-    metrics = _default_metrics_for(_Models(Legacy(), None))
-    assert all(isinstance(m, _CollectionsHandoff) for m in metrics)

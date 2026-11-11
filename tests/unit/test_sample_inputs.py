@@ -1,16 +1,8 @@
-"""``evaluate()`` accepts ragas.metrics.collections metrics.
+"""``evaluate()`` runs ragas.metrics.collections metrics through their signature.
 
-The two metric systems never met. ``evaluate()`` drives the legacy ``Metric``
-protocol; a collections metric is a ``SimpleBaseMetric`` with only
-``ascore(**kwargs)``, so it was rejected outright:
-
-    TypeError: All metrics must be initialised metric objects
-
-That mattered because every legacy metric warns that it moves to collections in
-v1.0, while collections metrics could not be used with the main entry point.
-
-The bridge is generic -- it reads ``ascore``'s signature and maps sample fields
-onto the call -- so these tests pin the behaviour that makes it generic, not any
+A collections metric is a ``SimpleBaseMetric`` with only ``ascore(**kwargs)``.
+``ragas.metrics.sample_inputs`` reads that signature and maps sample fields
+onto the call, so these tests pin the behaviour that makes it generic, not any
 one metric.
 """
 
@@ -27,17 +19,9 @@ from ragas.dataset_schema import MultiTurnSample as MTS, SingleTurnSample as STS
 from ragas.llms.base import InstructorLLM
 from ragas.messages import AIMessage, HumanMessage, ToolCall
 from ragas.metrics import collections as collections_module
-from ragas.metrics._collections_bridge import (
-    _as_score,
-    adapt_collections_metric,
-)
-from ragas.metrics.base import (
-    Metric,
-    MultiTurnMetric,
-    SimpleBaseMetric,
-    SingleTurnMetric,
-)
+from ragas.metrics.base import SimpleBaseMetric
 from ragas.metrics.result import MetricResult
+from ragas.metrics.sample_inputs import _as_score, input_spec
 
 
 def collections_classes():
@@ -98,51 +82,35 @@ class TestAdapterCoverage:
         )
 
 
-class TestAdaptation:
-    def test_adapter_is_a_legacy_metric(self, llm):
-        from ragas.metrics.collections import ContextRecall
-
-        adapter = adapt_collections_metric(ContextRecall(llm=llm))
-        assert isinstance(adapter, Metric)
-        assert isinstance(adapter, SingleTurnMetric)
-        assert not isinstance(adapter, MultiTurnMetric)
-
-    def test_name_is_preserved(self, llm):
-        """Result columns are keyed by name; a renamed metric would break them."""
-        from ragas.metrics.collections import ContextRecall
-
-        assert adapt_collections_metric(ContextRecall(llm=llm)).name == "context_recall"
-
+class TestInputSpec:
     def test_required_columns_come_from_the_signature(self, llm):
         from ragas.metrics.collections import ContextRecall
 
-        adapter = adapt_collections_metric(ContextRecall(llm=llm))
-        assert adapter.required_columns["SINGLE_TURN"] == {
+        spec = input_spec(ContextRecall(llm=llm))
+        assert spec.required_columns() == {
             "user_input",
             "retrieved_contexts",
             "reference",
         }
+        assert spec.single_turn and not spec.multi_turn
 
     def test_optional_parameters_are_not_required(self, llm):
         """DomainSpecificRubrics takes everything optionally; nothing is demanded."""
         from ragas.metrics.collections import DomainSpecificRubrics
 
-        adapter = adapt_collections_metric(DomainSpecificRubrics(llm=llm))
-        assert adapter.required_columns.get("SINGLE_TURN", set()) == set()
+        assert input_spec(DomainSpecificRubrics(llm=llm)).required_columns() == set()
 
-    def test_multi_turn_metric_adapts_to_multi_turn(self):
+    def test_multi_turn_metric_is_multi_turn_only(self):
         from ragas.metrics.collections import ToolCallAccuracy
 
-        adapter = adapt_collections_metric(ToolCallAccuracy())
-        assert isinstance(adapter, MultiTurnMetric)
-        assert not isinstance(adapter, SingleTurnMetric)
+        spec = input_spec(ToolCallAccuracy())
+        assert spec.multi_turn and not spec.single_turn
 
-    def test_metric_valid_for_both_sample_types_adapts_to_both(self, llm):
+    def test_metric_valid_for_both_sample_types_supports_both(self, llm):
         from ragas.metrics.collections import AgentGoalAccuracyWithoutReference
 
-        adapter = adapt_collections_metric(AgentGoalAccuracyWithoutReference(llm=llm))
-        assert isinstance(adapter, SingleTurnMetric)
-        assert isinstance(adapter, MultiTurnMetric)
+        spec = input_spec(AgentGoalAccuracyWithoutReference(llm=llm))
+        assert spec.single_turn and spec.multi_turn
 
     def test_unmappable_signature_is_rejected_with_guidance(self):
         class Weird(SimpleBaseMetric):
@@ -153,7 +121,7 @@ class TestAdaptation:
                 ...  # pragma: no cover - not called
 
         with pytest.raises(ValueError, match="not_a_sample_field"):
-            adapt_collections_metric(Weird(name="weird"))
+            input_spec(Weird(name="weird"))
 
 
 class TestEvaluateAcceptsCollectionsMetrics:
@@ -164,10 +132,8 @@ class TestEvaluateAcceptsCollectionsMetrics:
         result = evaluate(single_turn_dataset, metrics=[metric])
         assert result["context_recall"] == [0.8, 0.8, 0.8]
 
-    def test_legacy_and_collections_metrics_together(self, llm, single_turn_dataset):
-        """Nobody migrates everything at once."""
-        from ragas.metrics import BleuScore
-        from ragas.metrics.collections import ContextRecall
+    def test_llm_and_non_llm_metrics_together(self, llm, single_turn_dataset):
+        from ragas.metrics.collections import BleuScore, ContextRecall
 
         metric = fixed_score(ContextRecall(llm=llm), 0.9)
         result = evaluate(single_turn_dataset, metrics=[metric, BleuScore()])
@@ -176,7 +142,7 @@ class TestEvaluateAcceptsCollectionsMetrics:
         assert "bleu_score" in df.columns
 
     def test_traces_are_populated(self, llm, single_turn_dataset):
-        """EvaluationResult.traces must not go empty for adapted metrics."""
+        """EvaluationResult.traces must not go empty for collections metrics."""
         metric = fixed_score(
             __import__(
                 "ragas.metrics.collections", fromlist=["ContextRecall"]

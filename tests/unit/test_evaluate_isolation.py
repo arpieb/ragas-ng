@@ -1,6 +1,6 @@
 """evaluate() leaves the caller's metrics and LLMs untouched (#76).
 
-It used to fill in ``metric.llm`` / ``metric.embeddings``, set its RunConfig
+The legacy path used to fill in ``metric.llm`` / ``metric.embeddings``, set its RunConfig
 and token collector on the metric's LLM, and reset it all in ``finally``.
 Two runs sharing a metric or an LLM -- threads, a web server, a notebook --
 then used each other's LLM, lost theirs mid-run ("NoneType has no attribute
@@ -80,12 +80,10 @@ def dataset(n: int = 1) -> EvaluationDataset:
     )
 
 
-def shared_metric():
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        from ragas.metrics import ContextEntityRecall
+def shared_metric(llm):
+    from ragas.metrics.collections import ContextEntityRecall
 
-        return ContextEntityRecall()
+    return ContextEntityRecall(llm=llm)
 
 
 def run(results: t.Dict[str, t.Any], key: str, **kwargs):
@@ -103,23 +101,6 @@ def in_parallel(*jobs: t.Callable[[], None]):
     assert not any(th.is_alive() for th in threads)
 
 
-def test_concurrent_runs_on_a_shared_metric_use_their_own_llm():
-    gate = Gate()
-    metric = shared_metric()
-    reads_all = entity_llm(["ALPHA", "BETA"], gate)  # 1 of 2 entities -> 0.5
-    reads_alpha = entity_llm(["ALPHA"], gate)  # 1 of 1 -> 1.0
-    results: t.Dict[str, t.Any] = {}
-
-    in_parallel(
-        lambda: run(results, "a", dataset=dataset(), metrics=[metric], llm=reads_all),
-        lambda: run(results, "b", dataset=dataset(), metrics=[metric], llm=reads_alpha),
-    )
-
-    assert results["a"]["context_entity_recall"] == pytest.approx([0.5])
-    assert results["b"]["context_entity_recall"] == pytest.approx([1.0])
-    assert metric.llm is None
-
-
 def test_concurrent_runs_on_a_shared_llm_count_their_own_tokens():
     gate = Gate()
     llm = entity_llm(["ALPHA", "BETA"], gate)
@@ -133,7 +114,7 @@ def test_concurrent_runs_on_a_shared_llm_count_their_own_tokens():
             results,
             "one",
             dataset=dataset(1),
-            metrics=[shared_metric()],
+            metrics=[shared_metric(llm)],
             llm=llm,
             token_usage_parser=parser,
         ),
@@ -141,7 +122,7 @@ def test_concurrent_runs_on_a_shared_llm_count_their_own_tokens():
             results,
             "three",
             dataset=dataset(3),
-            metrics=[shared_metric()],
+            metrics=[shared_metric(llm)],
             llm=llm,
             token_usage_parser=parser,
         ),
@@ -164,7 +145,7 @@ def test_the_runs_config_applies_inside_the_run_and_does_not_stick():
         results,
         "r",
         dataset=dataset(),
-        metrics=[shared_metric()],
+        metrics=[shared_metric(llm)],
         llm=llm,
         run_config=rc,
     )
@@ -179,7 +160,7 @@ def test_without_a_run_config_the_llms_own_applies():
     llm.set_run_config(own)
     results: t.Dict[str, t.Any] = {}
 
-    run(results, "r", dataset=dataset(), metrics=[shared_metric()], llm=llm)
+    run(results, "r", dataset=dataset(), metrics=[shared_metric(llm)], llm=llm)
 
     assert all(c is own for c in llm.seen_configs)
 
@@ -191,7 +172,7 @@ def test_return_executor_jobs_keep_the_runs_config():
         warnings.simplefilter("ignore", DeprecationWarning)
         executor = evaluate(
             dataset(),
-            metrics=[shared_metric()],
+            metrics=[shared_metric(llm)],
             llm=llm,
             run_config=rc,
             show_progress=False,
@@ -203,29 +184,33 @@ def test_return_executor_jobs_keep_the_runs_config():
 
 
 def test_metric_objects_are_not_modified():
-    metric = shared_metric()
     llm = entity_llm(["ALPHA", "BETA"])
+    metric = shared_metric(llm)
     before = dict(metric.__dict__)
     results: t.Dict[str, t.Any] = {}
-    run(results, "r", dataset=dataset(), metrics=[metric], llm=llm)
-    assert metric.llm is None
+    run(results, "r", dataset=dataset(), metrics=[metric], llm=entity_llm(["BETA"]))
+    assert metric.llm is llm
     assert {k: v for k, v in metric.__dict__.items() if not k.startswith("_")} == {
         k: v for k, v in before.items() if not k.startswith("_")
     }
 
 
-def test_default_metrics_are_fresh_hand_off_instances():
-    from ragas.evaluation import _default_metrics
-    from ragas.metrics._legacy_handoff import _CollectionsHandoff
+def test_default_metrics_are_fresh_collections_instances():
+    from unittest.mock import MagicMock
 
-    first, second = _default_metrics(), _default_metrics()
+    from ragas.embeddings.base import BaseRagasEmbedding
+    from ragas.evaluation import _default_metrics_for, _Models
+    from ragas.metrics.collections.base import BaseMetric
+
+    models = _Models(entity_llm([]), MagicMock(spec=BaseRagasEmbedding))
+    first, second = _default_metrics_for(models), _default_metrics_for(models)
     assert [m.name for m in first] == [
         "answer_relevancy",
         "context_precision",
         "faithfulness",
         "context_recall",
     ]
-    assert all(isinstance(m, _CollectionsHandoff) for m in first)
+    assert all(isinstance(m, BaseMetric) for m in first)
     assert all(a is not b for a, b in zip(first, second))
 
 

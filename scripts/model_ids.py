@@ -28,7 +28,7 @@ SCAN_FILES = ("README.md", "CLAUDE.md")
 SCAN_SUFFIXES = (".py", ".md", ".ipynb", ".txt")
 # Also updated by the replace script (they call real providers), but not
 # guarded: e2e tests are opt-in and may pin a model on purpose.
-EXTRA_REPLACE_DIRS = ("tests/e2e", "tests/utils", "tests/docs")
+EXTRA_REPLACE_DIRS = ("tests/e2e", "tests/docs")
 
 # Files where an old ID is correct as written.
 ALLOWED = {

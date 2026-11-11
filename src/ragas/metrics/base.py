@@ -8,42 +8,26 @@ import inspect
 import logging
 import typing as t
 from abc import ABC, abstractmethod
-from collections import Counter
 from dataclasses import dataclass, field
 from enum import Enum
 
-from ragas.async_utils import run
-from ragas.callbacks import CallbackGroup, ChainType, new_group, traced, use_group
-from ragas.dataset_schema import MultiTurnSample, SingleTurnSample
-from ragas.llms import BaseRagasLLM
+from ragas.callbacks import CallbackGroup, ChainType, traced, use_group
 from ragas.metrics.validators import AllowedValuesType
-from ragas.prompt import PromptMixin
-from ragas.run_config import RunConfig, in_run_scope
-from ragas.utils import camel_to_snake
 
 if t.TYPE_CHECKING:
     from pydantic import BaseModel
 
     from ragas.callbacks import Callbacks
     from ragas.dataset import Dataset
-    from ragas.embeddings import BaseRagasEmbedding, BaseRagasEmbeddings
+    from ragas.embeddings import BaseRagasEmbedding
+    from ragas.llms.base import InstructorBaseRagasLLM
     from ragas.metrics.result import MetricResult
     from ragas.prompt.simple_prompt import Prompt
 
-    # Type alias for embedding model parameters (union of old and new embedding interfaces)
-    EmbeddingModelType = t.Union[BaseRagasEmbedding, BaseRagasEmbeddings]
+    # Type alias for embedding model parameters
+    EmbeddingModelType = BaseRagasEmbedding
 
 logger = logging.getLogger(__name__)
-
-
-VALID_COLUMNS = [
-    "user_input",
-    "retrieved_contexts",
-    "reference_contexts",
-    "response",
-    "reference",
-    "rubric",
-]
 
 
 class MetricType(Enum):
@@ -67,398 +51,6 @@ class MetricOutputType(Enum):
     DISCRETE = "discrete"
     CONTINUOUS = "continuous"
     RANKING = "ranking"
-
-
-@dataclass
-class Metric(ABC):
-    """
-    Abstract base class for metrics in Ragas.
-
-    Attributes
-    ----------
-    name : str
-        The name of the metric.
-    required_columns : Dict[str, Set[str]]
-        A dictionary mapping metric type names to sets of required column names. This is
-        a property and raises `ValueError` if columns are not in `VALID_COLUMNS`.
-    """
-
-    _required_columns: t.Dict[MetricType, t.Set[str]] = field(default_factory=dict)
-    name: str = field(default="", repr=True)
-
-    def __post_init__(self):
-        if self.name == "":
-            self.name = camel_to_snake(self.__class__.__name__)
-
-    @property
-    def required_columns(self) -> t.Dict[str, t.Set[str]]:
-        required_columns = {}
-        # ignore any value that contains marker suffixes like ":optional" or ":ignored"
-        for k, v in self._required_columns.items():
-            required_columns[k.name] = {
-                column
-                for column in v
-                if not column.endswith(":optional") and not column.endswith(":ignored")
-            }
-        return required_columns
-
-    @required_columns.setter
-    def required_columns(self, required_columns: t.Dict[MetricType, t.Set[str]]):
-        rc = {}
-        for metric_type, columns in required_columns.items():
-            for column in columns:
-                base_column = column.split(":")[0]
-                if base_column not in VALID_COLUMNS:
-                    raise ValueError(
-                        f"Invalid column '{column}'. Base column '{base_column}' must be one of {VALID_COLUMNS}"
-                    )
-            rc[metric_type] = columns
-        self._required_columns = rc
-
-    def get_required_columns(
-        self, with_optional: bool = False
-    ) -> t.Dict[str, t.Set[str]]:
-        if with_optional:
-            # get all the required columns with optional columns, remove the optional suffix
-            required_columns = {}
-            for k, v in self._required_columns.items():
-                # if any column ends with ":optional", add it to the required columns after removing the suffix
-                # if any column ends with ":ignored", do not include it
-                required_columns[k.name] = set()
-                for column in v:
-                    if column.endswith(":ignored"):
-                        continue
-                    if column.endswith(":optional"):
-                        required_columns[k.name].add(column[: -len(":optional")])
-                    else:
-                        required_columns[k.name].add(column)
-            return required_columns
-        else:
-            return self.required_columns
-
-    @abstractmethod
-    def init(self, run_config: RunConfig) -> None:
-        """
-        Initialize the metric with the given run configuration.
-
-        Parameters
-        ----------
-        run_config : RunConfig
-            Configuration for the metric run including timeouts and other settings.
-        """
-        ...
-
-
-@dataclass
-class MetricWithLLM(Metric, PromptMixin):
-    """
-    A metric class that uses a language model for evaluation.
-
-    Attributes
-    ----------
-    llm : Optional[BaseRagasLLM]
-        The language model used for the metric. Both BaseRagasLLM and InstructorBaseRagasLLM
-        are accepted at runtime via duck typing (both have compatible methods).
-    """
-
-    llm: t.Optional[BaseRagasLLM] = None
-    output_type: t.Optional[MetricOutputType] = None
-
-    def init(self, run_config: RunConfig) -> None:
-        """
-        Initialize the metric with run configuration and validate LLM is present.
-
-        Parameters
-        ----------
-        run_config : RunConfig
-            Configuration for the metric run.
-
-        Raises
-        ------
-        ValueError
-            If no LLM is provided to the metric.
-        """
-        if self.llm is None:
-            raise ValueError(
-                f"Metric '{self.name}' has no valid LLM provided (self.llm is None). Please instantiate the metric with an LLM to run."
-            )
-        # Both BaseRagasLLM and InstructorBaseRagasLLM take retry settings (#73).
-        # Inside evaluate() the run scope supplies them; setting them on the
-        # (possibly shared) LLM would leak into other runs (#76).
-        if hasattr(self.llm, "set_run_config") and not in_run_scope():
-            self.llm.set_run_config(run_config)
-
-
-@dataclass
-class MetricWithEmbeddings(Metric):
-    embeddings: t.Optional[t.Union[BaseRagasEmbeddings, BaseRagasEmbedding]] = None
-
-    def init(self, run_config: RunConfig):
-        if self.embeddings is None:
-            raise ValueError(
-                f"Metric '{self.name}' has no valid embeddings provided (self.embeddings is None). Please initantiate a the metric with an embeddings to run."  # noqa
-            )
-        # Only legacy BaseRagasEmbeddings has set_run_config method. Inside
-        # evaluate() the run scope supplies it instead (#76).
-        if hasattr(self.embeddings, "set_run_config") and not in_run_scope():
-            self.embeddings.set_run_config(run_config)  # type: ignore[attr-defined]
-
-
-class SingleTurnMetric(Metric):
-    """
-    A metric class for evaluating single-turn interactions.
-
-    This class provides methods to score single-turn samples, both synchronously and asynchronously.
-    """
-
-    def _only_required_columns_single_turn(
-        self, sample: SingleTurnSample
-    ) -> SingleTurnSample:
-        """
-        Simplify the sample to only include the required columns.
-        """
-        required_columns = self.get_required_columns(with_optional=True).get(
-            MetricType.SINGLE_TURN.name, set()
-        )
-        if not required_columns:
-            return sample
-        return SingleTurnSample(**sample.model_dump(include=required_columns))
-
-    def single_turn_score(
-        self,
-        sample: SingleTurnSample,
-        callbacks: Callbacks = None,
-    ) -> float:
-        """
-        Synchronously score a single-turn sample.
-
-        Works with or without a running event loop (e.g. Jupyter).
-        """
-        callbacks = callbacks or []
-        # only get the required columns
-        sample = self._only_required_columns_single_turn(sample)
-        rm, group_cm = new_group(
-            self.name,
-            inputs=sample.to_dict(),
-            callbacks=callbacks,
-            metadata={"type": ChainType.METRIC},
-        )
-
-        async def _async_wrapper():
-            try:
-                result = await self._single_turn_ascore(
-                    sample=sample, callbacks=group_cm
-                )
-            except Exception as e:
-                if not group_cm.ended:
-                    rm.on_chain_error(e)
-                raise e
-            else:
-                if not group_cm.ended:
-                    rm.on_chain_end({"output": result})
-                return result
-
-        score = run(_async_wrapper)
-
-        return score
-
-    async def single_turn_ascore(
-        self,
-        sample: SingleTurnSample,
-        callbacks: Callbacks = None,
-        timeout: t.Optional[float] = None,
-    ) -> float:
-        """
-        Asynchronously score a single-turn sample with an optional timeout.
-
-        May raise asyncio.TimeoutError if the scoring process exceeds the specified timeout.
-        """
-        callbacks = callbacks or []
-        # only get the required columns
-        sample = self._only_required_columns_single_turn(sample)
-        rm, group_cm = new_group(
-            self.name,
-            inputs=sample.to_dict(),
-            callbacks=callbacks,
-            metadata={"type": ChainType.METRIC},
-        )
-        try:
-            score = await asyncio.wait_for(
-                self._single_turn_ascore(sample=sample, callbacks=group_cm),
-                timeout=timeout,
-            )
-        except Exception as e:
-            if not group_cm.ended:
-                rm.on_chain_error(e)
-            raise e
-        else:
-            if not group_cm.ended:
-                rm.on_chain_end({"output": score})
-
-        return score
-
-    @abstractmethod
-    async def _single_turn_ascore(
-        self,
-        sample: SingleTurnSample,
-        callbacks: Callbacks,
-    ) -> float:
-        """
-        Abstract method to be implemented by subclasses for actual scoring logic.
-        """
-        ...
-
-
-class MultiTurnMetric(Metric):
-    """
-    A metric class for evaluating multi-turn conversations.
-
-    This class extends the base Metric class to provide functionality
-    for scoring multi-turn conversation samples.
-    """
-
-    def _only_required_columns_multi_turn(
-        self, sample: MultiTurnSample
-    ) -> MultiTurnSample:
-        """
-        Simplify the sample to only include the required columns.
-        """
-        required_columns = self.get_required_columns(with_optional=True).get(
-            MetricType.MULTI_TURN.name, set()
-        )
-        if not required_columns:
-            return sample
-        return MultiTurnSample(**sample.model_dump(include=required_columns))
-
-    def multi_turn_score(
-        self,
-        sample: MultiTurnSample,
-        callbacks: Callbacks = None,
-    ) -> float:
-        """
-        Score a multi-turn conversation sample synchronously.
-
-        Works with or without a running event loop (e.g. Jupyter).
-        """
-        callbacks = callbacks or []
-        sample = self._only_required_columns_multi_turn(sample)
-        rm, group_cm = new_group(
-            self.name,
-            inputs=sample.to_dict(),
-            callbacks=callbacks,
-            metadata={"type": ChainType.METRIC},
-        )
-
-        async def _async_wrapper():
-            try:
-                result = await self._multi_turn_ascore(
-                    sample=sample, callbacks=group_cm
-                )
-            except Exception as e:
-                if not group_cm.ended:
-                    rm.on_chain_error(e)
-                raise e
-            else:
-                if not group_cm.ended:
-                    rm.on_chain_end({"output": result})
-                return result
-
-        score = run(_async_wrapper)
-
-        return score
-
-    async def multi_turn_ascore(
-        self,
-        sample: MultiTurnSample,
-        callbacks: Callbacks = None,
-        timeout: t.Optional[float] = None,
-    ) -> float:
-        """
-        Score a multi-turn conversation sample asynchronously.
-
-        May raise asyncio.TimeoutError if the scoring process exceeds the specified timeout.
-        """
-        callbacks = callbacks or []
-        sample = self._only_required_columns_multi_turn(sample)
-
-        rm, group_cm = new_group(
-            self.name,
-            inputs=sample.to_dict(),
-            callbacks=callbacks,
-            metadata={"type": ChainType.METRIC},
-        )
-        try:
-            score = await asyncio.wait_for(
-                self._multi_turn_ascore(sample=sample, callbacks=group_cm),
-                timeout=timeout,
-            )
-        except Exception as e:
-            if not group_cm.ended:
-                rm.on_chain_error(e)
-            raise e
-        else:
-            if not group_cm.ended:
-                rm.on_chain_end({"output": score})
-
-        return score
-
-    @abstractmethod
-    async def _multi_turn_ascore(
-        self,
-        sample: MultiTurnSample,
-        callbacks: Callbacks,
-    ) -> float:
-        """
-        Abstract method to be implemented by subclasses for actual multi-turn scoring logic.
-        """
-        ...
-
-
-class Ensember:
-    """
-    Combine multiple llm outputs for same input (n>1) to a single output
-    """
-
-    def from_discrete(
-        self, inputs: list[list[t.Dict]], attribute: str
-    ) -> t.List[t.Dict]:
-        """
-        Simple majority voting for binary values, ie [0,0,1] -> 0
-        inputs: list of list of dicts each containing verdict for a single input
-        """
-
-        if not isinstance(inputs, list):
-            inputs = [inputs]
-
-        if not all(len(item) == len(inputs[0]) for item in inputs):
-            logger.warning("All inputs must have the same length")
-            return inputs[0]
-
-        if not all(attribute in item for input in inputs for item in input):
-            logger.warning(f"All inputs must have {attribute} attribute")
-            return inputs[0]
-
-        if len(inputs) == 1:
-            return inputs[0]
-
-        verdict_agg = []
-        for i in range(len(inputs[0])):
-            item = inputs[0][i]
-            verdicts = [inputs[k][i][attribute] for k in range(len(inputs))]
-            verdict_counts = dict(Counter(verdicts).most_common())
-            item[attribute] = list(verdict_counts.keys())[0]
-            verdict_agg.append(item)
-
-        return verdict_agg
-
-
-@t.runtime_checkable
-class ModeMetric(t.Protocol):
-    name: str
-    mode: str
-
-
-ensembler = Ensember()
 
 
 # Tracing for SimpleBaseMetric subclasses (#196): collections metrics and the
@@ -1172,7 +764,7 @@ class SimpleLLMMetric(SimpleBaseMetric):
         self,
         dataset: "Dataset",
         embedding_model: "EmbeddingModelType",
-        llm: "BaseRagasLLM",
+        llm: "InstructorBaseRagasLLM",
         test_size: float = 0.2,
         random_state: int = 42,
         **kwargs: t.Dict[str, t.Any],
@@ -1228,30 +820,11 @@ class SimpleLLMMetric(SimpleBaseMetric):
             if isinstance(similarity_threshold_val, (int, float, str))
             else 0.7
         )
-        # Convert BaseRagasEmbeddings to BaseRagasEmbedding if needed
-        if hasattr(embedding_model, "embed_query"):
-            # For legacy BaseRagasEmbeddings, we need to wrap it
-            # Create a wrapper that implements BaseRagasEmbedding interface
-            class EmbeddingWrapper:
-                def __init__(self, legacy_embedding):
-                    self.legacy_embedding = legacy_embedding
-
-                def embed_text(self, text: str, **kwargs) -> t.List[float]:
-                    return self.legacy_embedding.embed_query(text)
-
-                async def aembed_text(self, text: str, **kwargs) -> t.List[float]:
-                    return await self.legacy_embedding.aembed_query(text)
-
-            actual_embedding_model = EmbeddingWrapper(embedding_model)
-        else:
-            # Already BaseRagasEmbedding
-            actual_embedding_model = embedding_model
-
         from ragas.prompt.dynamic_few_shot import DynamicFewShotPrompt
 
         self.prompt = DynamicFewShotPrompt.from_prompt(
             self.prompt,
-            actual_embedding_model,  # type: ignore[arg-type]
+            embedding_model,
             max_similar_examples,
             similarity_threshold,
         )
@@ -1280,7 +853,7 @@ class SimpleLLMMetric(SimpleBaseMetric):
 
     def validate_alignment(
         self,
-        llm: "BaseRagasLLM",
+        llm: "InstructorBaseRagasLLM",
         test_dataset: "Dataset",
         mapping: t.Dict[str, str] = {},
     ):

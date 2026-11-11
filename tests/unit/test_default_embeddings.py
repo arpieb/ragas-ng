@@ -80,7 +80,6 @@ def test_a_provider_without_a_default_warns_and_falls_back(model):
 
 def test_evaluate_gives_a_gemini_llm_gemini_embeddings(monkeypatch):
     import ragas.evaluation as evaluation
-    from ragas.metrics import answer_relevancy
 
     seen = {}
     real = evaluation.default_embeddings_for_litellm_llm
@@ -93,5 +92,6 @@ def test_evaluate_gives_a_gemini_llm_gemini_embeddings(monkeypatch):
     llm = llm_factory("gemini/gemini-3.6-flash")
     ds = EvaluationDataset.from_list([{"user_input": "q", "response": "a"}])
     with pytest.raises(RuntimeError, match="stop here"):
-        evaluation.evaluate(ds, metrics=[answer_relevancy], llm=llm)
+        # the default metrics include AnswerRelevancy, which needs embeddings
+        evaluation.evaluate(ds, llm=llm)
     assert seen["embeddings"].model == "gemini/gemini-embedding-2"

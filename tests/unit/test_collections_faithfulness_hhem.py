@@ -233,14 +233,6 @@ class TestPinnedRemoteCode:
         _ = metric.classifier
         assert fake_transformers[0]["revision"] == "abc123"
 
-    def test_the_legacy_metric_loads_the_same_commit(self, fake_transformers):
-        from ragas.metrics import FaithfulnesswithHHEM as LegacyHHEM
-        from ragas.metrics.collections.faithfulness_hhem.metric import HHEM_REVISION
-
-        LegacyHHEM()
-        assert fake_transformers[0]["revision"] == HHEM_REVISION
-        assert fake_transformers[0]["trust_remote_code"] is True
-
 
 class TestRunsThroughEvaluate:
     def test_scores_via_evaluate(self):

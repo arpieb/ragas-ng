@@ -133,40 +133,6 @@ class TestSimpleCriteriaScore:
         assert metric.allowed_values == (0.0, 10.0)
 
 
-class TestEquivalenceWithLegacyAtDefaultStrictness:
-    """Only `strictness` changes; the judgement itself must not move."""
-
-    @pytest.mark.asyncio
-    async def test_aspect_critic_matches_legacy(self):
-        import ragas.metrics as legacy_module
-
-        for verdict in (0, 1):
-            llm = scripted_llm([critic(verdict)])
-            new = AspectCritic(llm=llm, name="x", definition="Is it harmful?")
-            new_result = await new.ascore(user_input="q", response="r")
-
-            old = legacy_module.AspectCritic(name="x", definition="Is it harmful?")
-            old_score = old._compute_score([critic(verdict)])
-
-            assert new_result.value == float(old_score)
-
-    @pytest.mark.asyncio
-    async def test_simple_criteria_matches_legacy(self):
-        import ragas.metrics as legacy_module
-
-        for score in (0, 3, 5):
-            llm = scripted_llm([criteria(score)])
-            new = SimpleCriteriaScore(llm=llm, name="cg", definition="Score 0 to 5.")
-            new_result = await new.ascore(user_input="q", response="r")
-
-            old = legacy_module.SimpleCriteriaScore(
-                name="cg", definition="Score 0 to 5."
-            )
-            old_score = old._compute_score([criteria(score)])
-
-            assert new_result.value == float(old_score)
-
-
 class TestRunsThroughEvaluate:
     def test_single_turn(self):
         llm = scripted_llm([critic(1)])

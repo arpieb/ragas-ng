@@ -110,35 +110,33 @@ class TestNestAsyncioNotAppliedInAevaluate:
 
             # Mock all the dependencies to avoid actual API calls
             with patch("ragas.evaluation.EvaluationDataset"):
-                with patch("ragas.evaluation.validate_required_columns"):
-                    with patch("ragas.evaluation.validate_supported_metrics"):
-                        with patch("ragas.evaluation.Executor") as mock_executor_class:
-                            with patch("ragas.evaluation.new_group"):
-                                with patch(
-                                    "ragas.async_utils.apply_nest_asyncio"
-                                ) as mock_apply:
-                                    # Mock executor
-                                    mock_executor = MagicMock()
-                                    mock_executor.aresults = AsyncMock(
-                                        return_value=[0.8]
-                                    )
-                                    mock_executor_class.return_value = mock_executor
+                with patch("ragas.evaluation.Executor") as mock_executor_class:
+                    with patch("ragas.evaluation.new_group"):
+                        with patch(
+                            "ragas.async_utils.apply_nest_asyncio"
+                        ) as mock_apply:
+                            # Mock executor
+                            mock_executor = MagicMock()
+                            mock_executor.aresults = AsyncMock(return_value=[0.8])
+                            mock_executor_class.return_value = mock_executor
 
-                                    # Mock dataset
-                                    mock_dataset_instance = MagicMock()
-                                    mock_dataset_instance.get_sample_type.return_value = MagicMock()
-                                    mock_dataset_instance.__iter__ = lambda x: iter([])
+                            # Mock dataset
+                            mock_dataset_instance = MagicMock()
+                            mock_dataset_instance.get_sample_type.return_value = (
+                                MagicMock()
+                            )
+                            mock_dataset_instance.__iter__ = lambda x: iter([])
 
-                                    from ragas import aevaluate
+                            from ragas import aevaluate
 
-                                    try:
-                                        await aevaluate(
-                                            dataset=mock_dataset_instance,
-                                            metrics=[],
-                                            show_progress=False,
-                                        )
-                                    except Exception:
-                                        pass
+                            try:
+                                await aevaluate(
+                                    dataset=mock_dataset_instance,
+                                    metrics=[],
+                                    show_progress=False,
+                                )
+                            except Exception:
+                                pass
 
             # aevaluate should never call apply_nest_asyncio
             mock_apply.assert_not_called()
@@ -156,22 +154,20 @@ class TestAsyncIntegration:
         # Just test that the function can be called without RuntimeError
         # We'll mock everything to avoid API calls
         with patch("ragas.evaluation.EvaluationDataset"):
-            with patch("ragas.evaluation.validate_required_columns"):
-                with patch("ragas.evaluation.validate_supported_metrics"):
-                    with patch("ragas.evaluation.Executor") as mock_executor_class:
-                        with patch("ragas.evaluation.new_group"):
-                            mock_executor = MagicMock()
-                            mock_executor.aresults = AsyncMock(return_value=[])
-                            mock_executor_class.return_value = mock_executor
+            with patch("ragas.evaluation.Executor") as mock_executor_class:
+                with patch("ragas.evaluation.new_group"):
+                    mock_executor = MagicMock()
+                    mock_executor.aresults = AsyncMock(return_value=[])
+                    mock_executor_class.return_value = mock_executor
 
-                            try:
-                                await aevaluate(
-                                    dataset=MagicMock(),
-                                    metrics=[],
-                                    show_progress=False,
-                                )
-                                # Should not raise RuntimeError about event loop
-                            except Exception as e:
-                                # We expect other exceptions due to mocking, but not RuntimeError
-                                assert "event loop" not in str(e).lower()
-                                assert "nest_asyncio" not in str(e).lower()
+                    try:
+                        await aevaluate(
+                            dataset=MagicMock(),
+                            metrics=[],
+                            show_progress=False,
+                        )
+                        # Should not raise RuntimeError about event loop
+                    except Exception as e:
+                        # We expect other exceptions due to mocking, but not RuntimeError
+                        assert "event loop" not in str(e).lower()
+                        assert "nest_asyncio" not in str(e).lower()
