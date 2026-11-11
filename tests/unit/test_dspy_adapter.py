@@ -20,7 +20,7 @@ except ImportError:
 
 
 class TestPromptToDSPySignature:
-    @pytest.mark.skipif(not DSPY_AVAILABLE, reason="dspy-ai not installed")
+    @pytest.mark.skipif(not DSPY_AVAILABLE, reason="dspy not installed")
     def test_basic_conversion(self):
         """Test basic conversion of a BasePrompt to DSPy Signature."""
         from ragas.optimizers.dspy_adapter import prompt_to_dspy_signature
@@ -48,7 +48,7 @@ class TestPromptToDSPySignature:
 
     @pytest.mark.skip(reason="Import error test requires complex mocking")
     def test_import_error_without_dspy(self):
-        """Test that conversion raises ImportError when dspy-ai is not installed.
+        """Test that conversion raises ImportError when dspy is not installed.
 
         Note: This test is skipped because it requires mocking the import system
         which is complex and fragile. The import error is adequately tested by
@@ -56,7 +56,7 @@ class TestPromptToDSPySignature:
         """
         pass
 
-    @pytest.mark.skipif(not DSPY_AVAILABLE, reason="dspy-ai not installed")
+    @pytest.mark.skipif(not DSPY_AVAILABLE, reason="dspy not installed")
     def test_field_descriptions(self):
         """Test that field descriptions are preserved."""
         from ragas.optimizers.dspy_adapter import prompt_to_dspy_signature
@@ -87,7 +87,7 @@ class TestPromptToDSPySignature:
 
 
 class TestRagasDatasetToDSPyExamples:
-    @pytest.mark.skipif(not DSPY_AVAILABLE, reason="dspy-ai not installed")
+    @pytest.mark.skipif(not DSPY_AVAILABLE, reason="dspy not installed")
     def test_basic_conversion(self):
         """Test basic conversion of Ragas dataset to DSPy examples."""
         from ragas.optimizers.dspy_adapter import ragas_dataset_to_dspy_examples
@@ -115,7 +115,7 @@ class TestRagasDatasetToDSPyExamples:
         assert example.context == "Math"
         assert example.answer == "4"
 
-    @pytest.mark.skipif(not DSPY_AVAILABLE, reason="dspy-ai not installed")
+    @pytest.mark.skipif(not DSPY_AVAILABLE, reason="dspy not installed")
     def test_skip_non_accepted_samples(self):
         """Test that non-accepted samples are skipped."""
         from ragas.optimizers.dspy_adapter import ragas_dataset_to_dspy_examples
@@ -146,7 +146,7 @@ class TestRagasDatasetToDSPyExamples:
 
         assert len(examples) == 1
 
-    @pytest.mark.skipif(not DSPY_AVAILABLE, reason="dspy-ai not installed")
+    @pytest.mark.skipif(not DSPY_AVAILABLE, reason="dspy not installed")
     def test_skip_missing_prompt_name(self):
         """Test that samples without the specified prompt are skipped."""
         from ragas.optimizers.dspy_adapter import ragas_dataset_to_dspy_examples
@@ -170,7 +170,7 @@ class TestRagasDatasetToDSPyExamples:
 
         assert len(examples) == 0
 
-    @pytest.mark.skipif(not DSPY_AVAILABLE, reason="dspy-ai not installed")
+    @pytest.mark.skipif(not DSPY_AVAILABLE, reason="dspy not installed")
     def test_edited_output_priority(self):
         """Test that edited_output takes priority over prompt_output."""
         from ragas.optimizers.dspy_adapter import ragas_dataset_to_dspy_examples
@@ -195,7 +195,7 @@ class TestRagasDatasetToDSPyExamples:
         assert len(examples) == 1
         assert examples[0].answer == "4"
 
-    @pytest.mark.skipif(not DSPY_AVAILABLE, reason="dspy-ai not installed")
+    @pytest.mark.skipif(not DSPY_AVAILABLE, reason="dspy not installed")
     def test_string_output_in_dict(self):
         """Test handling of string values in dict prompt outputs."""
         from ragas.optimizers.dspy_adapter import ragas_dataset_to_dspy_examples
@@ -221,7 +221,7 @@ class TestRagasDatasetToDSPyExamples:
         assert examples[0].result == "4"
 
     def test_import_error_without_dspy(self):
-        """Test that conversion raises ImportError when dspy-ai is not installed."""
+        """Test that conversion raises ImportError when dspy is not installed."""
         from ragas.optimizers.dspy_adapter import ragas_dataset_to_dspy_examples
 
         dataset = Mock(spec=SingleMetricAnnotation)
@@ -229,7 +229,7 @@ class TestRagasDatasetToDSPyExamples:
         with patch.dict("sys.modules", {"dspy": None}):
             with patch("builtins.__import__", side_effect=ImportError):
                 with pytest.raises(
-                    ImportError, match="DSPy optimizer requires dspy-ai"
+                    ImportError, match="DSPy optimizer requires dspy\\b"
                 ):
                     ragas_dataset_to_dspy_examples(dataset, "test_prompt")
 

@@ -17,7 +17,7 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _INSTALL_HINT = (
-    "DSPy optimizer requires dspy-ai. Install with:\n"
+    "DSPy optimizer requires dspy. Install with:\n"
     "  uv add 'ragas[dspy]'  # or: pip install 'ragas[dspy]'\n"
 )
 

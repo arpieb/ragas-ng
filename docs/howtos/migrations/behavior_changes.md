@@ -647,6 +647,10 @@ Testset generation (`TestsetGenerator`, the synthesizers, the transforms, `defau
 - The testset prompts (extractors, filters, synthesizers, personas) are now `ragas.prompt.metrics.BasePrompt` subclasses, not `PydanticPrompt`. Their rendered text is byte-for-byte unchanged, so cache keys don't move. Their `generate()` no longer takes `stop=` or `retries_left=`. `get_prompts()` and `set_prompts()` on testset classes find and take any `BasePrompt`, including a `PydanticPrompt`.
 - `EmbeddingExtractor` always calls `aembed_text()`. With an embedding model that had no `is_async` attribute, such as `LiteLLMEmbeddings`, it ran the sync `embed_text()` on a worker thread and warned (`UserWarning`); it now makes the async call and doesn't warn. The embeddings are the same.
 
+## The `dspy` extra installs DSPy 3 with optuna
+
+`pip install "ragas[dspy]"` now installs `dspy[optuna]>=3` instead of `dspy-ai>=2.4.0`. `DSPyOptimizer` runs MIPROv2, which on DSPy 3 needs `optuna`; the old extra left it out, so the optimizer failed on import of a fresh install. DSPy 2.x is no longer supported: `DSPyOptimizer` already needed DSPy 3's MIPROv2 constructor ([#214](https://github.com/arpieb/ragas-ng/issues/214)).
+
 ## The legacy layer is removed ([#215](https://github.com/arpieb/ragas-ng/issues/215))
 
 The legacy metrics, LLM and embedding wrappers and prompt classes are deleted, not deprecated. Everything they did has a modern replacement, which #214 moved testset generation, the optimizers and `evaluate()` onto.
