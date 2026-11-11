@@ -230,19 +230,7 @@ docs = [Document(page_content=text, metadata={"source": path})]
 
 ## Prompt and LLM result types
 
-If you implement a custom `BaseRagasLLM`, the result and prompt types moved:
-
-| Was | Now |
-|---|---|
-| `langchain_core.outputs.LLMResult` | `ragas.llms.output.LLMResult` |
-| `langchain_core.outputs.Generation` | `ragas.llms.output.Generation` |
-| `langchain_core.prompt_values.PromptValue` | `ragas.prompt.value.PromptValue` |
-| `langchain_core.prompt_values.StringPromptValue` | `ragas.prompt.value.StringPromptValue` |
-| `langchain_core.messages.BaseMessage` | `ragas.prompt.value.Message` |
-
-Field names are unchanged, so `response.generations[0][0].text` still works.
-`ragas.prompt.value.Message` carries an explicit `role` instead of encoding it in
-the class name the way `HumanMessage`/`AIMessage`/`SystemMessage` did.
+A custom `BaseRagasLLM` and the result and prompt types it used (`ragas.llms.output`, `ragas.prompt.value`) were removed later, with the rest of the legacy layer ([#215](https://github.com/arpieb/ragas-ng/issues/215)). To use a model ragas doesn't route to, give `llm_factory()` a LiteLLM model string or a `litellm.Router`; chat messages are `ragas.messages.Message`, which carries an explicit `role` instead of encoding it in the class name the way `HumanMessage`/`AIMessage`/`SystemMessage` did.
 
 ## Summary
 

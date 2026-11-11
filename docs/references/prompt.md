@@ -8,7 +8,6 @@ Ragas uses a modular prompt architecture based on the `BasePrompt` class. Prompt
 
 - **Input/Output Models**: Pydantic BaseModel classes that define the structure of prompt inputs and outputs
 - **Prompt Classes**: Inherit from `BasePrompt` to define instructions, examples, and prompt generation logic
-- **String Prompts**: Simple text-based prompts for backward compatibility
 
 ## Core Classes
 
@@ -16,12 +15,11 @@ Ragas uses a modular prompt architecture based on the `BasePrompt` class. Prompt
     options:
         members:
             - BasePrompt
-            - StringPrompt
             - InputModel
             - OutputModel
-            - PydanticPrompt
             - BoolIO
             - StringIO
+            - PromptMixin
 
 ## Metrics Collections Prompts
 

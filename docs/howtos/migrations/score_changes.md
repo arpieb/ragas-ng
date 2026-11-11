@@ -248,7 +248,7 @@ temperature passed to a prompt is used.
 with an `llm_factory()` LLM. That means the private modules, such as
 `from ragas.metrics._answer_relevance import AnswerRelevancy`, or a metric
 whose prompts were customised, where the hand-off falls back to legacy (see
-[above](#the-short-imports-score-through-collections)).
+[above](#only-the-collections-metrics-remain-215)).
 
 - `AnswerRelevancy(strictness=N)` now averages over N generated questions
   instead of one.
