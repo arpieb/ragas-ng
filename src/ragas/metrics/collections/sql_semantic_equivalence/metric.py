@@ -3,6 +3,7 @@
 import typing as t
 from typing import List, Optional
 
+from ragas.metrics.base import MetricOutputType
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
 
@@ -49,6 +50,7 @@ class SQLSemanticEquivalence(BaseMetric):
     """
 
     llm: "InstructorBaseRagasLLM"
+    output_type = MetricOutputType.BINARY
 
     def __init__(
         self,

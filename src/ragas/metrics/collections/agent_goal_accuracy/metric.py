@@ -4,6 +4,7 @@ import typing as t
 from typing import List, Union
 
 from ragas.messages import AIMessage, HumanMessage, ToolMessage
+from ragas.metrics.base import MetricOutputType
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
 
@@ -59,6 +60,7 @@ class AgentGoalAccuracyWithReference(BaseMetric):
     """
 
     llm: "InstructorBaseRagasLLM"
+    output_type = MetricOutputType.BINARY
 
     def __init__(
         self,
@@ -174,6 +176,7 @@ class AgentGoalAccuracyWithoutReference(BaseMetric):
     """
 
     llm: "InstructorBaseRagasLLM"
+    output_type = MetricOutputType.BINARY
 
     def __init__(
         self,

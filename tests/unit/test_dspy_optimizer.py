@@ -3,7 +3,9 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 
 from ragas.dataset_schema import SingleMetricAnnotation
+from ragas.llms.base import InstructorLLM
 from ragas.losses import MSELoss
+from ragas.metrics.collections.aspect_critic.util import AspectCriticPrompt
 
 try:
     import dspy  # noqa: F401
@@ -11,6 +13,18 @@ try:
     DSPY_AVAILABLE = True
 except ImportError:
     DSPY_AVAILABLE = False
+
+
+@pytest.fixture
+def fake_llm():
+    return MagicMock(spec=InstructorLLM)
+
+
+def _prompt():
+    """A collections metric prompt (output fields: reason, verdict)."""
+    prompt = AspectCriticPrompt()
+    prompt.instruction = "Test instruction"
+    return prompt
 
 
 class TestDSPyOptimizer:
@@ -189,7 +203,7 @@ class TestDSPyOptimizer:
 
     @pytest.mark.skipif(not DSPY_AVAILABLE, reason="dspy-ai not installed")
     @patch("ragas.optimizers.dspy_adapter.setup_dspy_llm")
-    @patch("ragas.optimizers.dspy_adapter.pydantic_prompt_to_dspy_signature")
+    @patch("ragas.optimizers.dspy_adapter.prompt_to_dspy_signature")
     @patch("ragas.optimizers.dspy_adapter.ragas_dataset_to_dspy_examples")
     @patch("ragas.optimizers.dspy_adapter.create_dspy_metric")
     def test_optimize_basic_flow(
@@ -207,9 +221,7 @@ class TestDSPyOptimizer:
 
         mock_metric = Mock()
         mock_metric.name = "test_metric"
-        mock_metric.get_prompts.return_value = {
-            "test_prompt": Mock(instruction="Test instruction")
-        }
+        mock_metric.get_prompts.return_value = {"test_prompt": _prompt()}
         optimizer.metric = mock_metric
         optimizer.llm = fake_llm
 
@@ -241,16 +253,18 @@ class TestDSPyOptimizer:
         result = optimizer.optimize(dataset, loss, {})
 
         assert "test_prompt" in result
-        assert result["test_prompt"] == "Optimized instruction"
+        assert result["test_prompt"].instruction == "Optimized instruction"
 
         mock_setup_llm.assert_called_once_with(mock_dspy, fake_llm)
         mock_metric.get_prompts.assert_called_once()
         mock_to_signature.assert_called_once()
         mock_to_examples.assert_called_once()
-        mock_create_metric.assert_called_once_with(loss, "test_metric")
+        mock_create_metric.assert_called_once_with(loss, "verdict")
 
+        # MIPROv2 takes the metric; with an auto level, no num_candidates
         mock_dspy.MIPROv2.assert_called_once_with(
-            num_candidates=10,
+            metric=mock_metric_fn,
+            num_candidates=None,
             max_bootstrapped_demos=5,
             max_labeled_demos=5,
             init_temperature=1.0,
@@ -267,12 +281,12 @@ class TestDSPyOptimizer:
         mock_teleprompter.compile.assert_called_once_with(
             mock_module,
             trainset=mock_examples,
-            metric=mock_metric_fn,
+            requires_permission_to_run=False,
         )
 
     @pytest.mark.skipif(not DSPY_AVAILABLE, reason="dspy-ai not installed")
     @patch("ragas.optimizers.dspy_adapter.setup_dspy_llm")
-    @patch("ragas.optimizers.dspy_adapter.pydantic_prompt_to_dspy_signature")
+    @patch("ragas.optimizers.dspy_adapter.prompt_to_dspy_signature")
     @patch("ragas.optimizers.dspy_adapter.ragas_dataset_to_dspy_examples")
     @patch("ragas.optimizers.dspy_adapter.create_dspy_metric")
     def test_optimize_with_custom_params(
@@ -303,9 +317,7 @@ class TestDSPyOptimizer:
 
         mock_metric = Mock()
         mock_metric.name = "test_metric"
-        mock_metric.get_prompts.return_value = {
-            "test_prompt": Mock(instruction="Test instruction")
-        }
+        mock_metric.get_prompts.return_value = {"test_prompt": _prompt()}
         optimizer.metric = mock_metric
         optimizer.llm = fake_llm
 
@@ -339,7 +351,8 @@ class TestDSPyOptimizer:
         assert "test_prompt" in result
 
         mock_dspy.MIPROv2.assert_called_once_with(
-            num_candidates=15,
+            metric=mock_metric_fn,
+            num_candidates=None,
             max_bootstrapped_demos=7,
             max_labeled_demos=6,
             init_temperature=0.8,
@@ -352,6 +365,50 @@ class TestDSPyOptimizer:
             log_dir="/tmp/dspy",
             metric_threshold=0.85,
         )
+
+    @pytest.mark.skipif(not DSPY_AVAILABLE, reason="dspy-ai not installed")
+    @patch("ragas.optimizers.dspy_adapter.setup_dspy_llm")
+    @patch("ragas.optimizers.dspy_adapter.prompt_to_dspy_signature")
+    @patch("ragas.optimizers.dspy_adapter.ragas_dataset_to_dspy_examples")
+    @patch("ragas.optimizers.dspy_adapter.create_dspy_metric")
+    def test_optimize_without_auto_sets_candidates_and_trials(
+        self,
+        mock_create_metric,
+        mock_to_examples,
+        mock_to_signature,
+        mock_setup_llm,
+        fake_llm,
+    ):
+        """Without an auto level, num_candidates and num_trials are passed;
+        the demos MIPROv2 picks become the prompt's examples."""
+        from ragas.optimizers.dspy_optimizer import DSPyOptimizer
+
+        optimizer = DSPyOptimizer(auto=None, num_candidates=4)
+        mock_metric = Mock()
+        mock_metric.name = "test_metric"
+        mock_metric.get_prompts.return_value = {"test_prompt": _prompt()}
+        optimizer.metric = mock_metric
+        optimizer.llm = fake_llm
+
+        mock_dspy = MagicMock()
+        mock_to_examples.return_value = [Mock()]
+        mock_optimized = Mock()
+        mock_optimized.signature.instructions = "Optimized instruction"
+        mock_optimized.demos = [
+            {"user_input": "q", "response": "r", "reason": "ok", "verdict": 1}
+        ]
+        mock_dspy.MIPROv2.return_value.compile.return_value = mock_optimized
+        optimizer._dspy = mock_dspy
+
+        dataset = Mock(spec=SingleMetricAnnotation)
+        dataset.name = "test_metric"
+        result = optimizer.optimize(dataset, MSELoss(), {"num_trials": 7})
+
+        assert mock_dspy.MIPROv2.call_args.kwargs["num_candidates"] == 4
+        compile_kwargs = mock_dspy.MIPROv2.return_value.compile.call_args.kwargs
+        assert compile_kwargs["num_trials"] == 7
+        [(inp, out)] = result["test_prompt"].examples
+        assert inp.user_input == "q" and out.verdict == 1
 
     @pytest.mark.skipif(not DSPY_AVAILABLE, reason="dspy-ai not installed")
     def test_extract_instruction_from_signature(self):
@@ -415,6 +472,7 @@ class TestDSPyOptimizer:
 
         mock_metric = Mock()
         mock_metric.name = "test_metric"
+        mock_metric.get_prompts.return_value = {}
         optimizer.metric = mock_metric
         optimizer.llm = fake_llm
 
@@ -439,6 +497,7 @@ class TestDSPyOptimizer:
 
         mock_metric = Mock()
         mock_metric.name = "test_metric"
+        mock_metric.get_prompts.return_value = {}
         optimizer.metric = mock_metric
         optimizer.llm = fake_llm
 
@@ -457,7 +516,7 @@ class TestDSPyOptimizer:
 
     @pytest.mark.skipif(not DSPY_AVAILABLE, reason="dspy-ai not installed")
     @patch("ragas.optimizers.dspy_adapter.setup_dspy_llm")
-    @patch("ragas.optimizers.dspy_adapter.pydantic_prompt_to_dspy_signature")
+    @patch("ragas.optimizers.dspy_adapter.prompt_to_dspy_signature")
     @patch("ragas.optimizers.dspy_adapter.ragas_dataset_to_dspy_examples")
     @patch("ragas.optimizers.dspy_adapter.create_dspy_metric")
     def test_cache_hit(
@@ -477,9 +536,7 @@ class TestDSPyOptimizer:
 
         mock_metric = Mock()
         mock_metric.name = "test_metric"
-        mock_metric.get_prompts.return_value = {
-            "test_prompt": Mock(instruction="Test instruction")
-        }
+        mock_metric.get_prompts.return_value = {"test_prompt": _prompt()}
         optimizer.metric = mock_metric
         optimizer.llm = fake_llm
 
@@ -516,7 +573,7 @@ class TestDSPyOptimizer:
         assert mock_teleprompter.compile.call_count == 1
 
         assert result1 == result2
-        assert result1["test_prompt"] == "Optimized instruction"
+        assert result1["test_prompt"].instruction == "Optimized instruction"
 
         cache.cache.close()
         import shutil
@@ -525,7 +582,7 @@ class TestDSPyOptimizer:
 
     @pytest.mark.skipif(not DSPY_AVAILABLE, reason="dspy-ai not installed")
     @patch("ragas.optimizers.dspy_adapter.setup_dspy_llm")
-    @patch("ragas.optimizers.dspy_adapter.pydantic_prompt_to_dspy_signature")
+    @patch("ragas.optimizers.dspy_adapter.prompt_to_dspy_signature")
     @patch("ragas.optimizers.dspy_adapter.ragas_dataset_to_dspy_examples")
     @patch("ragas.optimizers.dspy_adapter.create_dspy_metric")
     def test_cache_miss(
@@ -545,9 +602,7 @@ class TestDSPyOptimizer:
 
         mock_metric = Mock()
         mock_metric.name = "test_metric"
-        mock_metric.get_prompts.return_value = {
-            "test_prompt": Mock(instruction="Test instruction")
-        }
+        mock_metric.get_prompts.return_value = {"test_prompt": _prompt()}
         optimizer.metric = mock_metric
         optimizer.llm = fake_llm
 
@@ -588,8 +643,8 @@ class TestDSPyOptimizer:
         result2 = optimizer.optimize(dataset2, loss, {})
         assert mock_teleprompter.compile.call_count == 2
 
-        assert result1["test_prompt"] == "Optimized instruction"
-        assert result2["test_prompt"] == "Optimized instruction"
+        assert result1["test_prompt"].instruction == "Optimized instruction"
+        assert result2["test_prompt"].instruction == "Optimized instruction"
 
         cache.cache.close()
         import shutil

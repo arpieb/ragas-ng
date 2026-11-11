@@ -1,6 +1,7 @@
 """Base class for collections metrics with modern component validation."""
 
 import collections.abc
+import copy
 import functools
 import inspect
 import re
@@ -9,9 +10,15 @@ import typing as t
 from ragas.async_utils import run_sync
 from ragas.embeddings.base import BaseRagasEmbedding
 from ragas.llms.base import DEFAULT_LLM_MODEL, InstructorBaseRagasLLM
-from ragas.metrics.base import SimpleBaseMetric
+from ragas.metrics.base import MetricOutputType, SimpleBaseMetric
 from ragas.metrics.result import MetricResult
 from ragas.metrics.validators import NumericValidator
+from ragas.prompt.metrics.base_prompt import BasePrompt
+
+if t.TYPE_CHECKING:
+    from ragas.config import DemonstrationConfig, InstructionConfig
+    from ragas.dataset_schema import MetricAnnotation, SingleMetricAnnotation
+    from ragas.run_config import RunConfig
 
 _LIST_ANNOTATION = re.compile(
     r"^(?:(?:t|typing)\.)?(?:Optional\[)?(?:(?:t|typing)\.)?(?:List|list|Sequence)\["
@@ -92,7 +99,15 @@ class BaseMetric(SimpleBaseMetric, NumericValidator):
 
     Note: Subclasses define llm and/or embeddings fields only if they need them.
     The base classes handle all the core metric functionality - we just add modern component validation.
+
+    Prompts: every ``BasePrompt`` the metric holds as an attribute is listed
+    by ``get_prompts()`` under its attribute name and replaced with
+    ``set_prompts()``; ``train()`` tunes them against human annotations.
     """
+
+    #: What the score is, for ``train()``: a binary verdict is optimized for
+    #: accuracy, a continuous or discrete score for squared error.
+    output_type: t.Optional[MetricOutputType] = MetricOutputType.CONTINUOUS
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -164,6 +179,128 @@ class BaseMetric(SimpleBaseMetric, NumericValidator):
         # made a new loop per call, so a second score() with AsyncOpenAI
         # failed with "bound to a different event loop".
         return run_sync(self.abatch_score(inputs))
+
+    # ------------------------------------------------------------------ #
+    # Prompts
+    # ------------------------------------------------------------------ #
+
+    def _prompt_attributes(self) -> t.Dict[str, BasePrompt]:
+        """The prompts this metric holds, by attribute name, not copied.
+
+        Instance attributes first, then prompts defined on the class (shared
+        by every instance until ``set_prompts`` shadows them).
+        """
+        found: t.Dict[str, BasePrompt] = {
+            name: value
+            for name, value in vars(self).items()
+            if isinstance(value, BasePrompt)
+        }
+        for klass in type(self).__mro__:
+            for name, value in vars(klass).items():
+                if name not in found and isinstance(value, BasePrompt):
+                    found[name] = value
+        return found
+
+    def get_prompts(self) -> t.Dict[str, BasePrompt]:
+        """The metric's prompts, keyed by attribute name.
+
+        Each value is a copy: change it and pass it to ``set_prompts`` to use
+        it. Editing it in place changes neither this metric nor any other
+        metric or class that holds the same prompt object.
+
+        Returns:
+            ``{attribute name: prompt}``, e.g. ``statement_generator_prompt``
+            and ``nli_statement_prompt`` for Faithfulness. Empty for a metric
+            without prompts.
+        """
+        return {
+            name: copy.deepcopy(prompt)
+            for name, prompt in self._prompt_attributes().items()
+        }
+
+    def set_prompts(self, **prompts: BasePrompt) -> None:
+        """Replace prompts, by the names ``get_prompts()`` uses.
+
+        Each prompt is copied onto this metric, so later changes to the object
+        passed in don't reach the metric, and a prompt defined on the class
+        (shared by its instances) is shadowed, never modified.
+
+        Raises:
+            ValueError: for a name the metric has no prompt under.
+            TypeError: for a value that isn't a ``BasePrompt``, or whose input
+                or output model differs from the prompt it replaces (the
+                metric renders that input and parses that output).
+        """
+        current = self._prompt_attributes()
+        for name, prompt in prompts.items():
+            if name not in current:
+                available = ", ".join(sorted(current)) or "none"
+                raise ValueError(
+                    f"{type(self).__name__} has no prompt named '{name}'. "
+                    f"Available prompts: {available}."
+                )
+            if not isinstance(prompt, BasePrompt):
+                raise TypeError(
+                    f"Prompt '{name}' must be a ragas.prompt.metrics.BasePrompt, "
+                    f"got {type(prompt).__name__}."
+                )
+            old = current[name]
+            for side in ("input_model", "output_model"):
+                if getattr(prompt, side) is not getattr(old, side):
+                    raise TypeError(
+                        f"Prompt '{name}' must keep {side} "
+                        f"{getattr(old, side).__name__}, got "
+                        f"{getattr(prompt, side).__name__}."
+                    )
+        for name, prompt in prompts.items():
+            setattr(self, name, copy.deepcopy(prompt))
+
+    def train(
+        self,
+        path: t.Optional[str] = None,
+        demonstration_config: t.Optional["DemonstrationConfig"] = None,
+        instruction_config: t.Optional["InstructionConfig"] = None,
+        *,
+        dataset: t.Optional[
+            t.Union["MetricAnnotation", "SingleMetricAnnotation"]
+        ] = None,
+        run_config: t.Optional["RunConfig"] = None,
+        batch_size: t.Optional[int] = None,
+        raise_exceptions: bool = True,
+    ) -> None:
+        """Tune this metric's prompts to human annotations.
+
+        With ``instruction_config``, its optimizer (``GeneticOptimizer`` by
+        default) rewrites the annotated prompts' instructions. With
+        ``demonstration_config``, each annotated prompt then picks the
+        annotated examples most similar to its input as few-shot
+        demonstrations. The results replace this metric's prompts through
+        ``set_prompts``; the prompt objects it held before are not modified.
+
+        Args:
+            path: A JSON annotation file (``MetricAnnotation`` format), whose
+                prompt names are this metric's ``get_prompts()`` keys.
+            demonstration_config: Few-shot demonstration settings.
+            instruction_config: Instruction optimization settings.
+            dataset: The annotations as an object, instead of ``path``.
+            run_config: Execution limits for the scoring runs.
+            batch_size: Jobs per batch for the scoring runs.
+            raise_exceptions: Raise on a failed job instead of scoring NaN.
+
+        See ``ragas.optimizers.train_metric``.
+        """
+        from ragas.optimizers.training import train_metric
+
+        train_metric(
+            self,
+            path=path,
+            dataset=dataset,
+            demonstration_config=demonstration_config,
+            instruction_config=instruction_config,
+            run_config=run_config,
+            batch_size=batch_size,
+            raise_exceptions=raise_exceptions,
+        )
 
     def _validate_llm(self):
         """Validate that a modern InstructorLLM is provided."""

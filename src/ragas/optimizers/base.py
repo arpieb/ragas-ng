@@ -5,23 +5,30 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 from ragas.dataset_schema import SingleMetricAnnotation
-from ragas.llms.base import BaseRagasLLM
 from ragas.losses import Loss
-from ragas.metrics.base import MetricWithLLM
 from ragas.run_config import RunConfig
 
 if t.TYPE_CHECKING:
     from ragas.callbacks import Callbacks
+    from ragas.llms.base import InstructorBaseRagasLLM
+    from ragas.metrics.collections.base import BaseMetric
+    from ragas.prompt.metrics.base_prompt import BasePrompt
 
 
 @dataclass
 class Optimizer(ABC):
     """
     Abstract base class for all optimizers.
+
+    An optimizer tunes the prompts of a collections ``metric`` (one that
+    lists them with ``get_prompts()``) against human annotations, using
+    ``llm`` (an ``llm_factory()`` LLM) for its own calls. The metric is not
+    modified: ``optimize`` returns new prompts, which
+    ``metric.set_prompts(**prompts)`` applies. ``metric.train()`` does both.
     """
 
-    metric: t.Optional[MetricWithLLM] = None
-    llm: t.Optional[BaseRagasLLM] = None
+    metric: t.Optional[BaseMetric] = None
+    llm: t.Optional[InstructorBaseRagasLLM] = None
 
     @abstractmethod
     def optimize(
@@ -34,7 +41,7 @@ class Optimizer(ABC):
         callbacks: t.Optional[Callbacks] = None,
         with_debugging_logs=False,
         raise_exceptions: bool = True,
-    ) -> t.Dict[str, str]:
+    ) -> t.Dict[str, BasePrompt]:
         """
         Optimizes the prompts for the given metric.
 
@@ -59,7 +66,41 @@ class Optimizer(ABC):
 
         Returns
         -------
-        Dict[str, str]
-            The optimized prompts for given chain.
+        Dict[str, BasePrompt]
+            The optimized prompts, keyed by the metric's ``get_prompts()``
+            names: copies of the metric's prompts with the optimized
+            instruction (and, for ``DSPyOptimizer``, examples). Pass them to
+            ``metric.set_prompts(**prompts)``.
         """
         raise NotImplementedError("The method `optimize` must be implemented.")
+
+    def _require(self) -> t.Tuple[BaseMetric, InstructorBaseRagasLLM]:
+        """``(metric, llm)``, or a ValueError naming the one missing."""
+        if self.metric is None:
+            raise ValueError("No metric provided for optimization.")
+        if self.llm is None:
+            raise ValueError("No llm provided for optimization.")
+        if not hasattr(self.metric, "get_prompts"):
+            raise TypeError(
+                f"{type(self.metric).__name__} has no get_prompts(); optimizers "
+                "tune ragas.metrics.collections metrics."
+            )
+        return self.metric, self.llm
+
+    def _with_instructions(
+        self, instructions: t.Mapping[str, str]
+    ) -> t.Dict[str, BasePrompt]:
+        """Copies of the metric's prompts with these instructions."""
+        if self.metric is None:
+            raise ValueError("No metric provided for optimization.")
+        prompts = self.metric.get_prompts()  # copies
+        unknown = set(instructions) - set(prompts)
+        if unknown:
+            raise ValueError(
+                f"Metric '{self.metric.name}' has no prompt named "
+                f"{', '.join(repr(n) for n in sorted(unknown))}. Available "
+                f"prompts: {', '.join(sorted(prompts)) or 'none'}."
+            )
+        for name, instruction in instructions.items():
+            prompts[name].instruction = instruction
+        return {name: prompts[name] for name in instructions}

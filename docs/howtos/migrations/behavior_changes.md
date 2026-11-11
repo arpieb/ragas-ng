@@ -613,6 +613,30 @@ A copy (deep or shallow) of an LLM or embeddings with a `cache` used to keep the
 - `BasePrompt.adapt(..., adapt_instruction=True)` now translates the instruction even when the prompt has no example strings. It returned without translating it.
 - `save()` logs the saved path at INFO instead of printing it.
 
+## evaluate() runs modern metrics natively ([#214](https://github.com/arpieb/ragas-ng/issues/214))
+
+`evaluate()` and `aevaluate()` no longer wrap `ragas.metrics.collections` metrics as legacy metrics. They call the metric's `ascore()` with the sample's fields by name. Scores, reasons, traces and token usage are the same as before.
+
+Metrics that take the LLM per call now work in `evaluate()`: `NumericMetric` (and other prompt-template metrics) and `@numeric_metric`-decorated functions. They get the `llm` passed to `evaluate()`, or the default LLM if none was passed; every row used to score NaN. Passing a legacy `BaseRagasLLM` to such a metric now raises `TypeError` before the run starts, and a decorated function whose required parameters are not sample fields raises `ValueError` up front instead of scoring NaN on every row.
+
+**⚠ silent:** `evaluate(metrics=None)` now runs the collections `AnswerRelevancy`, `ContextPrecision`, `Faithfulness` and `ContextRecall`, built with the run's LLM and embeddings, instead of the `ragas.metrics` hand-off classes. Scores should not change, since the hand-off already scored through collections. With a legacy LLM or legacy embeddings you still get the old defaults.
+
+## Prompt optimization moves to collections metrics ([#214](https://github.com/arpieb/ragas-ng/issues/214))
+
+`metric.train()`, `GeneticOptimizer` and `DSPyOptimizer` now tune the metrics in `ragas.metrics.collections`. The legacy `ragas.metrics` classes are being removed (#215), and their `train()` is removed with this change. `InstructionConfig` and `DemonstrationConfig` now take only `llm_factory()` LLMs and `embedding_factory()` embeddings, and raise a `ValidationError` for legacy wrappers.
+
+- Collections metrics gain `get_prompts()` and `set_prompts(**prompts)`. Prompts are keyed by attribute name (`prompt` for `AspectCritic`; `statement_generator_prompt` and `nli_statement_prompt` for `Faithfulness`). `get_prompts()` returns copies, so to change a prompt you edit the copy and pass it to `set_prompts()`. `set_prompts()` copies what it is given, rejects unknown names with `ValueError`, and rejects a non-`BasePrompt`, or a prompt with different input or output models, with `TypeError`.
+- Annotation files key each sample's `prompts` by those names. Legacy names such as `single_turn_aspect_critic_prompt` raise a `ValueError` that lists the metric's names. The sample file for the Vertex AI alignment guide uses the new names.
+- `metric.train(path, demonstration_config, instruction_config, *, dataset=None, run_config=None, batch_size=None, raise_exceptions=True)` also accepts the annotations as an object through `dataset=`. It no longer takes `callbacks` or `with_debugging_logs`. A config with `enabled=False` is now skipped; it used to run anyway.
+- **⚠ silent:** `train()` no longer modifies the metric's prompt objects in place. Optimized prompts replace them through `set_prompts()`, and candidates are scored on a copy of the metric. In-place edits used to reach every metric sharing a prompt object.
+- `Optimizer.optimize()` now returns optimized copies of the prompts (`{name: BasePrompt}`) for `set_prompts()`, rather than `{name: instruction}`. `DSPyOptimizer`'s copies also carry the demonstrations MIPROv2 chose, which it used to drop.
+- Each collections metric has an `output_type`, which picks the default loss: binary for `AspectCritic`, `AgentGoalAccuracyWithReference`/`WithoutReference` and `SQLSemanticEquivalence`; discrete for the rubric metrics and `SimpleCriteriaScore`; continuous otherwise.
+- Few-shot demonstrations (`DemonstrationConfig`) make each annotated prompt a copy of itself that, per input, renders the `top_k` annotated examples at least `threshold` similar to it. `technique="random"` now works: a fixed random sample of `top_k` examples, with no embedding calls. It was ignored.
+- `DSPyOptimizer` now drives DSPy through a `dspy.LM` built from the LLM's LiteLLM model name and credentials, rather than wrapping a legacy LLM. Pass `DSPyOptimizer(lm=dspy.LM(...))` for an LLM over a `litellm.Router` or an Azure client, which raise `ValueError`. DSPy's own cache and retries apply to its calls, and `llm_factory(rate_limit=...)` doesn't.
+- `DSPyOptimizer` failed with every current DSPy: MIPROv2 takes its metric in the constructor and rejects `num_candidates` with an `auto` level. It now passes them that way, runs `num_trials` (from `optimizer_config`, default `num_candidates`) when `auto=None`, and doesn't stop to ask for confirmation. DSPy signatures now carry the prompt fields' types, and only prompts with annotations are optimized.
+- **⚠ silent:** DSPy's metric compared an output field named after the metric, which no prompt has, so every prediction scored 0. It now compares that field if present, else the prompt's first numeric output field, such as `verdict`.
+- `GeneticOptimizer`'s feedback mutation reads each prompt's input and output from the traced LLM calls of the metric. A custom LLM that doesn't trace its calls gets no feedback, with a warning, and keeps the candidate's instruction.
+
 ## Testset generation takes modern LLMs, embeddings and prompts only ([#214](https://github.com/arpieb/ragas-ng/issues/214))
 
 Testset generation (`TestsetGenerator`, the synthesizers, the transforms, `default_transforms()` and `generate_personas_from_kg()`) now takes only an `llm_factory()` LLM and a modern embedding model (`BaseRagasEmbedding`, such as `embedding_factory()` output). A legacy `BaseRagasLLM` or `BaseRagasEmbeddings` wrapper raises `TypeError` when you build the object or call the function, with a message that names what to use instead.

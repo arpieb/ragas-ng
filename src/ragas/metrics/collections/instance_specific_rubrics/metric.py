@@ -2,6 +2,7 @@
 
 import typing as t
 
+from ragas.metrics.base import MetricOutputType
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
 
@@ -62,6 +63,7 @@ class InstanceSpecificRubrics(BaseMetric):
     """
 
     llm: "InstructorBaseRagasLLM"
+    output_type = MetricOutputType.DISCRETE
 
     def __init__(
         self,
