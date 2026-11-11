@@ -281,10 +281,7 @@ For our diabetes assistant, we will use:
 ```python
 from ragas.llms import llm_factory
 from openai import OpenAI
-from ragas.metrics import (
-    AnswerAccuracy,
-    ResponseGroundedness,
-)
+from ragas.metrics.collections import AnswerAccuracy, ResponseGroundedness
 
 evaluator_llm = llm_factory("gpt-6-luna", client=OpenAI())
 
@@ -323,7 +320,7 @@ Output
 Evaluating answerable questions with base prompt...
 Evaluating: 100%|██████████| 20/20 [00:02<00:00,  9.79it/s]
 
-{'nv_accuracy': 0.6750, 'nv_response_groundedness': 1.0000}
+{'answer_accuracy': 0.6750, 'response_groundedness': 1.0000}
 ```
 
 
@@ -340,7 +337,7 @@ Output
 Evaluating answerable questions with incentive prompt...
 Evaluating: 100%|██████████| 20/20 [00:02<00:00,  9.19it/s]
 
-{'nv_accuracy': 0.6750, 'nv_response_groundedness': 1.0000}
+{'answer_accuracy': 0.6750, 'response_groundedness': 1.0000}
 ```
 
 
@@ -386,7 +383,9 @@ Ragas offers flexible tools to create custom metrics that measure your specific 
 ```python
 from ragas.llms import llm_factory
 from openai import OpenAI
-from ragas.metrics import AnswerAccuracy, AspectCritic
+from ragas.metrics.collections import AnswerAccuracy, AspectCritic
+
+evaluator_llm = llm_factory("gpt-6-luna", client=OpenAI())
 
 # Create a specialized metric for evaluating when the model should NOT answer
 no_answer_metric = AspectCritic(
@@ -394,8 +393,6 @@ no_answer_metric = AspectCritic(
     definition="Return 1 if both reference and response appropriately decline to provide an answer on the same grounds (e.g., medical expertise limitations); return 0 if the response provides any answer when the reference declines to answer.",
     llm=evaluator_llm,
 )
-
-evaluator_llm = llm_factory("gpt-6-luna", client=OpenAI())
 
 metrics = [
     AnswerAccuracy(llm=evaluator_llm),
@@ -418,7 +415,7 @@ Output
 Evaluating non-answerable questions with base prompt...
 Evaluating: 100%|██████████| 10/10 [00:01<00:00,  5.44it/s]
 
-{'nv_accuracy': 0.6000, 'Non-Answer Compliance': 0.4000}
+{'answer_accuracy': 0.6000, 'Non-Answer Compliance': 0.4000}
 ```
 
 ```python
@@ -433,7 +430,7 @@ Output
 Evaluating non-answerable questions with incentive prompt...
 Evaluating: 100%|██████████| 10/10 [00:01<00:00,  6.28it/s]
 
-{'nv_accuracy': 0.7000, 'Non-Answer Compliance': 0.6000}
+{'answer_accuracy': 0.7000, 'Non-Answer Compliance': 0.6000}
 ```
 
 Impact of Incentivization:

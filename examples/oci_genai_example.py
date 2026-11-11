@@ -1,148 +1,73 @@
 #!/usr/bin/env python3
 """
-Example script demonstrating OCI Gen AI integration with Ragas.
+Evaluate a small RAG dataset with an OCI Generative AI model.
 
-This script shows how to use Oracle Cloud Infrastructure Generative AI
-models for RAG evaluation with Ragas.
+Ragas reaches OCI through LiteLLM's ``oci/`` provider, so the evaluator is a
+plain ``llm_factory("oci/<model id>")``.
 
-Prerequisites:
-1. Install ragas with OCI support: pip install ragas[oci]
-2. Configure OCI authentication (see docs/howtos/integrations/oci_genai.md)
-3. Have access to OCI Gen AI models in your compartment
+Prerequisites (see docs/howtos/integrations/oci_genai.md):
+    export OCI_USER=ocid1.user.oc1..example
+    export OCI_FINGERPRINT=your_fingerprint
+    export OCI_TENANCY=ocid1.tenancy.oc1..example
+    export OCI_KEY_FILE=~/.oci/private_key.pem
+    export OCI_COMPARTMENT_ID=ocid1.compartment.oc1..example
+    export OCI_REGION=us-chicago-1
+    export OCI_MODEL_ID=cohere.command-latest  # optional
 """
 
 import os
-from datasets import Dataset
-from ragas import evaluate
-from ragas.llms import oci_genai_factory
 
-# These metrics import from the legacy `ragas.metrics` namespace and emit a
-# DeprecationWarning pointing at `ragas.metrics.collections`. That is correct
-# here: collections metrics require an InstructorBaseRagasLLM, and
-# oci_genai_factory returns a BaseRagasLLM, so this example stays on
-# evaluate() with the legacy metrics.
-from ragas.metrics import answer_relevancy, context_precision, faithfulness
+from ragas import EvaluationDataset, evaluate
+from ragas.llms import llm_factory
+from ragas.metrics.collections import ContextPrecision, Faithfulness
+
+SAMPLES = [
+    {
+        "user_input": "What is the capital of France?",
+        "response": "Paris is the capital of France.",
+        "retrieved_contexts": [
+            "France is a country in Europe. Its capital is Paris. "
+            "France is known for its culture and cuisine."
+        ],
+        "reference": "Paris",
+    },
+    {
+        "user_input": "Who wrote Romeo and Juliet?",
+        "response": "William Shakespeare wrote Romeo and Juliet.",
+        "retrieved_contexts": [
+            "Romeo and Juliet is a famous play written by William Shakespeare. "
+            "It's a tragic love story."
+        ],
+        "reference": "William Shakespeare",
+    },
+    {
+        "user_input": "What is the largest planet in our solar system?",
+        "response": "Jupiter is the largest planet in our solar system.",
+        "retrieved_contexts": [
+            "Jupiter is the largest planet in our solar system. "
+            "It's a gas giant with many moons."
+        ],
+        "reference": "Jupiter",
+    },
+]
 
 
 def main():
-    """Main function demonstrating OCI Gen AI integration."""
-    
-    # Configuration - Update these values for your environment
-    MODEL_ID = os.getenv("OCI_MODEL_ID", "cohere.command")
-    COMPARTMENT_ID = os.getenv("OCI_COMPARTMENT_ID", "ocid1.compartment.oc1..example")
-    ENDPOINT_ID = os.getenv("OCI_ENDPOINT_ID", None)  # Optional
-    
-    print("🚀 Initializing OCI Gen AI LLM...")
-    
-    # Initialize OCI Gen AI LLM
-    try:
-        llm = oci_genai_factory(
-            model_id=MODEL_ID,
-            compartment_id=COMPARTMENT_ID,
-            endpoint_id=ENDPOINT_ID
-        )
-        print(f"✅ Successfully initialized OCI Gen AI with model: {MODEL_ID}")
-    except Exception as e:
-        print(f"❌ Failed to initialize OCI Gen AI: {e}")
-        print("Please check your OCI configuration and credentials.")
-        return
-    
-    # Create sample dataset for evaluation
-    print("\n📊 Creating sample dataset...")
-    dataset = Dataset.from_dict({
-        "question": [
-            "What is the capital of France?",
-            "Who wrote Romeo and Juliet?",
-            "What is the largest planet in our solar system?",
-        ],
-        "answer": [
-            "Paris is the capital of France.",
-            "William Shakespeare wrote Romeo and Juliet.",
-            "Jupiter is the largest planet in our solar system.",
-        ],
-        "contexts": [
-            ["France is a country in Europe. Its capital is Paris. France is known for its culture and cuisine."],
-            ["Romeo and Juliet is a famous play written by William Shakespeare. It's a tragic love story."],
-            ["Jupiter is the largest planet in our solar system. It's a gas giant with many moons."],
-        ],
-        "ground_truth": [
-            "Paris",
-            "William Shakespeare", 
-            "Jupiter"
-        ]
-    })
-    
-    print(f"✅ Created dataset with {len(dataset)} examples")
-    
-    # Run evaluation
-    print("\n🔍 Running RAG evaluation with OCI Gen AI...")
-    try:
-        metrics = [faithfulness, answer_relevancy, context_precision]
-        result = evaluate(dataset, metrics=metrics, llm=llm)
-        
-        print("✅ Evaluation completed successfully!")
-        print("\n📈 Results:")
-        print(result)
-        
-        # Print individual metric scores. EvaluationResult has no .items();
-        # to_pandas() gives the per-row scores, and their mean is the aggregate.
-        print("\n📊 Detailed Scores:")
-        scores = result.to_pandas()[[m.name for m in metrics]]
-        for metric_name, score in scores.mean().items():
-            print(f"  {metric_name}: {score:.4f}")
-            
-    except Exception as e:
-        print(f"❌ Evaluation failed: {e}")
-        print("Please check your OCI configuration and model access.")
+    model_id = os.getenv("OCI_MODEL_ID", "cohere.command-latest")
+    llm = llm_factory(f"oci/{model_id}")
 
+    dataset = EvaluationDataset.from_list(SAMPLES)
+    metrics = [Faithfulness(llm=llm), ContextPrecision(llm=llm)]
 
-def test_llm_connection():
-    """Test basic LLM connection and generation."""
-    print("🧪 Testing OCI Gen AI connection...")
-    
-    MODEL_ID = os.getenv("OCI_MODEL_ID", "cohere.command")
-    COMPARTMENT_ID = os.getenv("OCI_COMPARTMENT_ID", "ocid1.compartment.oc1..example")
-    
-    try:
-        llm = oci_genai_factory(
-            model_id=MODEL_ID,
-            compartment_id=COMPARTMENT_ID
-        )
-        
-        # Test simple generation
-        from ragas.prompt.value import StringPromptValue
-        prompt = StringPromptValue(text="Hello, how are you?")
-        
-        result = llm.generate_text(prompt, n=1, temperature=0.1)
-        
-        print("✅ Connection test successful!")
-        print(f"Generated response: {result.generations[0][0].text}")
-        
-    except Exception as e:
-        print(f"❌ Connection test failed: {e}")
-        print("Please check your OCI configuration.")
+    result = evaluate(dataset, metrics=metrics)
+    print(result)
+    print(result.to_pandas()[[m.name for m in metrics]])
 
 
 if __name__ == "__main__":
-    print("🔧 OCI Gen AI Integration Example")
-    print("=" * 50)
-    
-    # Check if OCI configuration is available
     if not os.getenv("OCI_COMPARTMENT_ID"):
-        print("⚠️  OCI_COMPARTMENT_ID not set. Using example value.")
-        print("Set environment variables for your OCI configuration:")
-        print("  export OCI_MODEL_ID='cohere.command'")
-        print("  export OCI_COMPARTMENT_ID='ocid1.compartment.oc1..your-compartment'")
-        print("  export OCI_ENDPOINT_ID='ocid1.endpoint.oc1..your-endpoint'  # Optional")
-        print()
-    
-    # Test connection first
-    test_llm_connection()
-    
-    print("\n" + "=" * 50)
-    
-    # Run main evaluation
+        raise SystemExit(
+            "Set the OCI_* environment variables first; "
+            "see docs/howtos/integrations/oci_genai.md."
+        )
     main()
-    
-    print("\n🎉 Example completed!")
-    print("For more information, see: docs/howtos/integrations/oci_genai.md")

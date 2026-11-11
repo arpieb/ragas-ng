@@ -186,7 +186,7 @@ print(response_vector)
 
 ## Evaluating the `QueryEngine`
 
-Now that we have a `QueryEngine` for the `VectorStoreIndex` we can use the llama_index integration Ragas has to evaluate it.
+Now that we have a `QueryEngine` for the `VectorStoreIndex`, we can evaluate it with Ragas.
 
 In order to run an evaluation with Ragas and LlamaIndex you need 3 things
 
@@ -196,32 +196,28 @@ In order to run an evaluation with Ragas and LlamaIndex you need 3 things
 
 first let's generate the questions. Ideally you should use that you see in production so that the distribution of question with which we evaluate matches the distribution of questions seen in production. This ensures that the scores reflect the performance seen in production but to start off we'll be using a few example questions.
 
-Now let's import the metrics we will be using to evaluate
+Now let's set up the metrics we will be using to evaluate. Ragas metrics take an `llm_factory()` LLM (and, for `AnswerRelevancy`, ragas embeddings) when you create them. LiteLLM reaches the same providers LlamaIndex does, so you don't need to wrap a LlamaIndex LLM.
 
 
 ```python
-# import metrics
-from ragas.metrics import (
-    Faithfulness,
+from ragas.llms import llm_factory
+from ragas.metrics.collections import (
     AnswerRelevancy,
     ContextPrecision,
     ContextRecall,
+    Faithfulness,
 )
 
-# init metrics with evaluator LLM
-from llama_index.llms.openai import OpenAI
-from ragas.llms import LlamaIndexLLMWrapper
-
-evaluator_llm = LlamaIndexLLMWrapper(OpenAI(model="gpt-6-luna"))
+evaluator_llm = llm_factory("gpt-6-luna")
 metrics = [
     Faithfulness(llm=evaluator_llm),
-    AnswerRelevancy(llm=evaluator_llm),
+    AnswerRelevancy(llm=evaluator_llm, embeddings=embeddings),
     ContextPrecision(llm=evaluator_llm),
     ContextRecall(llm=evaluator_llm),
 ]
 ```
 
-the `evaluate()` function expects a dict of "question" and "ground_truth" for metrics. You can easily convert the `testset` to that format
+The testset holds the questions (`user_input`) and the expected answers (`reference`). Convert it to an `EvaluationDataset`:
 
 
 ```python
@@ -237,17 +233,27 @@ ragas_dataset
 
 
 
+The metrics also need what the `QueryEngine` returns for each question: the answer (`response`) and the text of the nodes it retrieved (`retrieved_contexts`). Run the engine over the dataset and fill them in:
+
+
+```python
+for sample in ragas_dataset:
+    llama_response = query_engine.query(sample.user_input)
+    sample.response = str(llama_response)
+    sample.retrieved_contexts = [
+        node.get_content() for node in llama_response.source_nodes
+    ]
+```
+
+For an async engine, call `await query_engine.aquery(...)` instead.
+
 Finally, let's run the evaluation
 
 
 ```python
-from ragas.integrations.llama_index import evaluate
+from ragas import evaluate
 
-result = evaluate(
-    query_engine=query_engine,
-    metrics=metrics,
-    dataset=ragas_dataset,
-)
+result = evaluate(dataset=ragas_dataset, metrics=metrics)
 ```
 
 

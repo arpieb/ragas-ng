@@ -109,7 +109,7 @@ See the [Langfuse guide](integrations/langfuse.md), which also covers scoring La
 `EvaluationResult.traces` holds the same run tree in process, with no OpenTelemetry setup: one entry per row, keyed by metric name. Each metric's entry holds the input and output of every LLM call or ragas prompt it ran, and `.scores` holds the row's scores:
 
 ```python
-result = evaluate(dataset, metrics=[...], llm=evaluator_llm)
+result = evaluate(dataset, metrics=[...])  # each metric built with llm=evaluator_llm
 
 result.traces[0].scores  # {'answers': 1.0}
 dict(result.traces[0]["answers"])

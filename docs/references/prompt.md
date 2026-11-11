@@ -22,38 +22,36 @@ Ragas uses a modular prompt architecture based on the `BasePrompt` class. Prompt
             - PydanticPrompt
             - BoolIO
             - StringIO
-            - PromptMixin
 
 ## Metrics Collections Prompts
 
 Modern metrics in Ragas use specialized prompt classes. Each metric module contains:
 
-- **Input Model**: Defines what data the prompt needs (e.g., `FaithfulnessInput`)
-- **Output Model**: Defines the expected LLM response structure (e.g., `FaithfulnessOutput`)
+- **Input Model**: Defines what data the prompt needs (e.g., `StatementGeneratorInput`)
+- **Output Model**: Defines the expected LLM response structure (e.g., `StatementGeneratorOutput`)
 - **Prompt Class**: Inherits from `BasePrompt` to generate the prompt string with examples and instructions
 
 ### Example: Faithfulness Metric Prompts
 
 ```python
 from ragas.metrics.collections.faithfulness.util import (
-    FaithfulnessPrompt,
-    FaithfulnessInput,
-    FaithfulnessOutput,
+    StatementGeneratorInput,
+    StatementGeneratorPrompt,
 )
 
 # The prompt class combines input/output models with instructions and examples
-prompt = FaithfulnessPrompt()
+prompt = StatementGeneratorPrompt()
 
 # Create input data
-input_data = FaithfulnessInput(
-    response="The capital of France is Paris.",
-    context="Paris is the capital and most populous city of France.",
+input_data = StatementGeneratorInput(
+    question="What is the capital of France?",
+    answer="The capital of France is Paris.",
 )
 
 # Generate the prompt string for the LLM
 prompt_string = prompt.to_string(input_data)
 
-# The output will be structured according to FaithfulnessOutput model
+# The LLM's reply is parsed into StatementGeneratorOutput (a list of statements)
 ```
 
 ### Available Metric Prompts

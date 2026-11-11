@@ -17,7 +17,6 @@ $$
 \text{Faithfulness Score} = \frac{\text{Number of claims in the response supported by the retrieved context}}{\text{Total number of claims in the response}}
 $$
 
-
 ### Example
 
 ```python
@@ -60,7 +59,6 @@ Faithfulness Score: 1.0
     )
     ```
 
-
 ### How It’s Calculated
 
 !!! example
@@ -88,7 +86,6 @@ Let's examine how faithfulness was calculated using the low faithfulness answer:
     $$
     \text{Faithfulness} = { \text{1} \over \text{2} } = 0.5
     $$
-
 
 ### Faithfulness with HHEM-2.1-Open
 
@@ -128,69 +125,4 @@ You can load the model onto a specific device with `device`, and set the inferen
 
 ```python
 scorer = FaithfulnesswithHHEM(llm=llm, device="cuda:0", batch_size=10)
-```
-
-
-## Legacy Metrics API
-
-The following examples use the legacy metrics API pattern. For new projects, we recommend using the collections-based API shown above.
-
-!!! warning "Deprecation Timeline"
-    This API will be deprecated in version 0.4 and removed in version 1.0. Please migrate to the collections-based API shown above.
-
-### Example with SingleTurnSample
-
-```python
-from ragas.dataset_schema import SingleTurnSample
-from ragas.metrics import Faithfulness
-
-sample = SingleTurnSample(
-    user_input="When was the first super bowl?",
-    response="The first superbowl was held on Jan 15, 1967",
-    retrieved_contexts=[
-        "The First AFL–NFL World Championship Game was an American football game played on January 15, 1967, at the Los Angeles Memorial Coliseum in Los Angeles."
-    ],
-)
-scorer = Faithfulness(llm=evaluator_llm)
-await scorer.single_turn_ascore(sample)
-```
-
-Output:
-
-```
-1.0
-```
-
-### Faithfulness with HHEM-2.1-Open (legacy)
-
-See [Faithfulness with HHEM-2.1-Open](#faithfulness-with-hhem-21-open) above for the collections version.
-
-To use the model to calculate faithfulness:
-
-```python
-from ragas.dataset_schema import SingleTurnSample
-from ragas.metrics import FaithfulnesswithHHEM
-
-
-sample = SingleTurnSample(
-    user_input="When was the first super bowl?",
-    response="The first superbowl was held on Jan 15, 1967",
-    retrieved_contexts=[
-        "The First AFL–NFL World Championship Game, later known as Super Bowl I, was an American football game played on January 15, 1967, at the Los Angeles Memorial Coliseum in Los Angeles."
-    ],
-)
-scorer = FaithfulnesswithHHEM(llm=evaluator_llm)
-await scorer.single_turn_ascore(sample)
-```
-
-You can load the model onto a specified device by setting the `device` argument and adjust the batch size for inference using the `batch_size` parameter. By default, the model is loaded on the CPU with a batch size of 10:
-
-```python
-my_device = "cuda:0"
-my_batch_size = 10
-
-scorer = FaithfulnesswithHHEM(
-    llm=evaluator_llm, device=my_device, batch_size=my_batch_size
-)
-await scorer.single_turn_ascore(sample)
 ```

@@ -63,14 +63,13 @@ You can pass in the parser to the `evaluate()` function and the cost will be cal
 from ragas import evaluate
 from ragas.cost import get_token_usage_for_openai
 from ragas.llms import llm_factory
-from ragas.metrics import LLMContextRecall
+from ragas.metrics.collections import ContextRecall
 
 evaluator_llm = llm_factory("gpt-6-luna", client=client)
 
 result = evaluate(
     eval_dataset,
-    metrics=[LLMContextRecall()],
-    llm=evaluator_llm,
+    metrics=[ContextRecall(llm=evaluator_llm)],
     token_usage_parser=get_token_usage_for_openai,
 )
 ```

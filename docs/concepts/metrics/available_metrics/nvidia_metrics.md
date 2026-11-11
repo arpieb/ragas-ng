@@ -16,13 +16,11 @@ earlier_run_outputs.md
 ### Example
 
 ```python
-from openai import AsyncOpenAI
 from ragas.llms import llm_factory
 from ragas.metrics.collections import AnswerAccuracy
 
 # Setup LLM
-client = AsyncOpenAI()
-llm = llm_factory("gpt-6-luna", client=client)
+llm = llm_factory("gpt-6-luna")
 
 # Create metric
 scorer = AnswerAccuracy(llm=llm)
@@ -99,38 +97,6 @@ Thus, the final **Answer Accuracy** score is **1**.
 - **Explainability**: Answer Accuracy provides a raw score without justification, while Rubric Score offers reasoning with verdict.
 - **Efficiency**: Answer Accuracy is lightweight and works very well with smaller models.
 
-### Legacy Metrics API
-
-The following examples use the legacy metrics API pattern. For new projects, we recommend using the collections-based API shown above.
-
-!!! warning "Deprecation Timeline"
-    This API will be deprecated in version 0.4 and removed in version 1.0. Please migrate to the collections-based API shown above.
-
-#### Example with SingleTurnSample
-
-```python
-from ragas.dataset_schema import SingleTurnSample
-from ragas.metrics import AnswerAccuracy
-
-sample = SingleTurnSample(
-    user_input="When was Einstein born?",
-    response="Albert Einstein was born in 1879.",
-    reference="Albert Einstein was born in 1879.",
-)
-
-scorer = AnswerAccuracy(
-    llm=evaluator_llm
-)  # evaluator_llm wrapped with ragas LLM Wrapper
-score = await scorer.single_turn_ascore(sample)
-print(score)
-```
-
-Output:
-
-```
-1.0
-```
-
 ## Context Relevance
 
 **Context Relevance** evaluates whether the **retrieved_contexts** (chunks or passages) are pertinent to the **user_input**. This is done via two independent "LLM-as-a-Judge" prompt calls that each rate the relevance on a scale of **0, 1, or 2**. The ratings are then converted to a [0,1] scale and averaged to produce the final score. Higher scores indicate that the contexts are more closely aligned with the user's query.
@@ -142,13 +108,11 @@ Output:
 ### Example
 
 ```python
-from openai import AsyncOpenAI
 from ragas.llms import llm_factory
 from ragas.metrics.collections import ContextRelevance
 
 # Setup LLM
-client = AsyncOpenAI()
-llm = llm_factory("gpt-6-luna", client=client)
+llm = llm_factory("gpt-6-luna")
 
 # Create metric
 scorer = ContextRelevance(llm=llm)
@@ -213,38 +177,6 @@ In this example, the two retrieved contexts together fully address the user's qu
 - **Explainability:** Context Precision and Context Recall offer high explainability with detailed reasoning, while Context Relevance provides a raw score without explanations.
 - **Robust Evaluation:** Context Relevance delivers a more robust evaluation through dual LLM judgments compared to the single-call approach of Context Precision and Context Recall.
 
-### Legacy Metrics API
-
-The following examples use the legacy metrics API pattern. For new projects, we recommend using the collections-based API shown above.
-
-!!! warning "Deprecation Timeline"
-    This API will be deprecated in version 0.4 and removed in version 1.0. Please migrate to the collections-based API shown above.
-
-#### Example with SingleTurnSample
-
-```python
-from ragas.dataset_schema import SingleTurnSample
-from ragas.metrics import ContextRelevance
-
-sample = SingleTurnSample(
-    user_input="When and Where Albert Einstein was born?",
-    retrieved_contexts=[
-        "Albert Einstein was born March 14, 1879.",
-        "Albert Einstein was born at Ulm, in Württemberg, Germany.",
-    ],
-)
-
-scorer = ContextRelevance(llm=evaluator_llm)
-score = await scorer.single_turn_ascore(sample)
-print(score)
-```
-
-Output:
-
-```
-1.0
-```
-
 ## Response Groundedness
 
 **Response Groundedness** measures how well a response is supported or "grounded" by the retrieved contexts. It assesses whether each claim in the response can be found, either wholly or partially, in the provided contexts.
@@ -256,13 +188,11 @@ Output:
 ### Example
 
 ```python
-from openai import AsyncOpenAI
 from ragas.llms import llm_factory
 from ragas.metrics.collections import ResponseGroundedness
 
 # Setup LLM
-client = AsyncOpenAI()
-llm = llm_factory("gpt-6-luna", client=client)
+llm = llm_factory("gpt-6-luna")
 
 # Create metric
 scorer = ResponseGroundedness(llm=llm)
@@ -322,35 +252,3 @@ In this example, the retrieved contexts provide both the birthdate and location 
 - **Token Usage:** Faithfulness consumes more tokens, whereas Response Groundedness is more token-efficient.
 - **Explainability:** Faithfulness provides transparent, reasoning for each claim, while Response Groundedness provides a raw score.
 - **Robust Evaluation:** Faithfulness incorporates user input for a comprehensive assessment, whereas Response Groundedness ensures consistency through dual LLM evaluations.
-
-### Legacy Metrics API
-
-The following examples use the legacy metrics API pattern. For new projects, we recommend using the collections-based API shown above.
-
-!!! warning "Deprecation Timeline"
-    This API will be deprecated in version 0.4 and removed in version 1.0. Please migrate to the collections-based API shown above.
-
-#### Example with SingleTurnSample
-
-```python
-from ragas.dataset_schema import SingleTurnSample
-from ragas.metrics import ResponseGroundedness
-
-sample = SingleTurnSample(
-    response="Albert Einstein was born in 1879.",
-    retrieved_contexts=[
-        "Albert Einstein was born March 14, 1879.",
-        "Albert Einstein was born at Ulm, in Württemberg, Germany.",
-    ],
-)
-
-scorer = ResponseGroundedness(llm=evaluator_llm)
-score = await scorer.single_turn_ascore(sample)
-print(score)
-```
-
-Output:
-
-```
-1.0
-```

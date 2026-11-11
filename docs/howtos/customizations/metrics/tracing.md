@@ -31,13 +31,13 @@ from openai import OpenAI
 
 from ragas import EvaluationDataset, evaluate
 from ragas.llms import llm_factory
-from ragas.metrics import LLMContextRecall
+from ragas.metrics.collections import ContextRecall
 
 dataset = load_dataset("vibrantlabsai/amnesty_qa", "english_v3")
 eval_dataset = EvaluationDataset.from_hf_dataset(dataset["eval"])
 
 evaluator_llm = llm_factory("gpt-6-luna", client=OpenAI())
-evaluate(eval_dataset, metrics=[LLMContextRecall()], llm=evaluator_llm)
+evaluate(eval_dataset, metrics=[ContextRecall(llm=evaluator_llm)])
 ```
 
 See [Observability](../../observability.md) for the span attributes, the LangSmith and Phoenix endpoints and `result.traces`.
