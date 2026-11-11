@@ -26,7 +26,7 @@ uv add "ragas[dspy]"
 pip install "ragas[dspy]"
 ```
 
-MIPROv2 in DSPy 3 also needs `optuna`: `pip install "dspy[optuna]"`.
+The extra installs DSPy 3 with `optuna`, which MIPROv2 needs.
 
 ## Basic Usage
 
@@ -268,7 +268,7 @@ for name, metric in metrics.items():
 
 ### Import Error
 
-If you get `ImportError: DSPy optimizer requires dspy-ai`:
+If you get `ImportError: DSPy optimizer requires dspy`:
 
 ```bash
 # Install the DSPy extra
