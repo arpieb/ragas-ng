@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import collections.abc
 import copy
 import logging
 import typing as t
 import warnings
+from dataclasses import dataclass, field
 from uuid import UUID
 
 from datasets import Dataset
@@ -35,7 +37,7 @@ from ragas.executor import Executor
 from ragas.integrations.helicone import helicone_config
 from ragas.llms import default_llm
 from ragas.llms.base import DEFAULT_LLM_MODEL, BaseRagasLLM, InstructorBaseRagasLLM
-from ragas.metrics._collections_bridge import adapt_collections_metric
+from ragas.metrics._collections_bridge import InputSpec, as_score, input_spec
 from ragas.metrics.base import (
     Metric,
     MetricWithEmbeddings,
@@ -44,10 +46,12 @@ from ragas.metrics.base import (
     MultiTurnMetric,
     SimpleBaseMetric,
     SingleTurnMetric,
+    adopt_metric_run,
 )
 from ragas.run_config import RunConfig, run_scope
 from ragas.utils import convert_v1_to_v2_dataset
 from ragas.validation import (
+    get_supported_metric_type,
     remap_column_names,
     validate_required_columns,
     validate_supported_metrics,
@@ -223,32 +227,16 @@ async def _aevaluate(
                 "Metrics should be provided in a list, e.g: metrics=[BleuScore()]"
             )
         metrics = list(metrics)
+        if any(not isinstance(m, (SimpleBaseMetric, Metric)) for m in metrics):
+            raise TypeError(
+                "All metrics must be initialised metric objects, e.g: metrics=[BleuScore(), AspectCritic()]"
+            )
 
-    # Collections metrics (ragas.metrics.collections) implement SimpleBaseMetric,
-    # not the legacy Metric protocol evaluate() drives, so they used to be
-    # rejected by the type check below. Wrap them instead: every legacy metric
-    # now warns that it moves to collections in v1.0, so the replacement has to
-    # work with the main entry point.
-    if isinstance(metrics, list):
-        metrics = [
-            adapt_collections_metric(m)
-            if isinstance(m, SimpleBaseMetric) and not isinstance(m, Metric)
-            else m
-            for m in metrics
-        ]
-
-    if isinstance(metrics, list) and any(not isinstance(m, Metric) for m in metrics):
-        raise TypeError(
-            "All metrics must be initialised metric objects, e.g: metrics=[BleuScore(), AspectCritic()]"
-        )
+    models = _Models(llm, embeddings)
 
     # default metrics
     if metrics is None:
-        metrics = _default_metrics()
-
-    # Work on copies: filling in llm/embeddings below must not change the
-    # caller's metric objects, which other threads or runs may be using (#76).
-    metrics = [copy.copy(m) for m in metrics]
+        metrics = _default_metrics_for(models)
 
     if isinstance(dataset, Dataset):
         # remap column names from the dataset
@@ -257,39 +245,22 @@ async def _aevaluate(
         # validation
         dataset = EvaluationDataset.from_list(dataset.to_list())
 
-    if isinstance(dataset, EvaluationDataset):
-        validate_required_columns(dataset, metrics)
-        validate_supported_metrics(dataset, metrics)
-
-    # loop through the (copied) metrics and perform initializations
-    for metric in metrics:
-        # set llm and embeddings if not set
-        if isinstance(metric, MetricWithLLM) and metric.llm is None:
-            if llm is None:
-                llm = default_llm()
-            metric.llm = t.cast(t.Optional[BaseRagasLLM], llm)
-        if isinstance(metric, MetricWithEmbeddings) and metric.embeddings is None:
-            if embeddings is None:
-                # Reuse the LLM's provider and client where that makes sense, so
-                # an OpenAI evaluator LLM gets OpenAI embeddings.
-                inferred_provider = _infer_embedding_provider_from_llm(llm)
-                if inferred_provider == "litellm":
-                    # A litellm-backed LLM's `.client` is an instructor-wrapped
-                    # completion function, not an embeddings client. Pick the
-                    # embedding model from the LLM's provider prefix (#190).
-                    embeddings = default_embeddings_for_litellm_llm(llm)
-                else:
-                    # the caller's own client (llm_factory keeps it as
-                    # source_client), not the instructor wrapper around it
-                    embeddings = embedding_factory(
-                        provider=inferred_provider,
-                        client=getattr(llm, "source_client", None)
-                        or getattr(llm, "client", None),
-                    )
-            metric.embeddings = embeddings
-
-        # init all the models
-        metric.init(run_config)
+    # One job per metric. A modern metric (ragas.metrics.collections, or any
+    # SimpleBaseMetric) runs natively: each sample's fields go straight to its
+    # ascore() (#214). A legacy Metric keeps the legacy protocol.
+    dataset = t.cast(EvaluationDataset, dataset)
+    jobs: t.List[_MetricJob] = [
+        _LegacyMetricJob(m) if isinstance(m, Metric) else _NativeMetricJob.build(m)
+        for m in metrics
+    ]
+    # All column checks first, then sample types: the order errors came in.
+    for job in jobs:
+        job.check_columns(dataset)
+    for job in jobs:
+        job.check_sample_type(dataset)
+    # Fill in the models each metric needs, once the dataset is known to fit.
+    for job in jobs:
+        job.prepare(models, run_config)
 
     executor = Executor(
         desc="Evaluating",
@@ -329,7 +300,6 @@ async def _aevaluate(
         metadata={"type": ChainType.EVALUATION},
     )
 
-    sample_type = dataset.get_sample_type()
     for i, sample in enumerate(dataset):
         row = t.cast(t.Dict[str, t.Any], sample.model_dump())
         row_rm, row_group_cm = new_group(
@@ -339,32 +309,14 @@ async def _aevaluate(
             metadata={"type": ChainType.ROW, "row_index": i},
         )
         row_run_managers.append((row_rm, row_group_cm))
-        if sample_type == SingleTurnSample:
-            _ = [
-                executor.submit(
-                    metric.single_turn_ascore,
-                    sample,
-                    row_group_cm,
-                    name=f"{metric.name}-{i}",
-                    timeout=run_config.timeout,
-                )
-                for metric in metrics
-                if isinstance(metric, SingleTurnMetric)
-            ]
-        elif sample_type == MultiTurnSample:
-            _ = [
-                executor.submit(
-                    metric.multi_turn_ascore,
-                    sample,
-                    row_group_cm,
-                    name=f"{metric.name}-{i}",
-                    timeout=run_config.timeout,
-                )
-                for metric in metrics
-                if isinstance(metric, MultiTurnMetric)
-            ]
-        else:
-            raise ValueError(f"Unsupported sample type {sample_type}")
+        for job in jobs:
+            executor.submit(
+                job.ascore,
+                sample,
+                row_group_cm,
+                name=f"{job.name}-{i}",
+                timeout=run_config.timeout,
+            )
 
     # Return executor for cancellable execution if requested
     if return_executor:
@@ -380,12 +332,8 @@ async def _aevaluate(
         # convert results to dataset_like
         for i, _ in enumerate(dataset):
             s = {}
-            for j, m in enumerate(metrics):
-                if isinstance(m, ModeMetric):  # type: ignore
-                    key = f"{m.name}(mode={m.mode})"
-                else:
-                    key = m.name
-                s[key] = results[len(metrics) * i + j]
+            for j, job in enumerate(jobs):
+                s[job.key] = results[len(jobs) * i + j]
             scores.append(s)
             # close the row chain
             row_rm, row_group_cm = row_run_managers[i]
@@ -612,14 +560,251 @@ def _check_models(llm: t.Any, embeddings: t.Any) -> None:
         )
 
 
-def _default_metrics() -> t.List[Metric]:
-    """The metrics ``evaluate(metrics=None)`` runs, built fresh for each call.
+class _Models:
+    """The run's ``llm`` and ``embeddings``, defaulted on first use.
 
-    These are the hand-off classes ``from ragas.metrics import ...`` gives,
-    so an LLM from ``llm_factory()`` scores them with the collections
-    implementations (#124). The defaults used to be the plain legacy
-    singletons from the private modules: legacy scoring, and module-level
-    objects shared by every caller.
+    A metric that needs a model nobody passed gets the default one, built once
+    per run and shared by every metric that needs it.
+    """
+
+    def __init__(self, llm: t.Any, embeddings: t.Any) -> None:
+        self._llm = llm
+        self._embeddings = embeddings
+
+    def llm(self) -> t.Any:
+        if self._llm is None:
+            self._llm = default_llm()
+        return self._llm
+
+    def embeddings(self) -> t.Any:
+        if self._embeddings is None:
+            self._embeddings = _default_embeddings(self._llm)
+        return self._embeddings
+
+    def modern_llm(self, metric_name: str) -> InstructorBaseRagasLLM:
+        llm = self.llm()
+        # Legacy-only check: redundant once evaluate() stops accepting
+        # BaseRagasLLM (#215).
+        if not isinstance(llm, InstructorBaseRagasLLM):
+            raise TypeError(
+                f"Metric '{metric_name}' needs the LLM evaluate() supplies, which "
+                f"must be an InstructorBaseRagasLLM from llm_factory(); got "
+                f"{type(llm).__name__}."
+            )
+        return llm
+
+    def modern_embeddings(self, metric_name: str) -> BaseRagasEmbedding:
+        embeddings = self.embeddings()
+        # Legacy-only check: redundant once evaluate() stops accepting
+        # BaseRagasEmbeddings (#215).
+        if not isinstance(embeddings, BaseRagasEmbedding):
+            raise TypeError(
+                f"Metric '{metric_name}' needs the embeddings evaluate() supplies, "
+                f"which must be a BaseRagasEmbedding from embedding_factory(); "
+                f"got {type(embeddings).__name__}."
+            )
+        return embeddings
+
+    def all_modern(self) -> bool:
+        """Can collections metrics be built from these models? (#215: always.)"""
+        llm_ok = self._llm is None or isinstance(self._llm, InstructorBaseRagasLLM)
+        emb_ok = self._embeddings is None or isinstance(
+            self._embeddings, BaseRagasEmbedding
+        )
+        return llm_ok and emb_ok
+
+
+def _default_embeddings(llm: t.Any) -> t.Any:
+    """The embeddings for a run that passed none, matched to its LLM.
+
+    Reuses the LLM's provider and client where that makes sense, so an OpenAI
+    evaluator LLM gets OpenAI embeddings.
+    """
+    inferred_provider = _infer_embedding_provider_from_llm(llm)
+    if inferred_provider == "litellm":
+        # A litellm-backed LLM's `.client` is an instructor-wrapped completion
+        # function, not an embeddings client. Pick the embedding model from
+        # the LLM's provider prefix (#190).
+        return default_embeddings_for_litellm_llm(llm)
+    # the caller's own client (llm_factory keeps it as source_client), not the
+    # instructor wrapper around it
+    return embedding_factory(
+        provider=inferred_provider,
+        client=getattr(llm, "source_client", None) or getattr(llm, "client", None),
+    )
+
+
+class _MetricJob(t.Protocol):
+    """One metric of an evaluate() run, scored once per row."""
+
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def key(self) -> str:
+        """The metric's column in the result."""
+        ...
+
+    def check_columns(self, dataset: EvaluationDataset) -> None: ...
+
+    def check_sample_type(self, dataset: EvaluationDataset) -> None: ...
+
+    def prepare(self, models: _Models, run_config: RunConfig) -> None: ...
+
+    async def ascore(
+        self,
+        sample: t.Union[SingleTurnSample, MultiTurnSample],
+        callbacks: Callbacks,
+        timeout: t.Optional[float] = None,
+    ) -> float: ...
+
+
+@dataclass
+class _NativeMetricJob:
+    """A modern metric (``SimpleBaseMetric``) scored by calling its ``ascore``.
+
+    Each sample's fields are passed by name, as the metric's signature asks
+    (see ``ragas.metrics._collections_bridge.input_spec``). The metric object
+    is never modified: a model it takes as an ``ascore`` argument is passed
+    per call.
+    """
+
+    metric: SimpleBaseMetric
+    spec: InputSpec
+    components: t.Dict[str, t.Any] = field(default_factory=dict)
+
+    @classmethod
+    def build(cls, metric: SimpleBaseMetric) -> "_NativeMetricJob":
+        return cls(metric=metric, spec=input_spec(metric))
+
+    @property
+    def name(self) -> str:
+        return self.metric.name
+
+    @property
+    def key(self) -> str:
+        return self.metric.name
+
+    def check_columns(self, dataset: EvaluationDataset) -> None:
+        if not self.spec.supports(dataset.get_sample_type()):
+            return  # check_sample_type reports it
+        missing = self.spec.required_columns() - set(dataset.features())
+        if missing:
+            raise ValueError(
+                f"The metric [{self.name}] that is used requires the following "
+                f"additional columns {sorted(missing)} to be present in the dataset."
+            )
+
+    def check_sample_type(self, dataset: EvaluationDataset) -> None:
+        get_supported_metric_type(dataset)  # raises for an unknown sample type
+        sample_type = dataset.get_sample_type()
+        if not self.spec.supports(sample_type):
+            raise ValueError(
+                f"The metric '{self.name}' does not support the sample type "
+                f"{sample_type}."
+            )
+
+    def prepare(self, models: _Models, run_config: RunConfig) -> None:
+        # A collections metric takes its models at construction. One that takes
+        # them per call (a prompt-template metric's ``llm``) gets the run's.
+        # The RunConfig reaches the models through the run scope (#76).
+        if "llm" in self.spec.components:
+            self.components["llm"] = models.modern_llm(self.name)
+        if "embeddings" in self.spec.components:
+            self.components["embeddings"] = models.modern_embeddings(self.name)
+
+    async def ascore(
+        self,
+        sample: t.Union[SingleTurnSample, MultiTurnSample],
+        callbacks: Callbacks,
+        timeout: t.Optional[float] = None,
+    ) -> float:
+        kwargs = {**self.spec.inputs_for(sample), **self.components}
+        rm, group_cm = new_group(
+            self.name,
+            inputs=self.spec.traced_sample(sample).to_dict(),
+            callbacks=callbacks,
+            metadata={"type": ChainType.METRIC},
+        )
+
+        async def call() -> t.Any:
+            # This run is the metric's: its own ascore() adopts it rather than
+            # opening a second one, and its LLM calls nest under it (#196).
+            with adopt_metric_run(group_cm):
+                return await self.metric.ascore(**kwargs)
+
+        try:
+            score = as_score(await asyncio.wait_for(call(), timeout), self.name)
+        except Exception as e:
+            if not group_cm.ended:
+                rm.on_chain_error(e)
+            raise
+        if not group_cm.ended:
+            rm.on_chain_end({"output": score})
+        return score
+
+
+# --- legacy metrics -------------------------------------------------------------
+# From here to "end of legacy metrics": running legacy ``Metric`` objects
+# (``ragas.metrics._*`` and the ``from ragas.metrics import X`` hand-off
+# classes). Delete it with them (#215).
+
+
+@dataclass
+class _LegacyMetricJob:
+    """A legacy ``Metric``, driven through its own protocol."""
+
+    metric: Metric
+
+    @property
+    def name(self) -> str:
+        return self.metric.name
+
+    @property
+    def key(self) -> str:
+        if isinstance(self.metric, ModeMetric):  # type: ignore
+            return f"{self.metric.name}(mode={self.metric.mode})"
+        return self.metric.name
+
+    def check_columns(self, dataset: EvaluationDataset) -> None:
+        validate_required_columns(dataset, [self.metric])
+
+    def check_sample_type(self, dataset: EvaluationDataset) -> None:
+        validate_supported_metrics(dataset, [self.metric])
+
+    def prepare(self, models: _Models, run_config: RunConfig) -> None:
+        # Work on a copy: filling in llm/embeddings must not change the
+        # caller's metric object, which other threads or runs may be using (#76).
+        metric = copy.copy(self.metric)
+        if isinstance(metric, MetricWithLLM) and metric.llm is None:
+            metric.llm = t.cast(t.Optional[BaseRagasLLM], models.llm())
+        if isinstance(metric, MetricWithEmbeddings) and metric.embeddings is None:
+            metric.embeddings = models.embeddings()
+        metric.init(run_config)
+        self.metric = metric
+
+    async def ascore(
+        self,
+        sample: t.Union[SingleTurnSample, MultiTurnSample],
+        callbacks: Callbacks,
+        timeout: t.Optional[float] = None,
+    ) -> float:
+        metric = self.metric
+        if isinstance(sample, SingleTurnSample) and isinstance(
+            metric, SingleTurnMetric
+        ):
+            return await metric.single_turn_ascore(sample, callbacks, timeout)
+        if isinstance(sample, MultiTurnSample) and isinstance(metric, MultiTurnMetric):
+            return await metric.multi_turn_ascore(sample, callbacks, timeout)
+        raise ValueError(f"Unsupported sample type {type(sample)}")
+
+
+def _default_metrics() -> t.List[Metric]:
+    """The defaults for a run given a legacy ``BaseRagasLLM``/``BaseRagasEmbeddings``.
+
+    Collections metrics can't be built from those, so these are the hand-off
+    classes ``from ragas.metrics import ...`` gives, built fresh for each call
+    (#124); they score with legacy code for such models.
     """
     with warnings.catch_warnings():
         # The short-import deprecation is aimed at user code, not this default.
@@ -632,6 +817,36 @@ def _default_metrics() -> t.List[Metric]:
         )
 
         return [AnswerRelevancy(), ContextPrecision(), Faithfulness(), ContextRecall()]
+
+
+# --- end of legacy metrics ------------------------------------------------------
+
+
+def _default_metrics_for(models: _Models) -> t.List[t.Any]:
+    """The metrics ``evaluate(metrics=None)`` runs, built fresh for each call.
+
+    Answer relevancy, context precision, faithfulness and context recall from
+    ``ragas.metrics.collections``, built with the run's models (the defaults
+    when none were passed).
+    """
+    if not models.all_modern():
+        return _default_metrics()  # legacy models; delete with them (#215)
+
+    from ragas.metrics.collections import (
+        AnswerRelevancy,
+        ContextPrecision,
+        ContextRecall,
+        Faithfulness,
+    )
+
+    llm = models.modern_llm("default metrics")
+    embeddings = models.modern_embeddings("answer_relevancy")
+    return [
+        AnswerRelevancy(llm=llm, embeddings=embeddings),
+        ContextPrecision(llm=llm),
+        Faithfulness(llm=llm),
+        ContextRecall(llm=llm),
+    ]
 
 
 def _warn_on_missing_scores(result: EvaluationResult) -> None:
