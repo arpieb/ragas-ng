@@ -78,11 +78,18 @@ def test_rpm_paces_sync_requests():
     from ragas.rate_limit import RateLimit
 
     limit = RateLimit(rpm=2)
-    stamps = []
+    # Each request was granted somewhere in [before, after]. Stamping only
+    # `after` let a scheduler hiccup after the first grant shrink the
+    # measured gap below the window (seen on macOS CI). `after_k - before_i`
+    # is an upper bound on the gap between two grants, so it only fails when
+    # three requests were certainly granted within one window.
+    spans = []
     for _ in range(4):
+        before = time.monotonic()
         limit.acquire()
-        stamps.append(time.monotonic())
-    assert _max_in_a_minute(stamps) <= 2
+        spans.append((before, time.monotonic()))
+    for i in range(len(spans) - 2):
+        assert spans[i + 2][1] - spans[i][0] >= MINUTE * 0.95
 
 
 def test_requests_are_spread_rather_than_sent_in_one_burst():
