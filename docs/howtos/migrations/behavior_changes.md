@@ -651,6 +651,15 @@ Testset generation (`TestsetGenerator`, the synthesizers, the transforms, `defau
 
 `pip install "ragas[dspy]"` now installs `dspy[optuna]>=3` instead of `dspy-ai>=2.4.0`. `DSPyOptimizer` runs MIPROv2, which on DSPy 3 needs `optuna`; the old extra left it out, so the optimizer failed on import of a fresh install. DSPy 2.x is no longer supported: `DSPyOptimizer` already needed DSPy 3's MIPROv2 constructor ([#214](https://github.com/arpieb/ragas-ng/issues/214)).
 
+## Dead code removed: `ragas evals`, `as_completed`, `find_indirect_clusters` ([#215](https://github.com/arpieb/ragas-ng/issues/215))
+
+These had no callers in ragas, and the CLI command could not run.
+
+- The `ragas evals` CLI command is removed. It called a `run_async` method that experiments don't have and a `Project` class that no longer exists, so every run failed. Run an experiment from Python instead: `Dataset.load(...)`, then `my_experiment.run(dataset)` or `await my_experiment.arun(dataset)`. `ragas quickstart` and `ragas hello-world` are unchanged, except that the `hello_world/evals.py` script that `ragas hello-world` writes is now a working `@experiment` you run with `python hello_world/evals.py`. It used to be meant for `ragas evals` and could not run either.
+- `ragas.async_utils.as_completed()` and `ragas.async_utils.process_futures()` are removed. Use `concurrent_results()`, which ragas has used since #207 and which cancels what is still running when you stop iterating, or `asyncio.as_completed()`.
+- `KnowledgeGraph.find_indirect_clusters()` is removed. Testset generation uses `find_n_indirect_clusters()`, which stays. With it goes ragas' last use of `scikit-network` (its Leiden clustering) and of `networkx`.
+- The module `ragas.backends.utils` is removed. Its `MemorableNames` was a copy of `ragas.utils.MemorableNames`; import it from there.
+
 ## The legacy layer is removed ([#215](https://github.com/arpieb/ragas-ng/issues/215))
 
 The legacy metrics, LLM and embedding wrappers and prompt classes are deleted, not deprecated. Everything they did has a modern replacement, which #214 moved testset generation, the optimizers and `evaluate()` onto.

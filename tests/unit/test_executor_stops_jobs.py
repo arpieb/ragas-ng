@@ -20,7 +20,7 @@ import warnings
 
 import pytest
 
-from ragas.async_utils import as_completed, run_async_tasks
+from ragas.async_utils import run_async_tasks
 from ragas.executor import Executor
 from ragas.run_config import RunConfig
 
@@ -147,24 +147,6 @@ def test_cancelling_leaves_no_coroutine_unawaited():
 
         asyncio.create_task(cancel_soon())
         await executor.aresults()
-
-    assert not _unawaited_during(lambda: asyncio.run(main()))
-
-
-def test_as_completed_cancel_path_leaves_no_coroutine_unawaited():
-    # the public helper is kept; its cancel path no longer leaks a waiter
-    async def job(i):
-        await asyncio.sleep(0.01 * i)
-        return i
-
-    async def main():
-        seen = []
-        for future in as_completed(
-            [job(i) for i in range(3)], cancel_check=lambda: bool(seen)
-        ):
-            seen.append(await future)
-        await asyncio.sleep(0)
-        assert seen == [0]
 
     assert not _unawaited_during(lambda: asyncio.run(main()))
 
