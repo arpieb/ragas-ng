@@ -646,3 +646,12 @@ Testset generation (`TestsetGenerator`, the synthesizers, the transforms, `defau
 - **⚠ silent:** `generate_with_docs()` now skips documents with no text, as `generate_with_chunks()` and the removed LlamaIndex method did. Blank documents used to become empty graph nodes and counted toward the document-length shares that pick the default transforms, so a corpus with blank documents can now get a different pipeline.
 - The testset prompts (extractors, filters, synthesizers, personas) are now `ragas.prompt.metrics.BasePrompt` subclasses, not `PydanticPrompt`. Their rendered text is byte-for-byte unchanged, so cache keys don't move. Their `generate()` no longer takes `stop=` or `retries_left=`. `get_prompts()` and `set_prompts()` on testset classes find and take any `BasePrompt`, including a `PydanticPrompt`.
 - `EmbeddingExtractor` always calls `aembed_text()`. With an embedding model that had no `is_async` attribute, such as `LiteLLMEmbeddings`, it ran the sync `embed_text()` on a worker thread and warned (`UserWarning`); it now makes the async call and doesn't warn. The embeddings are the same.
+
+## Dead code removed: `ragas evals`, `as_completed`, `find_indirect_clusters` ([#215](https://github.com/arpieb/ragas-ng/issues/215))
+
+These had no callers in ragas, and the CLI command could not run.
+
+- The `ragas evals` CLI command is removed. It called a `run_async` method that experiments don't have and a `Project` class that no longer exists, so every run failed. Run an experiment from Python instead: `Dataset.load(...)`, then `my_experiment.run(dataset)` or `await my_experiment.arun(dataset)`. `ragas quickstart` and `ragas hello-world` are unchanged, except that the `hello_world/evals.py` script that `ragas hello-world` writes is now a working `@experiment` you run with `python hello_world/evals.py`. It used to be meant for `ragas evals` and could not run either.
+- `ragas.async_utils.as_completed()` and `ragas.async_utils.process_futures()` are removed. Use `concurrent_results()`, which ragas has used since #207 and which cancels what is still running when you stop iterating, or `asyncio.as_completed()`.
+- `KnowledgeGraph.find_indirect_clusters()` is removed. Testset generation uses `find_n_indirect_clusters()`, which stays. With it goes ragas' last use of `scikit-network` (its Leiden clustering) and of `networkx`.
+- The module `ragas.backends.utils` is removed. Its `MemorableNames` was a copy of `ragas.utils.MemorableNames`; import it from there.
