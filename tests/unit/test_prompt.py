@@ -1,45 +1,9 @@
 import copy
-import typing as t
 
-import numpy as np
 import pytest
 from pydantic import BaseModel
 
-from ragas.llms.base import BaseRagasLLM
-from ragas.llms.output import Generation, LLMResult
-from ragas.prompt import StringIO, StringPrompt
-from ragas.prompt.value import StringPromptValue
-from ragas.run_config import RunConfig
-
-
-class EchoLLM(BaseRagasLLM):
-    def generate_text(  # type: ignore
-        self,
-        prompt: StringPromptValue,
-        *args,
-        **kwargs,
-    ) -> LLMResult:
-        return LLMResult(generations=[[Generation(text=prompt.to_string())]])
-
-    async def agenerate_text(  # type: ignore
-        self,
-        prompt: StringPromptValue,
-        *args,
-        **kwargs,
-    ) -> LLMResult:
-        return LLMResult(generations=[[Generation(text=prompt.to_string())]])
-
-    def is_finished(self, response: LLMResult) -> bool:
-        return True
-
-
-@pytest.mark.asyncio
-async def test_string_prompt():
-    echo_llm = EchoLLM(run_config=RunConfig())
-    prompt = StringPrompt()
-    assert await prompt.generate(data="hello", llm=echo_llm) == "hello"
-    assert prompt.name == "string_prompt"
-
+from ragas.prompt import StringIO
 
 expected_generate_output_signature = """\
 Please return the output in the following JSON format based on the StringIO model:
@@ -52,9 +16,7 @@ Please return the output in the following JSON format based on the StringIO mode
 def test_process_fields():
     from enum import Enum
 
-    from pydantic import BaseModel
-
-    from ragas.prompt import PydanticPrompt, StringIO
+    from ragas.prompt import BasePrompt, StringIO
 
     class Categories(str, Enum):
         science = "science"
@@ -65,7 +27,7 @@ def test_process_fields():
     class InputModel(BaseModel):
         category: Categories
 
-    class JokeGenerator(PydanticPrompt[InputModel, StringIO]):
+    class JokeGenerator(BasePrompt[InputModel, StringIO]):
         instruction = "Generate a joke in the category of {category}."
         output_model = StringIO
 
@@ -77,9 +39,9 @@ def test_process_fields():
 
 @pytest.mark.asyncio
 async def test_pydantic_prompt_io():
-    from ragas.prompt import PydanticPrompt, StringIO
+    from ragas.prompt import BasePrompt, StringIO
 
-    class Prompt(PydanticPrompt[StringIO, StringIO]):
+    class Prompt(BasePrompt[StringIO, StringIO]):
         instruction = ""
         input_model = StringIO
         output_model = StringIO
@@ -92,9 +54,9 @@ async def test_pydantic_prompt_io():
 
 
 def test_pydantic_prompt_examples():
-    from ragas.prompt import PydanticPrompt
+    from ragas.prompt import BasePrompt
 
-    class Prompt(PydanticPrompt[StringIO, StringIO]):
+    class Prompt(BasePrompt[StringIO, StringIO]):
         instruction = ""
         input_model = StringIO
         output_model = StringIO
@@ -108,9 +70,9 @@ def test_pydantic_prompt_examples():
 
 
 def test_prompt_hash():
-    from ragas.prompt import PydanticPrompt, StringIO
+    from ragas.prompt import BasePrompt, StringIO
 
-    class Prompt(PydanticPrompt[StringIO, StringIO]):
+    class Prompt(BasePrompt[StringIO, StringIO]):
         instruction = "You are a helpful assistant."
         input_model = StringIO
         output_model = StringIO
@@ -144,9 +106,9 @@ def test_prompt_hash_in_ragas():
 
 
 def test_prompt_save_load(tmp_path):
-    from ragas.prompt import PydanticPrompt, StringIO
+    from ragas.prompt import BasePrompt, StringIO
 
-    class Prompt(PydanticPrompt[StringIO, StringIO]):
+    class Prompt(BasePrompt[StringIO, StringIO]):
         instruction = "You are a helpful assistant."
         input_model = StringIO
         output_model = StringIO
@@ -164,9 +126,9 @@ def test_prompt_save_load(tmp_path):
 
 
 def test_prompt_save_load_language(tmp_path):
-    from ragas.prompt import PydanticPrompt, StringIO
+    from ragas.prompt import BasePrompt, StringIO
 
-    class Prompt(PydanticPrompt[StringIO, StringIO]):
+    class Prompt(BasePrompt[StringIO, StringIO]):
         instruction = "You are a helpful assistant."
         language = "spanish"
         input_model = StringIO
@@ -210,61 +172,3 @@ def test_prompt_class_attributes():
     p.examples = []
     assert p.instruction != p_another_instance.instruction
     assert p.examples != p_another_instance.examples
-
-
-@pytest.mark.asyncio
-async def test_prompt_parse_retry():
-    from ragas.exceptions import RagasOutputParserException
-    from ragas.prompt import PydanticPrompt, StringIO
-
-    class OutputModel(BaseModel):
-        example: str
-
-    class Prompt(PydanticPrompt[StringIO, OutputModel]):
-        instruction = ""
-        input_model = StringIO
-        output_model = OutputModel
-
-    echo_llm = EchoLLM(run_config=RunConfig())
-    prompt = Prompt()
-    with pytest.raises(RagasOutputParserException):
-        await prompt.generate(
-            data=StringIO(text="this prompt will be echoed back as invalid JSON"),
-            llm=echo_llm,
-        )
-
-
-def cosine_similarity(v1: t.List[float], v2: t.List[float]) -> float:
-    """Calculate cosine similarity between two vectors."""
-    v1_array = np.array(v1)
-    v2_array = np.array(v2)
-    return np.dot(v1_array, v2_array) / (
-        np.linalg.norm(v1_array) * np.linalg.norm(v2_array)
-    )
-
-
-@pytest.mark.skip(reason="TODO: Implement embedding calculation")
-def test_in_memory_example_store():
-    from ragas.prompt import InMemoryExampleStore
-
-    class FakeInputModel(BaseModel):
-        text: str
-        embedding: t.List[float]
-
-    class FakeOutputModel(BaseModel):
-        text: str
-
-    from tests.conftest import EchoEmbedding
-
-    store = InMemoryExampleStore(embeddings=EchoEmbedding())
-    store.add_example(
-        FakeInputModel(text="hello", embedding=[1, 2, 3]),
-        FakeOutputModel(text="hello"),
-    )
-    store.add_example(
-        FakeInputModel(text="world", embedding=[1, 2, 4]),
-        FakeOutputModel(text="world"),
-    )
-    assert store.get_examples(FakeInputModel(text="hello", embedding=[1, 2, 3])) == [
-        FakeOutputModel(text="hello")
-    ]

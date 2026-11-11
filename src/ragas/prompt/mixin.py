@@ -5,10 +5,10 @@ import logging
 import os
 import typing as t
 
-from .pydantic_prompt import PydanticPrompt
+from .metrics.base_prompt import BasePrompt
 
 if t.TYPE_CHECKING:
-    from ragas.llms.base import BaseRagasLLM, InstructorBaseRagasLLM
+    from ragas.llms.base import InstructorBaseRagasLLM
 
 
 logger = logging.getLogger(__name__)
@@ -17,19 +17,19 @@ logger = logging.getLogger(__name__)
 class PromptMixin:
     """
     Mixin class for classes that have prompts.
-    eg: [BaseSynthesizer][ragas.testset.synthesizers.base.BaseSynthesizer], [MetricWithLLM][ragas.metrics.base.MetricWithLLM]
+    eg: [BaseSynthesizer][ragas.testset.synthesizers.base.BaseSynthesizer]
     """
 
     name: str = ""
 
-    def _get_prompts(self) -> t.Dict[str, PydanticPrompt]:
-        prompts = {}
-        for key, value in inspect.getmembers(self):
-            if isinstance(value, PydanticPrompt):
-                prompts.update({key: value})
-        return prompts
+    def _get_prompts(self) -> t.Dict[str, BasePrompt]:
+        return {
+            key: value
+            for key, value in inspect.getmembers(self)
+            if isinstance(value, BasePrompt)
+        }
 
-    def get_prompts(self) -> t.Dict[str, PydanticPrompt]:
+    def get_prompts(self) -> t.Dict[str, BasePrompt]:
         """
         Returns a dictionary of prompts for the class.
         """
@@ -38,14 +38,15 @@ class PromptMixin:
             prompts.update({value.name: value})
         return prompts
 
-    def set_prompts(self, **prompts):
+    def set_prompts(self, **prompts: BasePrompt) -> None:
         """
         Sets the prompts for the class.
 
         Raises
         ------
         ValueError
-            If the prompt is not an instance of `PydanticPrompt`.
+            If there is no prompt of that name, or the value is not a
+            ``ragas.prompt.BasePrompt``.
         """
         available_prompts = self.get_prompts()
         name_to_var = {v.name: k for k, v in self._get_prompts().items()}
@@ -54,18 +55,18 @@ class PromptMixin:
                 raise ValueError(
                     f"Prompt with name '{key}' does not exist. Use get_prompts() to see available prompts."
                 )
-            if not isinstance(value, PydanticPrompt):
+            if not isinstance(value, BasePrompt):
                 raise ValueError(
-                    f"Prompt with name '{key}' must be an instance of 'ragas.prompt.PydanticPrompt'"
+                    f"Prompt with name '{key}' must be an instance of 'ragas.prompt.BasePrompt'"
                 )
             setattr(self, name_to_var[key], value)
 
     async def adapt_prompts(
         self,
         language: str,
-        llm: t.Union[BaseRagasLLM, InstructorBaseRagasLLM],
+        llm: InstructorBaseRagasLLM,
         adapt_instruction: bool = False,
-    ) -> t.Dict[str, PydanticPrompt]:
+    ) -> t.Dict[str, BasePrompt]:
         """
         Adapts the prompts in the class to the given language and using the given LLM.
 

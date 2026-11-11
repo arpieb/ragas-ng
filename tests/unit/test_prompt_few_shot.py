@@ -8,21 +8,13 @@ Annotation pairing is covered in ``test_optimizers_collections.py``.
 from __future__ import annotations
 
 import typing as t
-import warnings
-from types import SimpleNamespace
 
 import pytest
-from pydantic import BaseModel
 
 from ragas.prompt.dynamic_few_shot import (
     DynamicFewShotPrompt,
     SimpleExampleStore,
     SimpleInMemoryExampleStore,
-)
-from ragas.prompt.few_shot_pydantic_prompt import (
-    ExampleStore,
-    FewShotPydanticPrompt,
-    InMemoryExampleStore,
 )
 from ragas.prompt.utils import nearest_indices
 
@@ -39,25 +31,10 @@ class _AxisEmbeddings:
         return [1.0, 1.0, 1.0]
 
 
-class In(BaseModel):
-    text: str
-
-
-class Out(BaseModel):
-    label: str
-
-
 def _dict_store(embeddings=None) -> SimpleInMemoryExampleStore:
     store = SimpleInMemoryExampleStore(embedding_model=embeddings)
     for word in ["cat", "cat kitten", "dog", "car"]:
         store.add_example({"text": word}, {"label": word})
-    return store
-
-
-def _model_store() -> InMemoryExampleStore:
-    store = InMemoryExampleStore(embeddings=t.cast(t.Any, _AxisEmbeddings()))
-    for word in ["cat", "cat kitten", "dog", "car"]:
-        store.add_example(In(text=word), Out(label=word))
     return store
 
 
@@ -69,23 +46,13 @@ def test_dict_store_top_k_zero_returns_nothing(embeddings):
     assert _dict_store(embeddings).get_examples({"text": "cat"}, top_k=0) == []
 
 
-def test_model_store_top_k_zero_returns_nothing():
-    assert _model_store().get_examples(In(text="cat"), top_k=0) == []
-
-
 @pytest.mark.parametrize("embeddings", [None, _AxisEmbeddings()])
 def test_dict_store_negative_top_k_raises(embeddings):
     with pytest.raises(ValueError, match="0 or more"):
         _dict_store(embeddings).get_examples({"text": "cat"}, top_k=-1)
 
 
-def test_model_store_negative_top_k_raises():
-    with pytest.raises(ValueError, match="0 or more"):
-        _model_store().get_examples(In(text="cat"), top_k=-2)
-
-
 def test_nearest_helpers_top_k_zero():
-    assert InMemoryExampleStore.get_nearest_examples([1, 0], [[1, 0]], 0, 0.0) == []
     assert nearest_indices([1, 0], [[1, 0], [1, 0]], 0, 0.0) == []
 
 
@@ -108,7 +75,7 @@ def test_top_k_keeps_the_most_similar_in_ascending_order():
     assert indices == [2, 1]  # most similar last, as before
 
 
-# --- below the threshold: no examples, in both stores -------------------------
+# --- below the threshold: no examples -----------------------------------------
 
 
 def test_dict_store_below_threshold_returns_nothing():
@@ -118,87 +85,10 @@ def test_dict_store_below_threshold_returns_nothing():
     assert store.get_examples({"text": "zzz"}, top_k=2, threshold=0.99) == []
 
 
-def test_model_store_below_threshold_returns_nothing():
-    store = _model_store()
-    assert store.get_examples(In(text="zzz"), top_k=2, threshold=0.99) == []
-
-
 def test_dict_store_returns_only_qualifying_examples():
     store = _dict_store(_AxisEmbeddings())
     got = store.get_examples({"text": "cat"}, top_k=5, threshold=0.9)
     assert sorted(out["label"] for _, out in got) == ["cat", "cat kitten"]
-
-
-# --- #93: the threshold reaches the store -------------------------------------
-
-
-class _RecordingStore(ExampleStore):
-    def __init__(self):
-        self.calls: t.List[t.Tuple[int, float]] = []
-
-    def get_examples(self, data, top_k=5, threshold=0.7):
-        self.calls.append((top_k, threshold))
-        return []
-
-    def add_example(self, input, output):  # pragma: no cover - unused
-        pass
-
-
-class _LegacyStore(ExampleStore):
-    """Written against the old abstract signature, without ``threshold``."""
-
-    def __init__(self):
-        self.calls: t.List[int] = []
-
-    def get_examples(self, data, top_k=5):  # type: ignore[override]
-        self.calls.append(top_k)
-        return []
-
-    def add_example(self, input, output):  # pragma: no cover - unused
-        pass
-
-
-class _FakeLLM:
-    """Enough of a BaseRagasLLM for PydanticPrompt.generate_multiple."""
-
-    async def generate(self, prompt, n=1, temperature=None, stop=None, callbacks=None):
-        gen = SimpleNamespace(text='{"label": "x"}')
-        return SimpleNamespace(generations=[[gen] * n])
-
-
-def _few_shot(store) -> FewShotPydanticPrompt:
-    prompt = FewShotPydanticPrompt(example_store=store)
-    prompt.input_model = In
-    prompt.output_model = Out
-    prompt.instruction = "Label it."
-    prompt.name = "few_shot"
-    return prompt
-
-
-@pytest.mark.asyncio
-async def test_few_shot_prompt_forwards_the_threshold():
-    store = _RecordingStore()
-    prompt = _few_shot(store)
-    prompt.top_k_for_examples = 2
-    prompt.threshold_for_examples = 0.42
-
-    await prompt.generate_multiple(llm=t.cast(t.Any, _FakeLLM()), data=In(text="a"))
-
-    assert store.calls == [(2, 0.42)]
-
-
-@pytest.mark.asyncio
-async def test_legacy_store_still_works_and_warns_once():
-    store = _LegacyStore()
-    prompt = _few_shot(store)
-
-    with pytest.warns(UserWarning, match="threshold is ignored"):
-        await prompt.generate_multiple(llm=t.cast(t.Any, _FakeLLM()), data=In(text="a"))
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        await prompt.generate_multiple(llm=t.cast(t.Any, _FakeLLM()), data=In(text="b"))
-
-    assert store.calls == [5, 5]
 
 
 def test_dynamic_prompt_works_with_a_store_without_threshold():

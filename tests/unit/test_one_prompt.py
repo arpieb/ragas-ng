@@ -1,8 +1,8 @@
 """One structured prompt implementation (#214).
 
-``ragas.prompt.metrics.BasePrompt`` renders, generates, adapts, hashes and
-saves; ``ragas.prompt.PydanticPrompt`` is a subclass that only adds the
-legacy-LLM branch. The renders below are pinned to what ``main`` produced
+``ragas.prompt.BasePrompt`` renders, generates, adapts, hashes and saves
+(``PydanticPrompt``, its legacy-LLM subclass, was removed in #215). The
+renders below are pinned to what ``main`` produced
 before the merge, so cache keys and scores don't move.
 """
 
@@ -17,8 +17,7 @@ import pytest
 from pydantic import BaseModel
 
 from ragas.llms.base import InstructorLLM, llm_factory
-from ragas.prompt import PydanticPrompt
-from ragas.prompt.metrics import BasePrompt
+from ragas.prompt import BasePrompt
 
 
 class In(BaseModel):
@@ -41,13 +40,6 @@ class NoExamplePrompt(BasePrompt[In, Out]):
     output_model = Out
     instruction = "Label the text."
     examples = []
-
-
-class LegacyLabelPrompt(PydanticPrompt[In, Out]):
-    input_model = In
-    output_model = Out
-    instruction = "Label the text."
-    examples = [(In(text="hello"), Out(label="greeting"))]
 
 
 def _sha(text: str) -> str:
@@ -108,11 +100,6 @@ def test_testset_prompt_without_examples_renders_as_before():
     )
 
 
-def test_pydantic_prompt_renders_like_base_prompt():
-    data = In(text="hi")
-    assert LegacyLabelPrompt().to_string(data) == LabelPrompt().to_string(data)
-
-
 # --------------------------------------------------------------------------- #
 # Generation
 # --------------------------------------------------------------------------- #
@@ -138,14 +125,6 @@ async def test_n_samples_differ_by_sample_index():
 
 
 @pytest.mark.asyncio
-async def test_pydantic_prompt_sends_the_same_prompt_to_an_instructor_llm():
-    a, b = RecordingLLM(), RecordingLLM()
-    await LabelPrompt().generate(llm=a.llm, data=In(text="hi"))
-    await LegacyLabelPrompt().generate(llm=b.llm, data=In(text="hi"), stop=["x"])
-    assert a.calls[0]["prompt"] == b.calls[0]["prompt"]
-
-
-@pytest.mark.asyncio
 async def test_process_output_runs_on_each_output():
     class Upper(LabelPrompt):
         def process_output(self, output, input):
@@ -168,15 +147,6 @@ async def test_adapt_translates_the_instruction_without_examples():
     adapted = await NoExamplePrompt().adapt("spanish", rec.llm, adapt_instruction=True)
     assert adapted.language == "spanish"
     assert adapted.instruction == "[es] Label the text."
-
-
-@pytest.mark.asyncio
-async def test_pydantic_prompt_adapts_through_the_same_translation():
-    rec = RecordingLLM()
-    adapted = await LegacyLabelPrompt().adapt("spanish", rec.llm)
-    assert isinstance(adapted, LegacyLabelPrompt)
-    assert adapted.examples[0][0].text == "[es] hello"
-    assert adapted.original_hash == hash(adapted)
 
 
 def test_name_hash_and_equality():

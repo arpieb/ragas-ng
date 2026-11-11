@@ -10,7 +10,8 @@ from pydantic import BaseModel
 from ragas.callbacks import new_group
 from ragas.llms import default_llm
 from ragas.llms.base import InstructorBaseRagasLLM
-from ragas.testset._modern import TestsetPromptMixin, require_llm
+from ragas.prompt.mixin import PromptMixin
+from ragas.testset._modern import require_llm
 from ragas.testset.graph import KnowledgeGraph, Node
 from ragas.testset.persona import Persona
 
@@ -71,7 +72,7 @@ Scenario = t.TypeVar("Scenario", bound=BaseScenario)
 
 
 @dataclass
-class BaseSynthesizer(ABC, t.Generic[Scenario], TestsetPromptMixin):
+class BaseSynthesizer(ABC, t.Generic[Scenario], PromptMixin):
     """
     Base class for synthesizing scenarios and samples.
     """

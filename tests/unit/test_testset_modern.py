@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 import pytest
 
 from ragas.embeddings.base import BaseRagasEmbedding
-from ragas.prompt import PydanticPrompt, StringIO
+from ragas.prompt import StringIO
 from ragas.prompt.metrics.base_prompt import BasePrompt
 from ragas.testset import TestsetGenerator
 from ragas.testset.document import Document
@@ -210,7 +210,6 @@ def test_prompt_renders_match_main(prompt, data, language, digest):
 @pytest.mark.parametrize("prompt", [p for p, *_ in _RENDERS])
 def test_testset_prompts_are_structured_prompts(prompt):
     assert isinstance(prompt, BasePrompt)
-    assert not isinstance(prompt, PydanticPrompt)
 
 
 # --- prompt access on synthesizers and transforms -------------------------------
