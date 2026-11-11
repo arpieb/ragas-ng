@@ -30,9 +30,9 @@ from ragas.testset.synthesizers.generate import TestsetGenerator
 from ragas.testset.synthesizers.testset_schema import Testset
 from ragas.testset.transforms.base import BaseGraphTransformation
 from ragas.testset.transforms.splitters import HeadlineSplitter
+from tests.unit.testset_fakes import fake_embedding, fake_llm
 
 PERSONA = Persona(name="Analyst", role_description="Reads reports.")
-ANY = t.cast(t.Any, object())
 
 
 def _parse(raw: t.Any) -> TokenUsage:
@@ -41,7 +41,10 @@ def _parse(raw: t.Any) -> TokenUsage:
 
 def _generator(**kwargs) -> TestsetGenerator:
     return TestsetGenerator(
-        llm=ANY, embedding_model=ANY, persona_list=[PERSONA], **kwargs
+        llm=fake_llm(),
+        embedding_model=fake_embedding(),
+        persona_list=[PERSONA],
+        **kwargs,
     )
 
 
@@ -100,7 +103,7 @@ class _Synth(BaseSynthesizer):
 
 
 def _synth(**kwargs) -> _Synth:
-    return _Synth(name="fake", llm=ANY, **kwargs)
+    return _Synth(name="fake", llm=fake_llm(), **kwargs)
 
 
 # --- #90: one run scope for transforms and generation ------------------------

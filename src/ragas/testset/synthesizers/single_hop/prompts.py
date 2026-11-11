@@ -2,7 +2,7 @@ import typing as t
 
 from pydantic import BaseModel
 
-from ragas.prompt import PydanticPrompt
+from ragas.prompt.metrics.base_prompt import BasePrompt
 from ragas.testset.persona import Persona
 
 
@@ -20,7 +20,7 @@ class GeneratedQueryAnswer(BaseModel):
     answer: str
 
 
-class QueryAnswerGenerationPrompt(PydanticPrompt[QueryCondition, GeneratedQueryAnswer]):
+class QueryAnswerGenerationPrompt(BasePrompt[QueryCondition, GeneratedQueryAnswer]):
     # the generated query and answer are the user-facing output
     states_output_language: bool = True
     instruction: str = (

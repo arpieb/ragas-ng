@@ -2,7 +2,7 @@ import typing as t
 
 from pydantic import BaseModel
 
-from ragas.prompt import PydanticPrompt
+from ragas.prompt.metrics.base_prompt import BasePrompt
 from ragas.testset.persona import Persona
 
 
@@ -16,7 +16,7 @@ class PersonaThemesMapping(BaseModel):
 
 
 class ThemesPersonasMatchingPrompt(
-    PydanticPrompt[ThemesPersonasInput, PersonaThemesMapping]
+    BasePrompt[ThemesPersonasInput, PersonaThemesMapping]
 ):
     instruction: str = (
         "Given a list of themes and personas with their roles, "

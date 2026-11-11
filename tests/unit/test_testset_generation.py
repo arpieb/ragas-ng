@@ -33,6 +33,7 @@ from ragas.testset.synthesizers.single_hop.specific import (
     SingleHopSpecificQuerySynthesizer,
 )
 from ragas.testset.synthesizers.utils import calculate_split_values
+from tests.unit.testset_fakes import fake_embedding, fake_llm
 
 PERSONAS = [
     Persona(name="Data Scientist", role_description="Builds models."),
@@ -75,15 +76,15 @@ class FakeSynthesizer(BaseSynthesizer):
 
 def _generator(**kwargs) -> TestsetGenerator:
     return TestsetGenerator(
-        llm=t.cast(t.Any, object()),
-        embedding_model=t.cast(t.Any, object()),
+        llm=fake_llm(),
+        embedding_model=fake_embedding(),
         knowledge_graph=KnowledgeGraph(),
         **kwargs,
     )
 
 
 def _synth(name: str, **kwargs) -> FakeSynthesizer:
-    return FakeSynthesizer(name=name, llm=t.cast(t.Any, object()), **kwargs)
+    return FakeSynthesizer(name=name, llm=fake_llm(), **kwargs)
 
 
 def _generate(gen: TestsetGenerator, size: int, distribution, **kwargs):
@@ -245,7 +246,7 @@ def test_testset_reports_the_personas_synthesizers_saw():
     testset = _generate(
         gen,
         1,
-        [(Recording(name="r", llm=t.cast(t.Any, object())), 1.0)],
+        [(Recording(name="r", llm=fake_llm()), 1.0)],
         num_personas=2,
     )
 
@@ -253,8 +254,8 @@ def test_testset_reports_the_personas_synthesizers_saw():
     # the personas make a new generator reproduce the same pool
     assert (
         TestsetGenerator(
-            llm=t.cast(t.Any, object()),
-            embedding_model=t.cast(t.Any, object()),
+            llm=fake_llm(),
+            embedding_model=fake_embedding(),
             persona_list=testset.personas,
         ).persona_list
         == testset.personas
@@ -274,7 +275,7 @@ def test_num_personas_limits_what_synthesizers_see():
     _generate(
         gen,
         1,
-        [(Recording(name="r", llm=t.cast(t.Any, object())), 1.0)],
+        [(Recording(name="r", llm=fake_llm()), 1.0)],
         num_personas=2,
     )
 
@@ -317,7 +318,7 @@ def test_unknown_persona_get_returns_none_and_getitem_raises():
 
 
 def test_single_hop_skips_persona_names_it_cannot_match():
-    synth = SingleHopSpecificQuerySynthesizer(llm=t.cast(t.Any, object()))
+    synth = SingleHopSpecificQuerySynthesizer(llm=fake_llm())
     node = Node(properties={"page_content": "x"})
 
     [combo] = synth.prepare_combinations(
@@ -335,7 +336,7 @@ def test_single_hop_skips_persona_names_it_cannot_match():
 
 
 def test_multi_hop_skips_persona_names_it_cannot_match():
-    synth = MultiHopSpecificQuerySynthesizer(llm=t.cast(t.Any, object()))
+    synth = MultiHopSpecificQuerySynthesizer(llm=fake_llm())
     node = Node(properties={"page_content": "x", "themes": ["pricing"]})
 
     [combo] = synth.prepare_combinations(

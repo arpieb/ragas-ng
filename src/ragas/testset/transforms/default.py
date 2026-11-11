@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typing as t
 
+from ragas.testset._modern import require_embedding, require_llm
 from ragas.testset.document import DocumentLike
 from ragas.testset.graph import NodeType
 from ragas.testset.transforms.extractors import (
@@ -21,20 +22,16 @@ from ragas.utils import num_tokens_from_string
 from .engine import Parallel
 
 if t.TYPE_CHECKING:
-    from ragas.embeddings.base import BaseRagasEmbedding, BaseRagasEmbeddings
+    from ragas.embeddings.base import BaseRagasEmbedding
     from ragas.llms.base import InstructorBaseRagasLLM
 
     from .engine import Transforms
 
 
-from ragas.embeddings.base import BaseRagasEmbeddings
-from ragas.llms.base import BaseRagasLLM
-
-
 def default_transforms(
     documents: t.Sequence[DocumentLike],
-    llm: t.Union[BaseRagasLLM, "InstructorBaseRagasLLM"],
-    embedding_model: t.Union[BaseRagasEmbeddings, "BaseRagasEmbedding"],
+    llm: "InstructorBaseRagasLLM",
+    embedding_model: "BaseRagasEmbedding",
 ) -> "Transforms":
     """
     Creates and returns a default set of transforms for processing a knowledge graph.
@@ -81,6 +78,8 @@ def default_transforms(
         raise ValueError(
             "default_transforms() needs at least one document; got an empty list."
         )
+    llm = require_llm(llm, "default_transforms()")
+    embedding_model = require_embedding(embedding_model, "default_transforms()")
 
     bin_ranges = [(0, 100), (101, 500), (501, float("inf"))]
     result = count_doc_length_bins(documents, bin_ranges)
@@ -184,8 +183,8 @@ def default_transforms(
 
 
 def default_transforms_for_prechunked(
-    llm: t.Union[BaseRagasLLM, "InstructorBaseRagasLLM"],
-    embedding_model: t.Union[BaseRagasEmbeddings, "BaseRagasEmbedding"],
+    llm: "InstructorBaseRagasLLM",
+    embedding_model: "BaseRagasEmbedding",
 ) -> "Transforms":
     """
     Creates and returns a default set of transforms for processing a knowledge graph
@@ -194,6 +193,11 @@ def default_transforms_for_prechunked(
     This ignores the splitting step and directly applies extractors and relationship builders
     to the chunks.
     """
+
+    llm = require_llm(llm, "default_transforms_for_prechunked()")
+    embedding_model = require_embedding(
+        embedding_model, "default_transforms_for_prechunked()"
+    )
 
     def filter_chunks(node):
         return node.type == NodeType.CHUNK

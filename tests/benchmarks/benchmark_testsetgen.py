@@ -3,6 +3,7 @@ from openai import OpenAI
 
 from ragas.embeddings.base import embedding_factory
 from ragas.llms import llm_factory
+from ragas.testset.document import Document
 from ragas.testset.synthesizers.generate import TestsetGenerator
 
 generator_llm = llm_factory("gpt-4o", client=OpenAI())
@@ -27,7 +28,8 @@ IGNORE_ASYNCIO = False
 
 if __name__ == "__main__":
     documents = get_documents()
-    generator.generate_with_llamaindex_docs(
+    generator.generate_with_docs(
         documents=documents,
         testset_size=50,
+        document_adapter=lambda d: Document(page_content=d.text, metadata=d.metadata),
     )

@@ -1,11 +1,15 @@
 import typing as t
-import warnings
 from dataclasses import dataclass, field
 
-from ragas.embeddings import BaseRagasEmbedding, BaseRagasEmbeddings, embedding_factory
-from ragas.embeddings.utils import run_sync_in_async
+from ragas.embeddings.base import BaseRagasEmbedding, embedding_factory
+from ragas.testset._modern import require_embedding
 from ragas.testset.graph import Node
 from ragas.testset.transforms.base import Extractor
+
+
+def _default_embedding() -> BaseRagasEmbedding:
+    """``embedding_factory()``'s default: OpenAI's model through LiteLLM."""
+    return require_embedding(embedding_factory(), "EmbeddingExtractor")
 
 
 @dataclass
@@ -19,15 +23,20 @@ class EmbeddingExtractor(Extractor):
         The name of the property to store the embedding
     embed_property_name : str
         The name of the property containing the text to embed
-    embedding_model : BaseRagasEmbeddings or BaseRagasEmbedding
-        The embedding model used for generating embeddings
+    embedding_model : BaseRagasEmbedding
+        The embedding model used for generating embeddings, such as the output
+        of ``embedding_factory()``
     """
 
     property_name: str = "embedding"
     embed_property_name: str = "page_content"
-    embedding_model: t.Union[BaseRagasEmbeddings, BaseRagasEmbedding] = field(
-        default_factory=embedding_factory
-    )
+    embedding_model: BaseRagasEmbedding = field(default_factory=_default_embedding)
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.embedding_model = require_embedding(
+            self.embedding_model, type(self).__name__
+        )
 
     async def extract(self, node: Node) -> t.Tuple[str, t.Any]:
         """
@@ -43,29 +52,7 @@ class EmbeddingExtractor(Extractor):
             raise ValueError(
                 f"node.property('{self.embed_property_name}') must be a string, found '{type(text)}'"
             )
-
-        # Handle both modern (BaseRagasEmbedding) and legacy (BaseRagasEmbeddings) interfaces
-        if hasattr(self.embedding_model, "aembed_text"):
-            # Modern interface (BaseRagasEmbedding)
-            # Check if the client supports async operations by checking if is_async exists and is True
-            if hasattr(self.embedding_model, "is_async") and getattr(
-                self.embedding_model, "is_async", False
-            ):
-                embedding = await self.embedding_model.aembed_text(text)  # type: ignore[attr-defined]
-            else:
-                # For sync clients, use the sync method wrapped in thread executor to avoid blocking
-                warnings.warn(
-                    f"Using sync embedding model {self.embedding_model.__class__.__name__} "
-                    f"in async context. This may impact performance. "
-                    f"Consider using an async-compatible embedding model for better performance.",
-                    UserWarning,
-                    stacklevel=2,
-                )
-                embedding = await run_sync_in_async(
-                    self.embedding_model.embed_text, text
-                )  # type: ignore[attr-defined]
-        else:
-            # Legacy interface (BaseRagasEmbeddings)
-            embedding = await self.embedding_model.embed_text(text)  # type: ignore[misc]
-
+        # Every BaseRagasEmbedding implements aembed_text, moving a sync
+        # client to a worker thread itself.
+        embedding = await self.embedding_model.aembed_text(text)
         return self.property_name, embedding

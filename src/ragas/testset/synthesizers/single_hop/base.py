@@ -6,7 +6,7 @@ import typing as t
 from dataclasses import dataclass
 
 from ragas.dataset_schema import SingleTurnSample
-from ragas.prompt import PydanticPrompt
+from ragas.prompt.metrics.base_prompt import BasePrompt
 from ragas.testset.graph import Node
 from ragas.testset.persona import Persona, PersonaList
 from ragas.testset.synthesizers.base import (
@@ -45,7 +45,7 @@ class SingleHopScenario(BaseScenario):
 
 @dataclass
 class SingleHopQuerySynthesizer(BaseSynthesizer[Scenario]):
-    generate_query_reference_prompt: PydanticPrompt = QueryAnswerGenerationPrompt()
+    generate_query_reference_prompt: BasePrompt = QueryAnswerGenerationPrompt()
 
     def prepare_combinations(
         self,

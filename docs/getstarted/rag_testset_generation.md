@@ -15,7 +15,7 @@ git clone https://huggingface.co/datasets/vibrantlabsai/Sample_Docs_Markdown
 
 ### Load documents
 
-Now we will load the documents from the sample dataset. Any object exposing `page_content` and `metadata` works, so LangChain and LlamaIndex loaders are both fine -- here we build ragas `Document` objects directly, with no extra dependency.
+Now we will load the documents from the sample dataset. Any object exposing `page_content` and `metadata` works, so LangChain loaders are fine as they are; for documents with other attribute names, such as LlamaIndex's, pass a `document_adapter` (see below). Here we build ragas `Document` objects directly, with no extra dependency.
 
 ```shell
 # no extra dependency needed
@@ -42,7 +42,7 @@ choose_generator_llm.md
 
 ### Generate Testset
 
-Now we will run the test generation using the loaded documents and the LLM setup. If you have used `llama_index` to load documents, please use `generate_with_llama_index_docs` method instead.
+Now we will run the test generation using the loaded documents and the LLM setup. If your documents keep their text under another name, pass `document_adapter=`, a function that returns a ragas `Document` for each one. For LlamaIndex documents: `document_adapter=lambda d: Document(page_content=d.text, metadata=d.metadata)` (see [LlamaIndex](../howtos/integrations/llamaindex.md)).
 
 ```python
 from ragas.testset import TestsetGenerator

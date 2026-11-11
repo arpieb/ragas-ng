@@ -7,8 +7,9 @@ import numpy as np
 from pydantic import BaseModel
 
 from ragas.executor import run_async_batch
-from ragas.llms.base import BaseRagasLLM
-from ragas.prompt import PydanticPrompt, StringIO
+from ragas.prompt import StringIO
+from ragas.prompt.metrics.base_prompt import BasePrompt
+from ragas.testset._modern import require_llm
 from ragas.testset.graph import KnowledgeGraph, Node
 from ragas.testset.transforms.relationship_builders.cosine import (
     cosine_similarity_matrix,
@@ -46,7 +47,7 @@ class Persona(BaseModel):
     role_description: str
 
 
-class PersonaGenerationPrompt(PydanticPrompt[StringIO, Persona]):
+class PersonaGenerationPrompt(BasePrompt[StringIO, Persona]):
     instruction: str = (
         "Using the provided summary, generate a single persona who would likely "
         "interact with or benefit from the content. Include a unique name and a "
@@ -99,7 +100,7 @@ class PersonaList(BaseModel):
 
 def generate_personas_from_kg(
     kg: KnowledgeGraph,
-    llm: t.Union[BaseRagasLLM, InstructorBaseRagasLLM],
+    llm: InstructorBaseRagasLLM,
     persona_generation_prompt: PersonaGenerationPrompt = PersonaGenerationPrompt(),
     num_personas: int = 3,
     filter_fn: t.Callable[[Node], bool] = default_filter,
@@ -111,8 +112,9 @@ def generate_personas_from_kg(
     parameters:
         kg: KnowledgeGraph
             The knowledge graph to generate personas from.
-        llm: BaseRagasLLM or InstructorBaseRagasLLM
-            The LLM to use for generating the persona.
+        llm: InstructorBaseRagasLLM
+            The LLM to use for generating the persona, such as the output of
+            ``llm_factory()``.
         persona_generation_prompt: PersonaGenerationPrompt
             The prompt to use for generating the persona.
         num_personas: int
@@ -128,6 +130,7 @@ def generate_personas_from_kg(
             The list of generated personas.
     """
 
+    llm = require_llm(llm, "generate_personas_from_kg()")
     nodes = [node for node in kg.nodes if filter_fn(node)]
     if len(nodes) == 0:
         raise ValueError(

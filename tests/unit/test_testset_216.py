@@ -4,7 +4,7 @@ import typing as t
 
 import pytest
 
-from ragas.prompt import PydanticPrompt
+from ragas.prompt.metrics.base_prompt import BasePrompt
 from ragas.testset import persona as persona_module
 from ragas.testset.graph import KnowledgeGraph, Node, NodeType
 from ragas.testset.persona import Persona, generate_personas_from_kg
@@ -26,6 +26,13 @@ from ragas.testset.transforms.relationship_builders.traditional import (
     JaccardSimilarityBuilder,
     OverlapScoreBuilder,
 )
+from tests.unit import testset_fakes
+
+
+@pytest.fixture
+def fake_llm():
+    """An llm_factory() LLM stand-in; testset rejects legacy LLMs (#214)."""
+    return testset_fakes.fake_llm()
 
 
 def _is_chunk(node: Node) -> bool:
@@ -46,7 +53,7 @@ def test_single_hop_scenario_has_one_definition():
 
 @pytest.mark.asyncio
 async def test_exported_single_hop_scenario_passes_generate_sample(fake_llm):
-    class StubPrompt(PydanticPrompt):
+    class StubPrompt(BasePrompt):
         async def generate(self, data, llm, callbacks=None):  # type: ignore[override]
             class R:
                 query = "q"
@@ -198,7 +205,7 @@ def test_personas_pair_summaries_with_their_own_embeddings(captured_summaries):
             _node(NodeType.DOCUMENT, summary="cc", summary_embedding=[0.0, 1.0]),
         ]
     )
-    generate_personas_from_kg(kg, llm=None, num_personas=2)  # type: ignore[arg-type]
+    generate_personas_from_kg(kg, llm=testset_fakes.fake_llm(), num_personas=2)
     assert sorted(captured_summaries) == ["a", "cc"]
 
 
@@ -210,7 +217,7 @@ def test_personas_use_normalised_cosine(captured_summaries):
             _node(NodeType.DOCUMENT, summary="cc", summary_embedding=[1.0, 2.0]),
         ]
     )
-    generate_personas_from_kg(kg, llm=None, num_personas=2)  # type: ignore[arg-type]
+    generate_personas_from_kg(kg, llm=testset_fakes.fake_llm(), num_personas=2)
     assert sorted(captured_summaries) == ["a", "cc"]
 
 
@@ -221,5 +228,5 @@ def test_personas_group_similar_summaries(captured_summaries):
             _node(NodeType.DOCUMENT, summary="bb", summary_embedding=[0.5, 0.01]),
         ]
     )
-    generate_personas_from_kg(kg, llm=None, num_personas=1)  # type: ignore[arg-type]
+    generate_personas_from_kg(kg, llm=testset_fakes.fake_llm(), num_personas=1)
     assert captured_summaries == ["bb"]

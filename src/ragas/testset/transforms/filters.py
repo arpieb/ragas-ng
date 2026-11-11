@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 from pydantic import BaseModel, Field
 
-from ragas.prompt import PydanticPrompt
+from ragas.prompt.metrics.base_prompt import BasePrompt
 from ragas.testset.graph import KnowledgeGraph, Node
 from ragas.testset.graph_queries import get_parent_nodes
 from ragas.testset.transforms.base import LLMBasedNodeFilter
@@ -41,7 +41,7 @@ class QuestionPotentialOutput(BaseModel):
 
 
 class QuestionPotentialPrompt(
-    PydanticPrompt[QuestionPotentialInput, QuestionPotentialOutput]
+    BasePrompt[QuestionPotentialInput, QuestionPotentialOutput]
 ):
     instruction = (
         "Given a document summary and node content, score the content of the node in 1 to 5 range."
@@ -57,7 +57,7 @@ class CustomNodeFilter(LLMBasedNodeFilter):
     returns True if the score is less than min_score
     """
 
-    scoring_prompt: PydanticPrompt = field(default_factory=QuestionPotentialPrompt)
+    scoring_prompt: BasePrompt = field(default_factory=QuestionPotentialPrompt)
     min_score: int = 2
     rubrics: t.Dict[str, str] = field(default_factory=lambda: DEFAULT_RUBRICS)
 

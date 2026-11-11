@@ -23,9 +23,10 @@ from ragas.testset.transforms import Parallel, apply_transforms, default_transfo
 from ragas.testset.transforms.base import BaseGraphTransformation
 from ragas.testset.transforms.filters import CustomNodeFilter
 from ragas.testset.transforms.splitters import HeadlineSplitter
+from tests.unit.testset_fakes import fake_embedding, fake_llm
 
-FAKE_LLM = t.cast(t.Any, object())
-FAKE_EMB = t.cast(t.Any, object())
+FAKE_LLM = fake_llm()
+FAKE_EMB = fake_embedding()
 
 
 def _words(n: int, word: str = "token") -> str:

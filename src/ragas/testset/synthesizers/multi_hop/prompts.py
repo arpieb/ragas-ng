@@ -2,7 +2,7 @@ import typing as t
 
 from pydantic import BaseModel, Field
 
-from ragas.prompt import PydanticPrompt
+from ragas.prompt.metrics.base_prompt import BasePrompt
 from ragas.testset.persona import Persona
 
 
@@ -19,7 +19,7 @@ class ConceptCombinations(BaseModel):
     combinations: t.List[t.List[str]]
 
 
-class ConceptCombinationPrompt(PydanticPrompt[ConceptsList, ConceptCombinations]):
+class ConceptCombinationPrompt(BasePrompt[ConceptsList, ConceptCombinations]):
     instruction: str = (
         "Form combinations by pairing concepts from at least two different lists.\n"
         "**Instructions:**\n"
@@ -69,9 +69,7 @@ class GeneratedQueryAnswer(BaseModel):
     answer: str
 
 
-class QueryAnswerGenerationPrompt(
-    PydanticPrompt[QueryConditions, GeneratedQueryAnswer]
-):
+class QueryAnswerGenerationPrompt(BasePrompt[QueryConditions, GeneratedQueryAnswer]):
     # the generated query and answer are the user-facing output
     states_output_language: bool = True
     instruction: str = (

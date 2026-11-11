@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ragas.prompt import PydanticPrompt
+from ragas.prompt.metrics.base_prompt import BasePrompt
 from ragas.testset.graph import KnowledgeGraph
 from ragas.testset.persona import Persona
 from ragas.testset.synthesizers.multi_hop.base import (
@@ -34,8 +34,8 @@ class MultiHopSpecificQuerySynthesizer(MultiHopQuerySynthesizer):
     property_name: str = "entities"
     relation_type: str = "entities_overlap"
     relation_overlap_property: str = "overlapped_items"
-    theme_persona_matching_prompt: PydanticPrompt = ThemesPersonasMatchingPrompt()
-    generate_query_reference_prompt: PydanticPrompt = QueryAnswerGenerationPrompt()
+    theme_persona_matching_prompt: BasePrompt = ThemesPersonasMatchingPrompt()
+    generate_query_reference_prompt: BasePrompt = QueryAnswerGenerationPrompt()
 
     def get_node_clusters(self, knowledge_graph: KnowledgeGraph) -> t.List[t.Tuple]:
         """Identify clusters of nodes based on the specified relationship condition."""

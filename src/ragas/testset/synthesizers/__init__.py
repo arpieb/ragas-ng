@@ -1,7 +1,7 @@
 import logging
 import typing as t
 
-from ragas.llms.base import BaseRagasLLM
+from ragas.llms.base import InstructorBaseRagasLLM
 from ragas.testset.graph import KnowledgeGraph
 from ragas.testset.synthesizers.multi_hop import (
     MultiHopAbstractQuerySynthesizer,
@@ -13,16 +13,13 @@ from ragas.testset.synthesizers.single_hop.specific import (
 
 from .base import BaseSynthesizer
 
-if t.TYPE_CHECKING:
-    from ragas.llms.base import InstructorBaseRagasLLM
-
 logger = logging.getLogger(__name__)
 
 QueryDistribution = t.List[t.Tuple[BaseSynthesizer, float]]
 
 
 def default_query_distribution(
-    llm: t.Union[BaseRagasLLM, "InstructorBaseRagasLLM"],
+    llm: InstructorBaseRagasLLM,
     kg: t.Optional[KnowledgeGraph] = None,
     llm_context: t.Optional[str] = None,
 ) -> QueryDistribution:

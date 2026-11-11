@@ -3,7 +3,8 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
-from ragas.prompt import PydanticPrompt, StringIO
+from ragas.prompt import StringIO
+from ragas.prompt.metrics.base_prompt import BasePrompt
 from ragas.testset.graph import Node
 from ragas.testset.transforms.base import LLMBasedExtractor
 
@@ -13,7 +14,7 @@ class TextWithExtractionLimit(BaseModel):
     max_num: int = 10
 
 
-class SummaryExtractorPrompt(PydanticPrompt[StringIO, StringIO]):
+class SummaryExtractorPrompt(BasePrompt[StringIO, StringIO]):
     instruction: str = "Summarize the given text in less than 10 sentences."
     input_model: t.Type[StringIO] = StringIO
     output_model: t.Type[StringIO] = StringIO
@@ -33,7 +34,7 @@ class Keyphrases(BaseModel):
     keyphrases: t.List[str]
 
 
-class KeyphrasesExtractorPrompt(PydanticPrompt[TextWithExtractionLimit, Keyphrases]):
+class KeyphrasesExtractorPrompt(BasePrompt[TextWithExtractionLimit, Keyphrases]):
     instruction: str = "Extract top max_num keyphrases from the given text."
     input_model: t.Type[TextWithExtractionLimit] = TextWithExtractionLimit
     output_model: t.Type[Keyphrases] = Keyphrases
@@ -56,7 +57,7 @@ class KeyphrasesExtractorPrompt(PydanticPrompt[TextWithExtractionLimit, Keyphras
     ]
 
 
-class TitleExtractorPrompt(PydanticPrompt[StringIO, StringIO]):
+class TitleExtractorPrompt(BasePrompt[StringIO, StringIO]):
     instruction: str = "Extract the title of the given document."
     input_model: t.Type[StringIO] = StringIO
     output_model: t.Type[StringIO] = StringIO
@@ -74,7 +75,7 @@ class Headlines(BaseModel):
     headlines: t.List[str]
 
 
-class HeadlinesExtractorPrompt(PydanticPrompt[TextWithExtractionLimit, Headlines]):
+class HeadlinesExtractorPrompt(BasePrompt[TextWithExtractionLimit, Headlines]):
     instruction: str = (
         "Extract the most important max_num headlines from the given text that can be used to split the text into independent sections."
         "Focus on Level 2 and Level 3 headings."
@@ -127,7 +128,7 @@ class NEROutput(BaseModel):
     entities: t.List[str]
 
 
-class NERPrompt(PydanticPrompt[TextWithExtractionLimit, NEROutput]):
+class NERPrompt(BasePrompt[TextWithExtractionLimit, NEROutput]):
     instruction: str = (
         "Extract the named entities from the given text, limiting the output to the top entities. "
         "Ensure the number of entities does not exceed the specified maximum."
@@ -283,7 +284,7 @@ class NERExtractor(LLMBasedExtractor):
     """
 
     property_name: str = "entities"
-    prompt: PydanticPrompt[TextWithExtractionLimit, NEROutput] = NERPrompt()
+    prompt: BasePrompt[TextWithExtractionLimit, NEROutput] = NERPrompt()
     max_num_entities: int = 10
 
     async def extract(self, node: Node) -> t.Tuple[str, t.List[str]]:
@@ -305,7 +306,7 @@ class TopicDescription(BaseModel):
     description: str
 
 
-class TopicDescriptionPrompt(PydanticPrompt[StringIO, TopicDescription]):
+class TopicDescriptionPrompt(BasePrompt[StringIO, TopicDescription]):
     instruction: str = "Provide a concise description of the main topic(s) discussed in the following text."
     input_model: t.Type[StringIO] = StringIO
     output_model: t.Type[TopicDescription] = TopicDescription
@@ -335,7 +336,7 @@ class TopicDescriptionExtractor(LLMBasedExtractor):
     """
 
     property_name: str = "topic_description"
-    prompt: PydanticPrompt = TopicDescriptionPrompt()
+    prompt: BasePrompt = TopicDescriptionPrompt()
 
     async def extract(self, node: Node) -> t.Tuple[str, t.Any]:
         node_text = node.get_property("page_content")
@@ -351,7 +352,7 @@ class ThemesAndConcepts(BaseModel):
 
 
 class ThemesAndConceptsExtractorPrompt(
-    PydanticPrompt[TextWithExtractionLimit, ThemesAndConcepts]
+    BasePrompt[TextWithExtractionLimit, ThemesAndConcepts]
 ):
     instruction: str = "Extract the main themes and concepts from the given text."
     input_model: t.Type[TextWithExtractionLimit] = TextWithExtractionLimit

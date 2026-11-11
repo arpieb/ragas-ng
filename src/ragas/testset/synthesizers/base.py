@@ -8,18 +8,18 @@ from enum import Enum
 from pydantic import BaseModel
 
 from ragas.callbacks import new_group
-from ragas.llms import BaseRagasLLM, default_llm
-from ragas.prompt import PromptMixin
+from ragas.llms import default_llm
+from ragas.llms.base import InstructorBaseRagasLLM
+from ragas.testset._modern import TestsetPromptMixin, require_llm
 from ragas.testset.graph import KnowledgeGraph, Node
 from ragas.testset.persona import Persona
 
 if t.TYPE_CHECKING:
     from ragas.callbacks import Callbacks
     from ragas.dataset_schema import BaseSample
-    from ragas.llms.base import InstructorBaseRagasLLM
 
 
-def _default_llm_factory() -> t.Union[BaseRagasLLM, "InstructorBaseRagasLLM"]:
+def _default_llm_factory() -> InstructorBaseRagasLLM:
     """The default LLM, shared with ``evaluate()``. See ``ragas.llms.default_llm``."""
     return default_llm()
 
@@ -71,20 +71,19 @@ Scenario = t.TypeVar("Scenario", bound=BaseScenario)
 
 
 @dataclass
-class BaseSynthesizer(ABC, t.Generic[Scenario], PromptMixin):
+class BaseSynthesizer(ABC, t.Generic[Scenario], TestsetPromptMixin):
     """
     Base class for synthesizing scenarios and samples.
     """
 
     name: str = ""
-    llm: t.Union[BaseRagasLLM, "InstructorBaseRagasLLM"] = field(
-        default_factory=_default_llm_factory
-    )
+    llm: InstructorBaseRagasLLM = field(default_factory=_default_llm_factory)
     llm_context: t.Optional[str] = None
 
     def __post_init__(self):
         if not self.name:
             self.name = self.__class__.__name__
+        self.llm = require_llm(self.llm, type(self).__name__)
 
     async def generate_scenarios(
         self,

@@ -1,44 +1,15 @@
-from ragas.embeddings import BaseRagasEmbeddings
-from ragas.llms import BaseRagasLLM
 from ragas.testset.document import Document
 from ragas.testset.graph import NodeType
 from ragas.testset.synthesizers.generate import TestsetGenerator
 from ragas.testset.transforms.default import default_transforms_for_prechunked
 from ragas.testset.transforms.splitters import HeadlineSplitter
-
-
-class MockLLM(BaseRagasLLM):
-    def __init__(self):
-        super().__init__()
-
-    def generate_text(self, *args, **kwargs):
-        pass
-
-    async def agenerate_text(self, *args, **kwargs):
-        pass
-
-    def is_finished(self, response):
-        return True
-
-
-class MockEmbeddings(BaseRagasEmbeddings):
-    def embed_documents(self, texts):
-        pass
-
-    def embed_query(self, text):
-        pass
-
-    async def aembed_documents(self, texts):
-        pass
-
-    async def aembed_query(self, text):
-        pass
+from tests.unit.testset_fakes import fake_embedding, fake_llm
 
 
 def test_prechunked_transforms_has_no_splitter():
     """Prechunked transforms should not contain any splitter."""
-    llm = MockLLM()
-    embeddings = MockEmbeddings()
+    llm = fake_llm()
+    embeddings = fake_embedding()
 
     transforms = default_transforms_for_prechunked(llm, embeddings)
 
@@ -61,7 +32,7 @@ def test_prechunked_transforms_has_no_splitter():
 
 def test_generate_with_chunks_creates_chunk_nodes():
     """generate_with_chunks should create CHUNK nodes, not DOCUMENT nodes."""
-    generator = TestsetGenerator(llm=MockLLM(), embedding_model=MockEmbeddings())
+    generator = TestsetGenerator(llm=fake_llm(), embedding_model=fake_embedding())
 
     chunks = [
         Document(page_content="First chunk content", metadata={"source": "doc1"}),
@@ -90,7 +61,7 @@ def test_generate_with_chunks_creates_chunk_nodes():
 
 def test_generate_with_chunks_accepts_strings():
     """generate_with_chunks should also accept plain strings."""
-    generator = TestsetGenerator(llm=MockLLM(), embedding_model=MockEmbeddings())
+    generator = TestsetGenerator(llm=fake_llm(), embedding_model=fake_embedding())
 
     chunks = ["First chunk as string", "Second chunk as string"]
 
@@ -116,7 +87,7 @@ def test_generate_with_chunks_accepts_strings():
 
 def test_generate_with_chunks_filters_empty_content():
     """generate_with_chunks should filter out chunks with empty content."""
-    generator = TestsetGenerator(llm=MockLLM(), embedding_model=MockEmbeddings())
+    generator = TestsetGenerator(llm=fake_llm(), embedding_model=fake_embedding())
 
     chunks = [
         Document(page_content="Valid content", metadata={"id": 1}),
@@ -147,7 +118,7 @@ def test_generate_with_chunks_filters_empty_content():
 
 def test_generate_with_chunks_handles_empty_sequence():
     """generate_with_chunks should handle empty sequence gracefully."""
-    generator = TestsetGenerator(llm=MockLLM(), embedding_model=MockEmbeddings())
+    generator = TestsetGenerator(llm=fake_llm(), embedding_model=fake_embedding())
 
     chunks = []
 
