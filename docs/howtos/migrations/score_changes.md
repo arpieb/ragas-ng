@@ -4,20 +4,11 @@ ragas-ng fixes scoring bugs in the `ragas.metrics.collections` metrics, even whe
 
 If you compare runs across versions, check this page first. Each entry lists the metric, what changed, and which inputs score differently.
 
-## The short imports score through collections
+## Only the collections metrics remain ([#215](https://github.com/arpieb/ragas-ng/issues/215))
 
-`from ragas.metrics import BleuScore` (and every other deprecated metric name and pre-built instance such as `faithfulness`) returns the legacy class, but **its score comes from the matching `ragas.metrics.collections` metric**. So every fix on this page applies whichever import you use. The legacy interface is unchanged: the constructor arguments, `evaluate()` injecting `llm` and `embeddings`, `single_turn_ascore`, `get_prompts`, `adapt_prompts` and `train`.
+The legacy metrics are gone. `from ragas.metrics import Faithfulness` (and every other legacy name and pre-built instance such as `faithfulness`) now raises `ImportError` naming the `ragas.metrics.collections` import to use, and the private modules (`ragas.metrics._faithfulness` and the rest) no longer exist. Every fix on this page applies to the one implementation left.
 
-It falls back to the legacy implementation, and logs a warning saying so, when the collections metric can't honour the configuration:
-
-| Situation | Example |
-|---|---|
-| The LLM isn't an `InstructorBaseRagasLLM` from `llm_factory()` | OCI GenAI, Haystack or LlamaIndex wrappers |
-| The embeddings aren't a modern `BaseRagasEmbedding` | a custom legacy embeddings class |
-| A prompt was customised | `set_prompts(...)`, `adapt_prompts(...)`, `train(...)` |
-| A legacy-only option was changed | `FactualCorrectness(language=...)`, `AnswerSimilarity(is_cross_encoder=True)`, a `distance_measure` that isn't a `NonLLMStringSimilarity` |
-
-Only the private modules (`from ragas.metrics._bleu_score import BleuScore`) still give the unmodified legacy class.
+Until #215 the short imports already took their scores from the collections metrics, and fell back to the legacy code only for a legacy LLM or embeddings wrapper, a customised prompt or a legacy-only option. Those fallbacks are removed with the legacy code, so a run that relied on one now scores with the collections metric, or fails to build it (see [behavior changes](behavior_changes.md#the-legacy-layer-is-removed-215)).
 
 ## FactualCorrectness: recall and f1 ([#48](https://github.com/arpieb/ragas-ng/issues/48), [#49](https://github.com/arpieb/ragas-ng/issues/49))
 
