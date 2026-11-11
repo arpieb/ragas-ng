@@ -50,43 +50,6 @@ Available distance measures include:
 - `DistanceMeasure.JARO`
 - `DistanceMeasure.JARO_WINKLER`
 
-### Legacy Metrics API
-
-The following examples use the legacy metrics API pattern. For new projects, we recommend using the collections-based API shown above.
-
-!!! warning "Deprecation Timeline"
-    This API will be deprecated in version 0.4 and removed in version 1.0. Please migrate to the collections-based API shown above.
-
-#### Example with SingleTurnSample
-
-```python
-from ragas.dataset_schema import SingleTurnSample
-from ragas.metrics._string import NonLLMStringSimilarity
-
-sample = SingleTurnSample(
-    response="The Eiffel Tower is located in India.",
-    reference="The Eiffel Tower is located in Paris.",
-)
-
-scorer = NonLLMStringSimilarity()
-await scorer.single_turn_ascore(sample)
-```
-
-Output:
-
-```
-0.8918918918918919
-```
-
-#### Example with Different Distance Measure
-
-```python
-from ragas.metrics._string import NonLLMStringSimilarity, DistanceMeasure
-
-scorer = NonLLMStringSimilarity(distance_measure=DistanceMeasure.HAMMING)
-```
-
-
 ## BLEU Score
 
 The `BleuScore` metric is used to evaluate the quality of `response` by comparing it with `reference`. It measures the similarity between the response and the reference based on n-gram precision and brevity penalty. BLEU score was originally designed to evaluate machine translation systems, but it is also used in other natural language processing tasks. BLEU score ranges from 0 to 1, where 1 indicates a perfect match between the response and the reference. This is a non-LLM based metric.
@@ -132,35 +95,6 @@ scorer = BleuScore(kwargs={"smooth_method": "exp"})
 ```
 
 Each sample is scored as one segment, the whole `response` against the whole `reference`. Unsmoothed BLEU is often `0` for short texts that share no 4-gram, so `smooth_method="exp"` is a good choice for short answers. Unless you pass `tokenize`, Chinese text is tokenized with sacreBLEU's `"zh"` tokenizer and Japanese with `"char"`. The default `"13a"` splits on spaces, so it would treat a whole sentence as one word. All other text uses `"13a"`.
-
-### Legacy Metrics API
-
-The following examples use the legacy metrics API pattern. For new projects, we recommend using the collections-based API shown above.
-
-!!! warning "Deprecation Timeline"
-    This API will be deprecated in version 0.4 and removed in version 1.0. Please migrate to the collections-based API shown above.
-
-#### Example with SingleTurnSample
-
-```python
-from ragas.dataset_schema import SingleTurnSample
-from ragas.metrics import BleuScore
-
-sample = SingleTurnSample(
-    response="The Eiffel Tower is located in India.",
-    reference="The Eiffel Tower is located in Paris.",
-)
-
-scorer = BleuScore()
-await scorer.single_turn_ascore(sample)
-```
-
-Output:
-
-```
-0.7071067811865478
-```
-
 
 ## ROUGE Score
 
@@ -218,34 +152,6 @@ scorer = RougeScore(mode="recall")
 scorer = RougeScore(tokenizer=MyThaiSegmenter())
 ```
 
-### Legacy Metrics API
-
-The following examples use the legacy metrics API pattern. For new projects, we recommend using the collections-based API shown above.
-
-!!! warning "Deprecation Timeline"
-    This API will be deprecated in version 0.4 and removed in version 1.0. Please migrate to the collections-based API shown above.
-
-#### Example with SingleTurnSample
-
-```python
-from ragas.dataset_schema import SingleTurnSample
-from ragas.metrics import RougeScore
-
-sample = SingleTurnSample(
-    response="The Eiffel Tower is located in India.",
-    reference="The Eiffel Tower is located in Paris.",
-)
-
-scorer = RougeScore()
-await scorer.single_turn_ascore(sample)
-```
-
-Output:
-
-```
-0.8571428571428571
-```
-
 ## Exact Match
 
 The `ExactMatch` metric checks if the response is exactly the same as the reference text. It is useful in scenarios where you need to ensure that the generated response matches the expected output word-for-word. For example, arguments in tool calls, etc. The metric returns 1 if the response is an exact match with the reference, and 0 otherwise.
@@ -275,31 +181,6 @@ Exact Match Score: 0.0
     ```python
     result = scorer.score(reference="Paris", response="India")
     ```
-
-### Legacy Metrics API
-
-The following examples use the legacy metrics API pattern. For new projects, we recommend using the collections-based API shown above.
-
-!!! warning "Deprecation Timeline"
-    This API will be deprecated in version 0.4 and removed in version 1.0. Please migrate to the collections-based API shown above.
-
-#### Example with SingleTurnSample
-
-```python
-from ragas.dataset_schema import SingleTurnSample
-from ragas.metrics import ExactMatch
-
-sample = SingleTurnSample(response="India", reference="Paris")
-
-scorer = ExactMatch()
-await scorer.single_turn_ascore(sample)
-```
-
-Output:
-
-```
-0.0
-```
 
 ## String Presence
 
@@ -334,32 +215,6 @@ String Presence Score: 1.0
         reference="Eiffel Tower", response="The Eiffel Tower is located in India."
     )
     ```
-
-### Legacy Metrics API
-
-The following examples use the legacy metrics API pattern. For new projects, we recommend using the collections-based API shown above.
-
-!!! warning "Deprecation Timeline"
-    This API will be deprecated in version 0.4 and removed in version 1.0. Please migrate to the collections-based API shown above.
-
-#### Example with SingleTurnSample
-
-```python
-from ragas.dataset_schema import SingleTurnSample
-from ragas.metrics import StringPresence
-
-sample = SingleTurnSample(
-    response="The Eiffel Tower is located in India.", reference="Eiffel Tower"
-)
-scorer = StringPresence()
-await scorer.single_turn_ascore(sample)
-```
-
-Output:
-
-```
-1.0
-```
 
 ## CHRF Score
 
@@ -412,32 +267,4 @@ scorer = CHRFScore(kwargs={"char_order": 4, "word_order": 2})
 
 # Customize beta (recall weight)
 scorer = CHRFScore(kwargs={"beta": 3})
-```
-
-### Legacy Metrics API
-
-The following examples use the legacy metrics API pattern. For new projects, we recommend using the collections-based API shown above.
-
-!!! warning "Deprecation Timeline"
-    This API will be deprecated in version 0.4 and removed in version 1.0. Please migrate to the collections-based API shown above.
-
-#### Example with SingleTurnSample
-
-```python
-from ragas.dataset_schema import SingleTurnSample
-from ragas.metrics import ChrfScore
-
-sample = SingleTurnSample(
-    response="The Eiffel Tower is located in India.",
-    reference="The Eiffel Tower is located in Paris.",
-)
-
-scorer = ChrfScore()
-await scorer.single_turn_ascore(sample)
-```
-
-Output:
-
-```
-0.8048
 ```

@@ -104,7 +104,6 @@ With the default `beta=1.0` this is the F1 score. `beta > 1` weights recall more
 
 Each sentence in the response and reference can be broken down into one or more claims. The number of claims that are generated from a single sentence is determined by the level of `atomicity` and `coverage` required for your application.
 
-
 #### Example
 
 ```python
@@ -114,7 +113,6 @@ Output
 ```
 1.0
 ```
-
 
 #### Understanding Atomicity and Coverage
 
@@ -201,58 +199,3 @@ By adjusting both atomicity and coverage, you can customize the level of detail 
 - Use **Low Atomicity and Low Coverage** when only the key information is necessary, such as for summarization.
 
 This flexibility in controlling the number of claims helps ensure that the information is presented at the right level of granularity for your application's requirements.
-
-## Legacy Metrics API
-
-The following examples use the legacy metrics API pattern. For new projects, we recommend using the collections-based API shown above.
-
-!!! warning "Deprecation Timeline"
-    This API will be deprecated in version 0.4 and removed in version 1.0. Please migrate to the collections-based API shown above.
-
-### Example with SingleTurnSample
-
-```python
-from ragas.dataset_schema import SingleTurnSample
-from ragas.metrics._factual_correctness import FactualCorrectness
-
-
-sample = SingleTurnSample(
-    response="The Eiffel Tower is located in Paris.",
-    reference="The Eiffel Tower is located in Paris. I has a height of 1000ft.",
-)
-
-scorer = FactualCorrectness(llm=evaluator_llm)
-await scorer.single_turn_ascore(sample)
-```
-
-Output:
-
-```
-0.67
-```
-
-### Changing the Mode
-
-By default, the mode is set to `F1`, you can change the mode to `precision` or `recall` by setting the `mode` parameter.
-
-```python
-scorer = FactualCorrectness(llm=evaluator_llm, mode="precision")
-```
-
-Output:
-
-```
-1.0
-```
-
-### Controlling Atomicity
-
-```python
-scorer = FactualCorrectness(mode="precision", atomicity="low")
-```
-
-Output:
-
-```
-1.0
-```

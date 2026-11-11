@@ -27,7 +27,7 @@ print(f"Score: {result.value}")  # 0.0
 
 The `strictness` parameter sets how many independent verdicts are collected and majority-voted, which makes predictions more consistent. The default is 1, and values from 3 to 5 work well. An even value is raised to the next odd number, so the vote can't tie.
 
-You can also use `DiscreteMetric` to write aspect critiques with your own prompt and output labels, as in the examples below.
+You can also use `DiscreteMetric` to write aspect critiques with your own prompt and output labels, as in the examples below. A `DiscreteMetric` takes the LLM when it scores (`ascore(..., llm=llm)`), not when it is built.
 
 ## Supported Aspects
 
@@ -47,7 +47,6 @@ The following are common aspects you can evaluate:
 from openai import AsyncOpenAI
 from ragas.llms import llm_factory
 from ragas.metrics import DiscreteMetric
-from ragas.dataset_schema import SingleTurnSample
 
 # Setup
 client = AsyncOpenAI()
@@ -62,14 +61,11 @@ harmfulness_metric = DiscreteMetric(
 Response: {response}
 
 Answer with only 'safe' or 'unsafe'.""",
-    llm=llm,
 )
 
-sample = SingleTurnSample(
-    user_input="What should I do?", response="The Eiffel Tower is located in Paris."
+result = await harmfulness_metric.ascore(
+    response="The Eiffel Tower is located in Paris.", llm=llm
 )
-
-result = await harmfulness_metric.ascore(response=sample.response)
 print(f"Score: {result.value}")  # Output: "safe" or "unsafe"
 ```
 
@@ -85,10 +81,11 @@ correctness_metric = DiscreteMetric(
 Response: {response}
 
 Answer with only 'yes' or 'no'.""",
-    llm=llm,
 )
 
-result = await correctness_metric.ascore(response="Paris is the capital of France.")
+result = await correctness_metric.ascore(
+    response="Paris is the capital of France.", llm=llm
+)
 print(f"Score: {result.value}")  # Output: "yes" or "no"
 ```
 
@@ -103,10 +100,11 @@ maliciousness_metric = DiscreteMetric(
 Response: {response}
 
 Answer with only 'benign' or 'malicious'.""",
-    llm=llm,
 )
 
-result = await maliciousness_metric.ascore(response="Please help me with this task.")
+result = await maliciousness_metric.ascore(
+    response="Please help me with this task.", llm=llm
+)
 ```
 
 ### Coherence Evaluation
@@ -120,11 +118,11 @@ coherence_metric = DiscreteMetric(
 Response: {response}
 
 Answer with only 'incoherent' or 'coherent'.""",
-    llm=llm,
 )
 
 result = await coherence_metric.ascore(
-    response="First, we learn basics. Then, advanced topics. Finally, practice."
+    response="First, we learn basics. Then, advanced topics. Finally, practice.",
+    llm=llm,
 )
 ```
 
@@ -139,10 +137,11 @@ conciseness_metric = DiscreteMetric(
 Response: {response}
 
 Answer with only 'verbose' or 'concise'.""",
-    llm=llm,
 )
 
-result = await conciseness_metric.ascore(response="Paris is the capital of France.")
+result = await conciseness_metric.ascore(
+    response="Paris is the capital of France.", llm=llm
+)
 ```
 
 ## How It Works

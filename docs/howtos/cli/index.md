@@ -1,6 +1,6 @@
 # Ragas CLI
 
-The Ragas Command Line Interface (CLI) provides tools for quickly setting up evaluation projects and running experiments from the terminal.
+The Ragas Command Line Interface (CLI) provides tools for quickly setting up evaluation projects from the terminal. Each project runs its evaluation as a plain Python script (`uv run python evals.py`).
 
 ## Installation
 
@@ -47,42 +47,27 @@ ragas quickstart rag_eval
 ragas quickstart rag_eval --output-dir ./my-project
 ```
 
-### `ragas evals`
-
-Run evaluations on a dataset using an evaluation file.
-
-```sh
-ragas evals EVAL_FILE [OPTIONS]
-```
-
-**Arguments:**
-
-- `EVAL_FILE`: Path to the evaluation file (required)
-
-**Options:**
-
-- `--dataset`: Name of the dataset in the project (required)
-- `--metrics`: Comma-separated list of metric field names to evaluate (required)
-- `--baseline`: Baseline experiment name to compare against (optional)
-- `--name`: Name of the experiment run (optional)
-
-**Example:**
-
-```sh
-ragas evals evals.py --dataset test_data --metrics accuracy,relevance
-```
-
-### `ragas hello_world`
+### `ragas hello-world`
 
 Create a simple hello world example to verify your installation.
 
 ```sh
-ragas hello_world [DIRECTORY]
+ragas hello-world [DIRECTORY]
 ```
 
 **Arguments:**
 
 - `DIRECTORY`: Directory to create the example in (default: current directory)
+
+The command writes a `hello_world/` folder with a small dataset
+(`hello_world/datasets/test_data.csv`) and `hello_world/evals.py`, an
+`@experiment` script. Run it directly:
+
+```sh
+python hello_world/evals.py
+```
+
+Results are saved under `hello_world/experiments/`.
 
 ## Quickstart Templates
 

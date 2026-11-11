@@ -274,7 +274,7 @@ Goal: Convert the list of dictionary-based Swarm messages (e.g., user, assistant
 
 This conversion ensures that Swarm's message format aligns with the expected structure of Ragas' evaluation framework, enabling seamless integration and evaluation of the agent's interactions.
 
-To convert a list of Swarm messages into a format suitable for Ragas evaluation, Ragas provides the function [convert_to_ragas_messages][ragas.integrations.swarm.convert_to_ragas_messages], which can be used to transform LangChain messages into the format expected by Ragas.
+To convert a list of Swarm messages into a format suitable for Ragas evaluation, Ragas provides the function [convert_to_ragas_messages][ragas.integrations.swarm.convert_to_ragas_messages], which can be used to transform Swarm messages into the format expected by Ragas.
 
 Here's how you can use the function:
 
@@ -324,16 +324,11 @@ load_dotenv()
 ```
 
 ```python
-from pprint import pprint
-from openai import OpenAI
 from ragas.messages import ToolCall
-from ragas.metrics import ToolCallAccuracy
-from ragas.dataset_schema import MultiTurnSample
+from ragas.metrics.collections import ToolCallAccuracy
 
-# from ragas.integrations.swarm import convert_to_ragas_messages
-
-
-sample = MultiTurnSample(
+tool_accuracy_scorer = ToolCallAccuracy()
+result = await tool_accuracy_scorer.ascore(
     user_input=shipment_update_ragas_trace,
     reference_tool_calls=[
         ToolCall(name="transfer_to_tracker_agent", args={}),
@@ -341,9 +336,7 @@ sample = MultiTurnSample(
         ToolCall(name="case_resolved", args={}),
     ],
 )
-
-tool_accuracy_scorer = ToolCallAccuracy()
-await tool_accuracy_scorer.multi_turn_ascore(sample)
+result.value
 ```
 Output
 ```
@@ -380,7 +373,7 @@ Exiting the loop. Goodbye!
 ```python
 valid_return_interaction = convert_to_ragas_messages(valid_return_interaction)
 
-sample = MultiTurnSample(
+result = await tool_accuracy_scorer.ascore(
     user_input=valid_return_interaction,
     reference_tool_calls=[
         ToolCall(name="transfer_to_return_agent", args={}),
@@ -389,9 +382,7 @@ sample = MultiTurnSample(
         ToolCall(name="case_resolved", args={}),
     ],
 )
-
-tool_accuracy_scorer = ToolCallAccuracy()
-await tool_accuracy_scorer.multi_turn_ascore(sample)
+result.value
 ```
 Output
 ```
@@ -427,23 +418,19 @@ Unfortunately, a change of mind does not qualify for a return under our current 
 Exiting the loop. Goodbye!
 ```
 ```python
-from ragas.dataset_schema import MultiTurnSample
-from ragas.metrics import AgentGoalAccuracyWithReference
 from ragas.llms import llm_factory
-
+from ragas.metrics.collections import AgentGoalAccuracyWithReference
 
 invalid_return_ragas_trace = convert_to_ragas_messages(invalid_return_interaction)
 
-sample = MultiTurnSample(
+evaluator_llm = llm_factory("gpt-6-luna")
+scorer = AgentGoalAccuracyWithReference(llm=evaluator_llm)
+
+result = await scorer.ascore(
     user_input=invalid_return_ragas_trace,
     reference="The agent should fulfill the user's request.",
 )
-
-scorer = AgentGoalAccuracyWithReference()
-
-evaluator_llm = llm_factory("gpt-6-luna", client=OpenAI())
-scorer.llm = evaluator_llm
-await scorer.multi_turn_ascore(sample)
+result.value
 ```
 Output
 ```

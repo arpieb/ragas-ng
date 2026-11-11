@@ -34,7 +34,7 @@ from openai import OpenAI
 
 from ragas import EvaluationDataset, evaluate
 from ragas.llms import llm_factory
-from ragas.metrics import AspectCritic
+from ragas.metrics.collections import AspectCritic
 
 evaluator_llm = llm_factory("gpt-6-luna", client=OpenAI())
 

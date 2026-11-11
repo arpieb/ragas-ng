@@ -153,11 +153,12 @@ Every response comes back in OpenAI's shape, Claude and Gemini included, so use 
 | `llm_factory(m, provider="groq", client=Groq(...))` | `llm_factory("groq/<model>")` |
 | `llm_factory(m, provider="cohere", client=Cohere(...))` | `llm_factory("cohere_chat/<model>")` |
 | a boto3 Bedrock client | `llm_factory("bedrock/<model id>", aws_region_name=...)` |
+| `oci_genai_factory(model_id=..., compartment_id=...)` | `llm_factory("oci/<model id>", oci_compartment_id=...)` |
 | `llm_factory(m, client=OpenAI(...))` | unchanged |
 | `llm_factory(m, client=client, adapter="instructor" / "litellm")` | drop `adapter=`; it is ignored, with a warning |
 | `mode=instructor.Mode.ANTHROPIC_JSON` / `ANTHROPIC_TOOLS` | `Mode.JSON` / `Mode.TOOLS` |
 
-The key that used to go to the SDK client is read from the provider's environment variable, or pass `api_key=`. `ragas.llms.adapters` (`get_adapter`, `auto_detect_adapter`) and `LiteLLMStructuredLLM` still import but are deprecated. See [Behavior changes](migrations/behavior_changes.md#one-path-for-every-llm-litellm-182).
+The key that used to go to the SDK client is read from the provider's environment variable, or pass `api_key=`. There are no provider- or framework-specific LLM wrappers either: use the LiteLLM model string for OCI Generative AI (`llm_factory("oci/<model id>")`, see [OCI Gen AI](integrations/oci_genai.md)), and for a model you reach through LlamaIndex or Haystack, pass its provider's model string rather than the framework's LLM object. See [Behavior changes](migrations/behavior_changes.md#one-path-for-every-llm-litellm-182).
 
 ## Troubleshooting
 

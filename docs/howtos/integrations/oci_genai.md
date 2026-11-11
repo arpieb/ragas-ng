@@ -1,260 +1,140 @@
 # OCI Gen AI Integration
 
-This guide shows how to use Oracle Cloud Infrastructure (OCI) Generative AI models with Ragas for evaluation.
+This guide shows how to evaluate with Oracle Cloud Infrastructure (OCI) Generative AI models in Ragas.
 
-## Installation
-
-First, install the OCI dependency:
-
-```bash
-pip install ragas[oci]
-```
+Ragas reaches OCI through [LiteLLM's OCI provider](https://docs.litellm.ai/docs/providers/oci): pass an `oci/<model id>` model string to `llm_factory()`. There is no OCI-specific wrapper and no OCI SDK to install.
 
 ## Setup
 
-### 1. Configure OCI Authentication
+### 1. Configure OCI credentials
 
-Set up your OCI configuration using one of these methods:
+LiteLLM signs each request with your OCI API key. Set these environment variables:
 
-#### Option A: OCI CLI Configuration
 ```bash
-oci setup config
+export OCI_USER=ocid1.user.oc1..example
+export OCI_FINGERPRINT=your_fingerprint
+export OCI_TENANCY=ocid1.tenancy.oc1..example
+export OCI_KEY_FILE=~/.oci/private_key.pem   # or OCI_KEY with the PEM contents
+export OCI_COMPARTMENT_ID=ocid1.compartment.oc1..example
+export OCI_REGION=us-chicago-1               # defaults to us-ashburn-1
 ```
 
-#### Option B: Environment Variables
-```bash
-export OCI_CONFIG_FILE=~/.oci/config
-export OCI_PROFILE=DEFAULT
-```
+The values are the ones in your `~/.oci/config` profile. You can also pass any of them to `llm_factory()` as keyword arguments (`oci_user=`, `oci_fingerprint=`, `oci_tenancy=`, `oci_key_file=`, `oci_compartment_id=`, `oci_region=`), which LiteLLM forwards with each request.
 
-#### Option C: Manual Configuration
-```python
-config = {
-    "user": "ocid1.user.oc1..example",
-    "key_file": "~/.oci/private_key.pem",
-    "fingerprint": "your_fingerprint",
-    "tenancy": "ocid1.tenancy.oc1..example",
-    "region": "us-ashburn-1",
-}
-```
+### 2. Pick a model
 
-### 2. Get Required IDs
+Use the model ID from the OCI Generative AI console, prefixed with `oci/`, for example `oci/cohere.command-latest` or `oci/meta.llama-3.3-70b-instruct`. Check the [OCI documentation](https://docs.oracle.com/en-us/iaas/Content/generative-ai/pretrained-models.htm) for the models available in your region.
 
-You'll need:
-- **Model ID**: The OCI model ID (e.g., `cohere.command`, `meta.llama-3-8b`)
-- **Compartment ID**: Your OCI compartment OCID
-- **Endpoint ID** (optional): If using a custom endpoint
-
-## Usage
-
-### Basic Usage
+## Create the evaluator LLM
 
 ```python
-from ragas.llms import oci_genai_factory
-from ragas import evaluate
-from datasets import Dataset
+from ragas.llms import llm_factory
 
-# Initialize OCI Gen AI LLM
-llm = oci_genai_factory(
-    model_id="cohere.command", compartment_id="ocid1.compartment.oc1..example"
+llm = llm_factory("oci/cohere.command-latest")
+
+# Or pass the credentials explicitly instead of through the environment
+llm = llm_factory(
+    "oci/meta.llama-3.3-70b-instruct",
+    oci_region="us-chicago-1",
+    oci_compartment_id="ocid1.compartment.oc1..example",
+)
+```
+
+Ragas asks the model for structured output through tool calling. If a model returns no tool call, use JSON mode instead:
+
+```python
+import instructor
+
+llm = llm_factory("oci/cohere.command-latest", mode=instructor.Mode.JSON)
+```
+
+For embeddings (needed by metrics such as `AnswerRelevancy`), use an OCI embedding model through LiteLLM as well:
+
+```python
+from ragas.embeddings import LiteLLMEmbeddings
+
+embeddings = LiteLLMEmbeddings(model="oci/cohere.embed-english-v3.0")
+```
+
+## Score a single sample
+
+```python
+from ragas.metrics.collections import Faithfulness
+
+faithfulness = Faithfulness(llm=llm)
+
+result = await faithfulness.ascore(
+    user_input="What is the capital of France?",
+    response="Paris is the capital of France.",
+    retrieved_contexts=["France is a country in Europe. Its capital is Paris."],
+)
+print(result.value, result.reason)
+```
+
+## Evaluate a dataset
+
+```python
+from ragas import EvaluationDataset, evaluate
+from ragas.metrics.collections import (
+    AnswerRelevancy,
+    ContextPrecision,
+    Faithfulness,
 )
 
-# Your dataset
-dataset = Dataset.from_dict(
-    {
-        "question": ["What is the capital of France?"],
-        "answer": ["Paris"],
-        "contexts": [["France is a country in Europe. Its capital is Paris."]],
-        "ground_truth": ["Paris"],
-    }
+dataset = EvaluationDataset.from_list(
+    [
+        {
+            "user_input": "What is the capital of France?",
+            "response": "Paris is the capital of France.",
+            "retrieved_contexts": [
+                "France is a country in Europe. Its capital is Paris."
+            ],
+            "reference": "Paris",
+        },
+        {
+            "user_input": "Who wrote Romeo and Juliet?",
+            "response": "William Shakespeare wrote Romeo and Juliet.",
+            "retrieved_contexts": [
+                "Romeo and Juliet is a play by William Shakespeare."
+            ],
+            "reference": "William Shakespeare",
+        },
+    ]
 )
 
-# Evaluate with OCI Gen AI
 result = evaluate(
     dataset,
-    llm=llm,
-    embeddings=None,  # You can use any embedding model
+    metrics=[
+        Faithfulness(llm=llm),
+        AnswerRelevancy(llm=llm, embeddings=embeddings),
+        ContextPrecision(llm=llm),
+    ],
 )
-```
-
-### Advanced Configuration
-
-```python
-from ragas.llms import oci_genai_factory
-from ragas.run_config import RunConfig
-
-# Custom OCI configuration
-config = {
-    "user": "ocid1.user.oc1..example",
-    "key_file": "~/.oci/private_key.pem",
-    "fingerprint": "your_fingerprint",
-    "tenancy": "ocid1.tenancy.oc1..example",
-    "region": "us-ashburn-1",
-}
-
-# Custom run configuration
-run_config = RunConfig(timeout=60, max_retries=3)
-
-# Initialize with custom config and endpoint
-llm = oci_genai_factory(
-    model_id="cohere.command",
-    compartment_id="ocid1.compartment.oc1..example",
-    config=config,
-    endpoint_id="ocid1.endpoint.oc1..example",  # Optional
-    run_config=run_config,
-)
-```
-
-### Using with Different Models
-
-```python
-# Cohere Command model
-llm_cohere = oci_genai_factory(
-    model_id="cohere.command", compartment_id="ocid1.compartment.oc1..example"
-)
-
-# Meta Llama model
-llm_llama = oci_genai_factory(
-    model_id="meta.llama-3-8b", compartment_id="ocid1.compartment.oc1..example"
-)
-
-# Using with different endpoints
-llm_endpoint = oci_genai_factory(
-    model_id="cohere.command",
-    compartment_id="ocid1.compartment.oc1..example",
-    endpoint_id="ocid1.endpoint.oc1..example",
-)
-```
-
-## Available Models
-
-OCI Gen AI supports various models including:
-
-- **Cohere**: `cohere.command`, `cohere.command-light`
-- **Meta**: `meta.llama-3-8b`, `meta.llama-3-70b`
-- **Mistral**: `mistral.mistral-7b-instruct`
-- **And more**: Check OCI documentation for the latest available models
-
-## Error Handling
-
-The OCI Gen AI wrapper includes comprehensive error handling:
-
-```python
-try:
-    result = evaluate(dataset, llm=llm)
-except Exception as e:
-    print(f"Evaluation failed: {e}")
-```
-
-## Performance Considerations
-
-1. **Rate Limits**: OCI Gen AI has rate limits. Use appropriate retry configurations.
-2. **Timeout**: Set appropriate timeouts for your use case.
-3. **Batch Processing**: The wrapper supports batch processing for multiple completions.
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Authentication Errors**
-   ```
-   Error: OCI SDK authentication failed
-   ```
-   Solution: Verify your OCI configuration and credentials.
-
-2. **Model Not Found**
-   ```
-   Error: Model not found in compartment
-   ```
-   Solution: Check if the model ID exists in your compartment.
-
-3. **Permission Errors**
-   ```
-   Error: Insufficient permissions
-   ```
-   Solution: Ensure your user has the necessary IAM policies for Generative AI.
-
-### Debug Mode
-
-Enable debug logging to troubleshoot issues:
-
-```python
-import logging
-
-logging.basicConfig(level=logging.DEBUG)
-
-# Your OCI Gen AI code here
-```
-
-## Examples
-
-### Complete Evaluation Example
-
-```python
-from ragas import evaluate
-from ragas.llms import oci_genai_factory
-from ragas.metrics import faithfulness, answer_relevancy, context_precision
-from datasets import Dataset
-
-# Initialize OCI Gen AI
-llm = oci_genai_factory(
-    model_id="cohere.command", compartment_id="ocid1.compartment.oc1..example"
-)
-
-# Create dataset
-dataset = Dataset.from_dict(
-    {
-        "question": ["What is the capital of France?", "Who wrote Romeo and Juliet?"],
-        "answer": [
-            "Paris is the capital of France.",
-            "William Shakespeare wrote Romeo and Juliet.",
-        ],
-        "contexts": [
-            ["France is a country in Europe. Its capital is Paris."],
-            ["Romeo and Juliet is a play by William Shakespeare."],
-        ],
-        "ground_truth": ["Paris", "William Shakespeare"],
-    }
-)
-
-# Evaluate
-result = evaluate(
-    dataset, metrics=[faithfulness, answer_relevancy, context_precision], llm=llm
-)
-
 print(result)
 ```
 
-### Custom Metrics with OCI Gen AI
+## Rate limits
+
+OCI Generative AI enforces per-model rate limits. Pace the requests with `rate_limit=`:
 
 ```python
-from ragas.metrics import MetricWithLLM
+from ragas.rate_limit import RateLimit
 
-
-# Create custom metric using OCI Gen AI
-class CustomMetric(MetricWithLLM):
-    def __init__(self):
-        super().__init__()
-        self.llm = oci_genai_factory(
-            model_id="cohere.command", compartment_id="ocid1.compartment.oc1..example"
-        )
-
-
-# Use in evaluation
-result = evaluate(dataset, metrics=[CustomMetric()], llm=llm)
+llm = llm_factory("oci/cohere.command-latest", rate_limit=RateLimit(rpm=60))
 ```
 
-## Best Practices
+## Troubleshooting
 
-1. **Use Appropriate Models**: Choose models based on your evaluation needs.
-2. **Monitor Costs**: OCI Gen AI usage is billed. Monitor your usage.
-3. **Handle Errors**: Implement proper error handling for production use.
-4. **Use Caching**: Enable caching for repeated evaluations.
-5. **Batch Operations**: Use batch operations when possible for efficiency.
+- **`Missing required parameters: oci_user, ...`**: one of the credential variables above is unset.
+- **Model not found**: the model is not offered in `OCI_REGION`, or your compartment has no access to it.
+- **Permission errors**: your user needs the IAM policies for Generative AI in the compartment.
 
-## Support
+Turn on LiteLLM's debug logging to see the request it sends:
 
-For issues specific to OCI Gen AI integration:
-- Check OCI documentation: https://docs.oracle.com/en-us/iaas/Content/generative-ai/
-- OCI Python SDK: https://docs.oracle.com/en-us/iaas/tools/python/2.160.1/api/generative_ai.html
-- Ragas GitHub issues: https://github.com/arpieb/ragas-ng/issues
+```python
+import litellm
+
+litellm._turn_on_debug()
+```
+
+See also: [LLMs (`llm_factory`)](../llm-adapters.md) and the [OCI Generative AI docs](https://docs.oracle.com/en-us/iaas/Content/generative-ai/).

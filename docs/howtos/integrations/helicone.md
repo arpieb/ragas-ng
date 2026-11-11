@@ -29,8 +29,10 @@ import os
 from datasets import Dataset
 
 from ragas import evaluate
+from ragas.embeddings import LiteLLMEmbeddings
 from ragas.integrations.helicone import helicone_config  # import helicone_config
-from ragas.metrics import answer_relevancy, context_precision, faithfulness
+from ragas.llms import llm_factory
+from ragas.metrics.collections import AnswerRelevancy, ContextPrecision, Faithfulness
 
 # Set up Helicone
 HELICONE_API_KEY = (
@@ -80,12 +82,27 @@ print(dataset)
 
 ## Evaluate with Ragas
 
-Now, let's use Ragas to evaluate our RAG system. Helicone will automatically log the API calls made during this evaluation.
+Now, let's use Ragas to evaluate our RAG system. Route the evaluator LLM and embeddings through Helicone's OpenAI proxy by giving them its base URL and your Helicone key as a header; Helicone then logs every API call made during this evaluation. Setting `helicone_config.api_key` alone does not route any requests.
 
 
 ```python
+# Send the evaluator's requests through Helicone
+helicone = {
+    "api_base": "https://oai.helicone.ai/v1",
+    "extra_headers": {"Helicone-Auth": f"Bearer {HELICONE_API_KEY}"},
+}
+llm = llm_factory("gpt-6-luna", **helicone)
+embeddings = LiteLLMEmbeddings(model="text-embedding-3-small", **helicone)
+
 # Evaluate using Ragas
-score = evaluate(dataset, metrics=[faithfulness, answer_relevancy, context_precision])
+score = evaluate(
+    dataset,
+    metrics=[
+        Faithfulness(llm=llm),
+        AnswerRelevancy(llm=llm, embeddings=embeddings),
+        ContextPrecision(llm=llm),
+    ],
+)
 
 # Display results
 print(score.to_pandas())

@@ -17,7 +17,6 @@ $$
 \text{Context Entity Recall} = \frac{\text{Number of common entities between $RCE$ and $RE$}}{\text{Total number of entities in $RE$}}
 $$
 
-
 ### Example
 
 ```python
@@ -57,8 +56,6 @@ Context Entity Recall Score: 0.999999995
 
 ### How It’s Calculated
 
-
-
 !!! example
     **reference**: The Taj Mahal is an ivory-white marble mausoleum on the right bank of the river Yamuna in the Indian city of Agra. It was commissioned in 1631 by the Mughal emperor Shah Jahan to house the tomb of his favorite wife, Mumtaz Mahal.
     **High entity recall context**: The Taj Mahal is a symbol of love and architectural marvel located in Agra, India. It was built by the Mughal emperor Shah Jahan in memory of his beloved wife, Mumtaz Mahal. The structure is renowned for its intricate marble work and beautiful gardens surrounding it.
@@ -85,30 +82,3 @@ Let us consider the reference and the retrieved contexts given above.
     $$
 
     We can see that the first context had a high entity recall, because it has a better entity coverage given the reference. If these two retrieved contexts were fetched by two retrieval mechanisms on same set of documents, we could say that the first mechanism was better than the other in use-cases where entities are of importance.
-
-## Legacy Metrics API
-
-The following examples use the legacy metrics API pattern. For new projects, we recommend using the collections-based API shown above.
-
-!!! warning "Deprecation Timeline"
-    This API will be deprecated in version 0.4 and removed in version 1.0. Please migrate to the collections-based API shown above.
-
-### Example with SingleTurnSample
-
-```python
-from ragas import SingleTurnSample
-from ragas.metrics import ContextEntityRecall
-
-sample = SingleTurnSample(
-    reference="The Eiffel Tower is located in Paris.",
-    retrieved_contexts=["The Eiffel Tower is located in Paris."],
-)
-
-scorer = ContextEntityRecall(llm=evaluator_llm)
-
-await scorer.single_turn_ascore(sample)
-```
-Output:
-```
-0.999999995
-```

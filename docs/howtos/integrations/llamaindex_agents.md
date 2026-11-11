@@ -97,22 +97,20 @@ ragas_messages = convert_to_ragas_messages(events)
 ```
 
 
+The evaluator LLM is an `llm_factory()` LLM. LiteLLM reaches the same
+providers LlamaIndex does, so you don't need to wrap the agent's LlamaIndex LLM.
+
 ```python
-from ragas.metrics import AgentGoalAccuracyWithoutReference
-from ragas.llms import LlamaIndexLLMWrapper
-from ragas.dataset_schema import MultiTurnSample
-from ragas.messages import ToolCall as RagasToolCall
+from ragas.llms import llm_factory
+from ragas.metrics.collections import AgentGoalAccuracyWithoutReference
 
-evaluator_llm = LlamaIndexLLMWrapper(llm=llm)
-
-sample = MultiTurnSample(
-    user_input=ragas_messages,
-)
+evaluator_llm = llm_factory("gpt-6-luna")
 
 agent_goal_accuracy_without_reference = AgentGoalAccuracyWithoutReference(
     llm=evaluator_llm
 )
-await agent_goal_accuracy_without_reference.multi_turn_ascore(sample)
+result = await agent_goal_accuracy_without_reference.ascore(user_input=ragas_messages)
+result.value
 ```
 Output:
 ```
@@ -120,16 +118,14 @@ Output:
 ```
 
 ```python
-from ragas.metrics import AgentGoalAccuracyWithReference
+from ragas.metrics.collections import AgentGoalAccuracyWithReference
 
-sample = MultiTurnSample(
+agent_goal_accuracy_with_reference = AgentGoalAccuracyWithReference(llm=evaluator_llm)
+result = await agent_goal_accuracy_with_reference.ascore(
     user_input=ragas_messages,
     reference="Successfully sent a message to Jhon asking for a meeting",
 )
-
-
-agent_goal_accuracy_with_reference = AgentGoalAccuracyWithReference(llm=evaluator_llm)
-await agent_goal_accuracy_with_reference.multi_turn_ascore(sample)
+result.value
 ```
 Output:
 ```
@@ -144,9 +140,11 @@ In agentic workflows, an AI agent's effectiveness depends heavily on its ability
 
 
 ```python
-from ragas.metrics import ToolCallAccuracy
+from ragas.messages import ToolCall as RagasToolCall
+from ragas.metrics.collections import ToolCallAccuracy
 
-sample = MultiTurnSample(
+tool_accuracy_scorer = ToolCallAccuracy()
+result = await tool_accuracy_scorer.ascore(
     user_input=ragas_messages,
     reference_tool_calls=[
         RagasToolCall(
@@ -158,9 +156,7 @@ sample = MultiTurnSample(
         ),
     ],
 )
-
-tool_accuracy_scorer = ToolCallAccuracy()
-await tool_accuracy_scorer.multi_turn_ascore(sample)
+result.value
 ```
 Output:
 ```
@@ -432,12 +428,10 @@ True
 
 
 ```python
-from ragas.metrics import AspectCritic
-from ragas.dataset_schema import SingleTurnSample
-from ragas.llms import LlamaIndexLLMWrapper
+from ragas.llms import llm_factory
+from ragas.metrics.collections import AspectCritic
 
-llm = OpenAI(model="gpt-6-luna")
-evaluator_llm = LlamaIndexLLMWrapper(llm=llm)
+evaluator_llm = llm_factory("gpt-6-luna")
 
 correct_tool_args = AspectCritic(
     name="correct_tool_args",
@@ -445,16 +439,15 @@ correct_tool_args = AspectCritic(
     definition="Score 1 if the tool arguements use in the tool call are correct and 0 otherwise",
 )
 
-sample = SingleTurnSample(
+result = await correct_tool_args.ascore(
     user_input="Calculate the sum of the first 10 fibonacci numbers",
     response=agent_code,
 )
-
-await correct_tool_args.single_turn_ascore(sample)
+result.value
 ```
 Output:
 ```
-1
+1.0
 ```
 
 
@@ -682,17 +675,15 @@ This evaluation approach allows us to identify potential issues with either retr
 
 ```python
 from ragas import evaluate
-from ragas.metrics import Faithfulness, ContextRelevance
-from ragas.llms import LlamaIndexLLMWrapper
-from llama_index.llms.openai import OpenAI
+from ragas.llms import llm_factory
+from ragas.metrics.collections import ContextRelevance, Faithfulness
 
-llm = OpenAI(model="gpt-6-luna")
-evaluator_llm = LlamaIndexLLMWrapper(llm=llm)
+evaluator_llm = llm_factory("gpt-6-luna")
 
 faithfulness = Faithfulness(llm=evaluator_llm)
-context_precision = ContextRelevance(llm=evaluator_llm)
+context_relevance = ContextRelevance(llm=evaluator_llm)
 
-result = evaluate(dataset, metrics=[faithfulness, context_precision])
+result = evaluate(dataset, metrics=[faithfulness, context_relevance])
 ```
 ```
 Evaluating: 100%|██████████| 4/4 [00:03<00:00,  1.19it/s]
@@ -726,7 +717,7 @@ Output:
       <th>retrieved_contexts</th>
       <th>response</th>
       <th>faithfulness</th>
-      <th>nv_context_relevance</th>
+      <th>context_relevance</th>
     </tr>
   </thead>
   <tbody>

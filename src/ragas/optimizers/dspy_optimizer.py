@@ -42,7 +42,7 @@ class DSPyOptimizer(Optimizer):
     - Demonstration optimization (few-shot examples)
     - Combined search over both spaces
 
-    Requires: pip install dspy-ai or uv add ragas[dspy]
+    Requires: pip install 'ragas[dspy]' (DSPy 3 with optuna)
 
     Each of the metric's prompts is compiled on its own annotations. The
     result is a copy of the prompt with MIPROv2's instruction and its chosen
@@ -107,7 +107,7 @@ class DSPyOptimizer(Optimizer):
             self._dspy = dspy
         except ImportError as e:
             raise ImportError(
-                "DSPy optimizer requires dspy-ai. Install with:\n"
+                "DSPy optimizer requires dspy. Install with:\n"
                 "  uv add 'ragas[dspy]'  # or: pip install 'ragas[dspy]'\n"
             ) from e
 
