@@ -5,27 +5,15 @@ import inspect
 import typing as t
 import warnings
 from abc import ABC, abstractmethod
-from dataclasses import field
-
-import numpy as np
-from pydantic.dataclasses import dataclass
-from pydantic_core import CoreSchema, core_schema
 
 from ragas.cache import CacheInterface, cache_identity, cacher
 from ragas.embeddings.utils import run_async_in_current_loop, validate_texts
 from ragas.run_config import (
     RunConfig,
-    add_async_retry,
-    add_retry,
-    scoped_run_config,
 )
 
 if t.TYPE_CHECKING:
-    from llama_index.core.base.embeddings.base import BaseEmbedding
-    from pydantic import GetCoreSchemaHandler
-
-
-DEFAULT_MODEL_NAME = "BAAI/bge-small-en-v1.5"
+    pass
 
 
 class BaseRagasEmbedding(ABC):
@@ -215,348 +203,6 @@ class BaseRagasEmbedding(ABC):
         return cls(**init_kwargs)
 
 
-def _overrides(cls: type, name: str) -> bool:
-    """Has ``cls`` supplied its own ``name``, rather than inheriting the default?"""
-    return getattr(cls, name, None) is not getattr(BaseRagasEmbeddings, name, None)
-
-
-class BaseRagasEmbeddings(ABC):
-    """
-    Abstract base class for Ragas embeddings.
-
-    Implement **either** the sync pair (``embed_query``/``embed_documents``) or
-    the async pair (``aembed_query``/``aembed_documents``). Whichever you omit is
-    bridged automatically: sync calls run the coroutine, async calls hand the
-    sync method to an executor.
-
-    This used to subclass ``langchain_core.embeddings.Embeddings`` and declare
-    only the async pair abstract, which left ``HuggingfaceEmbeddings`` -- which
-    implements only the sync pair -- permanently abstract and impossible to
-    instantiate. Requiring one pair rather than a specific pair fixes that, and
-    is strictly more permissive than before for user subclasses.
-
-    Attributes:
-        run_config (RunConfig): Configuration for running the embedding operations.
-
-    """
-
-    def __init_subclass__(cls, **kwargs: t.Any) -> None:
-        super().__init_subclass__(**kwargs)
-        if inspect.isabstract(cls):
-            return
-        # Neither pair is abstract any more, so Python cannot catch a subclass
-        # that implements nothing -- instead embed_query would call aembed_query
-        # which would call embed_query, recursing until the stack blew. Check at
-        # class-definition time so the failure is a clear message, not a
-        # RecursionError from deep inside an evaluation.
-        has_sync = _overrides(cls, "embed_query") and _overrides(cls, "embed_documents")
-        has_async = _overrides(cls, "aembed_query") and _overrides(
-            cls, "aembed_documents"
-        )
-        # Overriding the higher-level API instead is also fine: it short-circuits
-        # the chain before either pair is reached.
-        has_high_level = _overrides(cls, "embed_text") or _overrides(cls, "embed_texts")
-        if not (has_sync or has_async or has_high_level):
-            raise TypeError(
-                f"{cls.__name__} must implement either (embed_query, embed_documents), "
-                f"(aembed_query, aembed_documents), or embed_text/embed_texts. "
-                f"Without one of these, embedding calls would recurse indefinitely."
-            )
-
-    run_config: RunConfig
-    cache: t.Optional[CacheInterface] = None
-
-    def __init__(self, cache: t.Optional[CacheInterface] = None):
-        super().__init__()
-        self.cache = cache
-        if self.cache is not None:
-            self.embed_query = cacher(
-                cache_backend=self.cache, identity=lambda: cache_identity(self)
-            )(self.embed_query)
-            self.embed_documents = cacher(
-                cache_backend=self.cache, identity=lambda: cache_identity(self)
-            )(self.embed_documents)
-            self.aembed_query = cacher(
-                cache_backend=self.cache, identity=lambda: cache_identity(self)
-            )(self.aembed_query)
-            self.aembed_documents = cacher(
-                cache_backend=self.cache, identity=lambda: cache_identity(self)
-            )(self.aembed_documents)
-
-    async def embed_text(self, text: str, is_async=True) -> t.List[float]:
-        """
-        Embed a single text string.
-        """
-        embs = await self.embed_texts([text], is_async=is_async)
-        return embs[0]
-
-    async def embed_texts(
-        self, texts: t.List[str], is_async: bool = True
-    ) -> t.List[t.List[float]]:
-        """
-        Embed multiple texts.
-        """
-        if is_async:
-            aembed_documents_with_retry = add_async_retry(
-                self.aembed_documents, scoped_run_config() or self.run_config
-            )
-            return await aembed_documents_with_retry(texts)
-        else:
-            loop = asyncio.get_event_loop()
-            embed_documents_with_retry = add_retry(
-                self.embed_documents, scoped_run_config() or self.run_config
-            )
-            return await loop.run_in_executor(None, embed_documents_with_retry, texts)
-
-    def embed_query(self, text: str) -> t.List[float]:
-        """Embed one string. Bridges to ``aembed_query`` unless overridden."""
-        return run_async_in_current_loop(self.aembed_query(text))
-
-    def embed_documents(self, texts: t.List[str]) -> t.List[t.List[float]]:
-        """Embed many strings. Bridges to ``aembed_documents`` unless overridden."""
-        return run_async_in_current_loop(self.aembed_documents(texts))
-
-    async def aembed_query(self, text: str) -> t.List[float]:
-        """Embed one string. Bridges to ``embed_query`` unless overridden."""
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, self.embed_query, text)
-
-    async def aembed_documents(self, texts: t.List[str]) -> t.List[t.List[float]]:
-        """Embed many strings. Bridges to ``embed_documents`` unless overridden."""
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, self.embed_documents, texts)
-
-    def set_run_config(self, run_config: RunConfig):
-        """
-        Set the run configuration for the embedding operations.
-        """
-        self.run_config = run_config
-
-    @classmethod
-    def __get_pydantic_core_schema__(
-        cls, source_type: t.Any, handler: GetCoreSchemaHandler
-    ) -> CoreSchema:
-        """
-        Define how Pydantic generates a schema for BaseRagasEmbeddings.
-        """
-        return core_schema.no_info_after_validator_function(
-            cls,
-            core_schema.is_instance_schema(cls),  # The validator function
-        )
-
-
-@dataclass
-class HuggingfaceEmbeddings(BaseRagasEmbeddings):
-    """
-    Hugging Face embeddings class for generating embeddings using pre-trained models.
-
-    This class provides functionality to load and use Hugging Face models for
-    generating embeddings of text inputs.
-
-    Attributes
-    ----------
-    model_name : str
-        Name of the pre-trained model to use, by default DEFAULT_MODEL_NAME.
-    cache_folder : str, optional
-        Path to store downloaded models. Can also be set by SENTENCE_TRANSFORMERS_HOME
-        environment variable.
-    model_kwargs : dict
-        Additional keyword arguments to pass to the model.
-    encode_kwargs : dict
-        Additional keyword arguments to pass to the encoding method.
-    model : Union[SentenceTransformer, CrossEncoder]
-        The loaded Hugging Face model.
-    is_cross_encoder : bool
-        Flag indicating whether the model is a cross-encoder.
-
-    Methods
-    -------
-    embed_query(text)
-        Embed a single query text.
-    embed_documents(texts)
-        Embed multiple documents.
-    predict(texts)
-        Make predictions using a cross-encoder model.
-
-    Notes
-    -----
-    This class requires the `sentence_transformers` and `transformers` packages
-    to be installed.
-
-    Examples
-    --------
-    >>> embeddings = HuggingfaceEmbeddings(model_name="bert-base-uncased")
-    >>> query_embedding = embeddings.embed_query("What is the capital of France?")
-    >>> doc_embeddings = embeddings.embed_documents(["Paris is the capital of France.", "London is the capital of the UK."])
-    """
-
-    model_name: str = DEFAULT_MODEL_NAME
-    cache_folder: t.Optional[str] = None
-    model_kwargs: t.Dict[str, t.Any] = field(default_factory=dict)
-    encode_kwargs: t.Dict[str, t.Any] = field(default_factory=dict)
-    cache: t.Optional[CacheInterface] = None
-
-    def __post_init__(self):
-        """
-        Initialize the model after the object is created.
-        """
-        super().__init__(cache=self.cache)
-        try:
-            import sentence_transformers
-            from transformers import AutoConfig  # type: ignore
-            from transformers.models.auto.modeling_auto import (
-                MODEL_FOR_SEQUENCE_CLASSIFICATION_MAPPING_NAMES,
-            )
-        except ImportError as exc:
-            raise ImportError(
-                "Could not import sentence_transformers python package. "
-                "Please install it with `pip install sentence-transformers`."
-            ) from exc
-        config = AutoConfig.from_pretrained(self.model_name)
-        self.is_cross_encoder = bool(
-            np.intersect1d(
-                list(MODEL_FOR_SEQUENCE_CLASSIFICATION_MAPPING_NAMES.values()),
-                config.architectures or [],
-            ).size
-            != 0
-        )
-
-        if self.is_cross_encoder:
-            self.model = sentence_transformers.CrossEncoder(
-                self.model_name, **self.model_kwargs
-            )
-        else:
-            self.model = sentence_transformers.SentenceTransformer(  # type: ignore
-                self.model_name, cache_folder=self.cache_folder, **self.model_kwargs
-            )
-        # ensure outputs are tensors
-        if "convert_to_tensor" not in self.encode_kwargs:
-            self.encode_kwargs["convert_to_tensor"] = True
-
-        if self.cache is not None:
-            self.predict = cacher(
-                cache_backend=self.cache, identity=lambda: cache_identity(self)
-            )(self.predict)
-
-    def embed_query(self, text: str) -> t.List[float]:
-        """
-        Embed a single query text.
-        """
-        return self.embed_documents([text])[0]
-
-    def embed_documents(self, texts: t.List[str]) -> t.List[t.List[float]]:
-        """
-        Embed multiple documents.
-        """
-        from sentence_transformers.SentenceTransformer import SentenceTransformer
-        from torch import Tensor
-
-        assert isinstance(self.model, SentenceTransformer), (
-            "Model is not of the type Bi-encoder"
-        )
-        embeddings = self.model.encode(
-            texts, normalize_embeddings=True, **self.encode_kwargs
-        )
-
-        assert isinstance(embeddings, Tensor)
-        return embeddings.tolist()
-
-    def predict(self, texts: t.List[t.List[str]]) -> t.List[t.List[float]]:
-        """
-        Make predictions using a cross-encoder model.
-        """
-        from sentence_transformers.cross_encoder import CrossEncoder
-        from torch import Tensor
-
-        assert isinstance(self.model, CrossEncoder), (
-            "Model is not of the type CrossEncoder"
-        )
-
-        predictions = self.model.predict(texts, **self.encode_kwargs)
-
-        assert isinstance(predictions, Tensor)
-        return predictions.tolist()
-
-
-class LlamaIndexEmbeddingsWrapper(BaseRagasEmbeddings):
-    """
-    Wrapper for any embeddings from llama-index.
-
-    # TODO: Revisit deprecation warning
-    # .. deprecated::
-    #     LlamaIndexEmbeddingsWrapper is deprecated and will be removed in a future version.
-    #     Use the modern embedding providers directly with embedding_factory() instead:
-    #
-    #     # Instead of:
-    #     # embedder = LlamaIndexEmbeddingsWrapper(llama_index_embeddings)
-    #
-    #     # Use:
-    #     # embedder = embedding_factory("openai", model="text-embedding-3-small", client=openai_client)
-    #     # embedder = embedding_factory("huggingface", model="sentence-transformers/all-MiniLM-L6-v2")
-    #     # embedder = embedding_factory("google", client=vertex_client)
-
-    This class provides a wrapper for llama-index embeddings, allowing them to be used
-    within the Ragas framework. It supports both synchronous and asynchronous embedding
-    operations for queries and documents.
-
-    Parameters
-    ----------
-    embeddings : BaseEmbedding
-        The llama-index embedding model to be wrapped.
-    run_config : RunConfig, optional
-        Configuration for the run. If not provided, a default RunConfig will be used.
-
-    Attributes
-    ----------
-    embeddings : BaseEmbedding
-        The wrapped llama-index embedding model.
-
-    Examples
-    --------
-    >>> from llama_index.embeddings import OpenAIEmbedding
-    >>> from ragas.embeddings import LlamaIndexEmbeddingsWrapper
-    >>> llama_embeddings = OpenAIEmbedding()
-    >>> wrapped_embeddings = LlamaIndexEmbeddingsWrapper(llama_embeddings)
-    >>> query_embedding = wrapped_embeddings.embed_query("What is the capital of France?")
-    >>> document_embeddings = wrapped_embeddings.embed_documents(["Paris is the capital of France.", "London is the capital of the UK."])
-    """
-
-    def __init__(
-        self,
-        embeddings: BaseEmbedding,
-        run_config: t.Optional[RunConfig] = None,
-        cache: t.Optional[CacheInterface] = None,
-    ):
-        warnings.warn(
-            "LlamaIndexEmbeddingsWrapper is deprecated and will be removed in a future version. "
-            "Use the modern embedding providers instead: "
-            "embedding_factory('openai', model='text-embedding-3-small', client=openai_client) "
-            "or from ragas.embeddings import OpenAIEmbeddings, GoogleEmbeddings, HuggingFaceEmbeddings",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        super().__init__(cache=cache)
-        self.embeddings = embeddings
-        if run_config is None:
-            run_config = RunConfig()
-        self.set_run_config(run_config)
-
-    def embed_query(self, text: str) -> t.List[float]:
-        return self.embeddings.get_query_embedding(text)
-
-    def embed_documents(self, texts: t.List[str]) -> t.List[t.List[float]]:
-        return self.embeddings.get_text_embedding_batch(texts)
-
-    async def aembed_query(self, text: str) -> t.List[float]:
-        return await self.embeddings.aget_query_embedding(text)
-
-    async def aembed_documents(self, texts: t.List[str]) -> t.List[t.List[float]]:
-        return await self.embeddings.aget_text_embedding_batch(texts)
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(embeddings={self.embeddings.__class__.__name__}(...))"
-
-
 def _infer_embedding_provider_from_llm(llm: t.Any) -> str:
     """
     Infer the embedding provider from an LLM instance.
@@ -617,12 +263,9 @@ def embedding_factory(
     base_url: t.Optional[str] = None,
     cache: t.Optional[CacheInterface] = None,
     **kwargs: t.Any,
-) -> t.Union[BaseRagasEmbeddings, BaseRagasEmbedding]:
+) -> BaseRagasEmbedding:
     """
-    Create and return an embeddings instance. Unified factory supporting both legacy and modern interfaces.
-
-    This factory function automatically detects whether to use legacy or modern interfaces based on
-    the parameters provided, while maintaining full backward compatibility.
+    Create and return an embeddings instance.
 
     Parameters
     ----------
@@ -651,16 +294,16 @@ def embedding_factory(
 
     Returns
     -------
-    BaseRagasEmbeddings or BaseRagasEmbedding
-        An instance of the requested embedding interface.
+    BaseRagasEmbedding
+        An instance of the requested embedding provider.
 
     Examples
     --------
-    # Legacy usage (backward compatible)
+    # Through LiteLLM (credentials from the environment)
     embedder = embedding_factory()
     embedder = embedding_factory("text-embedding-ada-002")
 
-    # Modern usage
+    # With a client
     embedder = embedding_factory("openai", "text-embedding-3-small", client=openai_client)
     embedder = embedding_factory("huggingface", "sentence-transformers/all-MiniLM-L6-v2")
     embedder = embedding_factory("google", client=vertex_client, project_id="my-project")

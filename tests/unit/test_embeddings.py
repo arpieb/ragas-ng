@@ -1,14 +1,6 @@
 from __future__ import annotations
 
 
-def test_basic_legacy_imports():
-    """Test that basic legacy imports work."""
-    from ragas.embeddings import BaseRagasEmbeddings, embedding_factory
-
-    assert BaseRagasEmbeddings is not None
-    assert embedding_factory is not None
-
-
 def test_debug_base_module():
     """Debug what's available in base module."""
     import ragas.embeddings.base as base_module

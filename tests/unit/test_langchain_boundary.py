@@ -40,7 +40,7 @@ LANGCHAIN_FREE_MODULES: list[str] = [
     "ragas.embeddings",
     "ragas.embeddings.base",
     "ragas.prompt",
-    "ragas.prompt.pydantic_prompt",
+    "ragas.prompt.metrics.base_prompt",
     "ragas.metrics",
     "ragas.metrics.collections",
     "ragas.testset",

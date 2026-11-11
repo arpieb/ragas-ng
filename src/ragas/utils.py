@@ -20,7 +20,6 @@ from rich.console import Console
 from tqdm.auto import tqdm
 
 if t.TYPE_CHECKING:
-    from ragas.metrics.base import Metric
     from ragas.tokenizers import BaseTokenizer
 
 DEBUG_ENV_VAR = "RAGAS_DEBUG"
@@ -87,36 +86,6 @@ def is_nan(x):
         return np.isnan(x)
     except TypeError:
         return False
-
-
-def get_metric_language(metric: "Metric") -> str:
-    from ragas.prompt import BasePrompt
-
-    languags = [
-        value.language
-        for _, value in vars(metric).items()
-        if isinstance(value, BasePrompt)
-    ]
-    return languags[0] if len(languags) > 0 else ""
-
-
-class DeprecationHelper:
-    """Helper class to handle deprecation warnings for exported classes."""
-
-    def __init__(self, new_target: t.Type, deprecation_message: str):
-        self.new_target = new_target
-        self.deprecation_message = deprecation_message
-
-    def _warn(self):
-        warnings.warn(self.deprecation_message, DeprecationWarning, stacklevel=3)
-
-    def __call__(self, *args, **kwargs):
-        self._warn()
-        return self.new_target(*args, **kwargs)
-
-    def __getattr__(self, attr):
-        self._warn()
-        return getattr(self.new_target, attr)
 
 
 def deprecated(
@@ -218,12 +187,6 @@ REQUIRED_COLS_v1 = {
     "response": "answer",
     "reference": "ground_truth",
 }
-
-
-def get_required_columns_v1(metric: Metric):
-    required_cols = metric.required_columns.get("SINGLE_TURN", set())
-    required_cols = [REQUIRED_COLS_v1.get(col) for col in required_cols]
-    return [col for col in required_cols if col is not None]
 
 
 def convert_row_v1_to_v2(row: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
