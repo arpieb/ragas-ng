@@ -9,7 +9,7 @@ from ragas.dataset_schema import (
     SingleMetricAnnotation,
 )
 from ragas.losses import MSELoss
-from ragas.prompt.pydantic_prompt import PydanticPrompt
+from ragas.prompt.metrics.base_prompt import BasePrompt
 
 try:
     import dspy  # noqa: F401
@@ -19,11 +19,11 @@ except ImportError:
     DSPY_AVAILABLE = False
 
 
-class TestPydanticPromptToDSPySignature:
+class TestPromptToDSPySignature:
     @pytest.mark.skipif(not DSPY_AVAILABLE, reason="dspy-ai not installed")
     def test_basic_conversion(self):
-        """Test basic conversion of PydanticPrompt to DSPy Signature."""
-        from ragas.optimizers.dspy_adapter import pydantic_prompt_to_dspy_signature
+        """Test basic conversion of a BasePrompt to DSPy Signature."""
+        from ragas.optimizers.dspy_adapter import prompt_to_dspy_signature
 
         class InputModel(BaseModel):
             question: str = Field(description="The question")
@@ -32,14 +32,14 @@ class TestPydanticPromptToDSPySignature:
         class OutputModel(BaseModel):
             answer: str = Field(description="The answer")
 
-        class TestPrompt(PydanticPrompt[InputModel, OutputModel]):
+        class TestPrompt(BasePrompt[InputModel, OutputModel]):
             instruction = "Answer the question"
             input_model = InputModel
             output_model = OutputModel
 
         prompt = TestPrompt()
 
-        signature = pydantic_prompt_to_dspy_signature(prompt)
+        signature = prompt_to_dspy_signature(prompt)
 
         assert signature.__doc__ == "Answer the question"
         assert "question" in signature.model_fields
@@ -59,7 +59,7 @@ class TestPydanticPromptToDSPySignature:
     @pytest.mark.skipif(not DSPY_AVAILABLE, reason="dspy-ai not installed")
     def test_field_descriptions(self):
         """Test that field descriptions are preserved."""
-        from ragas.optimizers.dspy_adapter import pydantic_prompt_to_dspy_signature
+        from ragas.optimizers.dspy_adapter import prompt_to_dspy_signature
 
         class InputModel(BaseModel):
             question: str = Field(description="User's question")
@@ -67,14 +67,14 @@ class TestPydanticPromptToDSPySignature:
         class OutputModel(BaseModel):
             score: float = Field(description="Relevance score")
 
-        class TestPrompt(PydanticPrompt[InputModel, OutputModel]):
+        class TestPrompt(BasePrompt[InputModel, OutputModel]):
             instruction = "Score relevance"
             input_model = InputModel
             output_model = OutputModel
 
         prompt = TestPrompt()
 
-        signature = pydantic_prompt_to_dspy_signature(prompt)
+        signature = prompt_to_dspy_signature(prompt)
 
         assert "question" in signature.model_fields
         assert "score" in signature.model_fields
@@ -303,16 +303,17 @@ class TestCreateDSPyMetric:
 
 
 class TestSetupDSPyLLM:
-    @patch("ragas.optimizers.dspy_llm_wrapper.RagasDSPyLM")
-    def test_setup_configures_dspy(self, mock_wrapper_class, fake_llm):
-        """Test that setup_dspy_llm configures DSPy settings."""
+    @patch("ragas.optimizers.dspy_adapter.dspy_lm_from_llm")
+    def test_setup_configures_dspy(self, mock_lm_from_llm):
+        """setup_dspy_llm configures DSPy with the LM built from the LLM."""
         from ragas.optimizers.dspy_adapter import setup_dspy_llm
 
         mock_dspy = MagicMock()
-        mock_wrapper = Mock()
-        mock_wrapper_class.return_value = mock_wrapper
+        llm = Mock()
+        mock_lm = Mock()
+        mock_lm_from_llm.return_value = mock_lm
 
-        setup_dspy_llm(mock_dspy, fake_llm)
+        setup_dspy_llm(mock_dspy, llm)
 
-        mock_wrapper_class.assert_called_once_with(fake_llm)
-        mock_dspy.settings.configure.assert_called_once_with(lm=mock_wrapper)
+        mock_lm_from_llm.assert_called_once_with(mock_dspy, llm)
+        mock_dspy.settings.configure.assert_called_once_with(lm=mock_lm)

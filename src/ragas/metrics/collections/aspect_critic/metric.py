@@ -3,6 +3,7 @@
 import typing as t
 from collections import Counter
 
+from ragas.metrics.base import MetricOutputType
 from ragas.metrics.collections._sampling import sample_n
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
@@ -56,6 +57,7 @@ class AspectCritic(BaseMetric):
     """
 
     llm: "InstructorBaseRagasLLM"
+    output_type = MetricOutputType.BINARY
 
     def __init__(
         self,

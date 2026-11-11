@@ -35,7 +35,7 @@ def test_dspy_optimizer_basic_optimization():
     from ragas.llms import llm_factory
     from ragas.losses import MSELoss
     from ragas.optimizers import DSPyOptimizer
-    from ragas.prompt.pydantic_prompt import PydanticPrompt
+    from ragas.prompt.metrics.base_prompt import BasePrompt
 
     class QuestionInput(BaseModel):
         question: str = Field(description="The question to answer")
@@ -43,7 +43,7 @@ def test_dspy_optimizer_basic_optimization():
     class ScoreOutput(BaseModel):
         score: float = Field(description="Relevance score between 0 and 1")
 
-    class TestPrompt(PydanticPrompt[QuestionInput, ScoreOutput]):
+    class TestPrompt(BasePrompt[QuestionInput, ScoreOutput]):
         instruction = "Score the relevance of the question."
         input_model = QuestionInput
         output_model = ScoreOutput
@@ -104,8 +104,8 @@ def test_dspy_optimizer_basic_optimization():
         result = optimizer.optimize(dataset, loss, {})
 
         assert "score_prompt" in result
-        assert isinstance(result["score_prompt"], str)
-        assert len(result["score_prompt"]) > 0
+        assert isinstance(result["score_prompt"], BasePrompt)
+        assert result["score_prompt"].instruction
     except Exception as e:
         pytest.skip(f"DSPy optimization failed (expected in CI): {e}")
 
@@ -123,10 +123,10 @@ def test_dspy_adapter_conversions():
     from ragas.losses import MSELoss
     from ragas.optimizers.dspy_adapter import (
         create_dspy_metric,
-        pydantic_prompt_to_dspy_signature,
+        prompt_to_dspy_signature,
         ragas_dataset_to_dspy_examples,
     )
-    from ragas.prompt.pydantic_prompt import PydanticPrompt
+    from ragas.prompt.metrics.base_prompt import BasePrompt
 
     class InputModel(BaseModel):
         question: str = Field(description="The question")
@@ -134,14 +134,14 @@ def test_dspy_adapter_conversions():
     class OutputModel(BaseModel):
         answer: str = Field(description="The answer")
 
-    class TestPrompt(PydanticPrompt[InputModel, OutputModel]):
+    class TestPrompt(BasePrompt[InputModel, OutputModel]):
         instruction = "Answer the question"
         input_model = InputModel
         output_model = OutputModel
 
     prompt = TestPrompt()
 
-    signature = pydantic_prompt_to_dspy_signature(prompt)
+    signature = prompt_to_dspy_signature(prompt)
     assert signature.__doc__ == "Answer the question"
 
     prompt_annotation = PromptAnnotation(
