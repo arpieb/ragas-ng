@@ -101,7 +101,11 @@ prompt_annotation = PromptAnnotation(
 
 # Create sample with annotations
 sample = SampleAnnotation(
-    metric_input={"user_input": "...", "response": "...", "retrieved_contexts": ["..."]},
+    metric_input={
+        "user_input": "...",
+        "response": "...",
+        "retrieved_contexts": ["..."],
+    },
     metric_output=0.9,  # Ground truth score
     prompts={"nli_statement_prompt": prompt_annotation},
     is_accepted=True,  # Whether to use in optimization

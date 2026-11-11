@@ -21,7 +21,9 @@ from ragas.llms import llm_factory
 from ragas.metrics.collections import AspectCritic
 
 llm = llm_factory("gpt-6-luna")
-metric = AspectCritic(name="helpfulness", definition="Is the response helpful?", llm=llm)
+metric = AspectCritic(
+    name="helpfulness", definition="Is the response helpful?", llm=llm
+)
 
 metric.train(
     "annotated_data.json",  # or dataset=SingleMetricAnnotation(...)
@@ -184,7 +186,9 @@ demonstrations = DemonstrationConfig(
     technique="similarity",  # or "random": a fixed random sample
 )
 
-metric.train(dataset=dataset, instruction_config=config, demonstration_config=demonstrations)
+metric.train(
+    dataset=dataset, instruction_config=config, demonstration_config=demonstrations
+)
 ```
 
 ## Dataset Format
