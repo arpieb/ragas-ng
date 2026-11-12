@@ -19,6 +19,7 @@ from ragas.callbacks import (
     new_group,
 )
 from ragas.dataset_schema import (
+    SAMPLE_TYPES,
     EvaluationDataset,
     EvaluationResult,
     MultiTurnSample,
@@ -38,8 +39,7 @@ from ragas.llms.base import DEFAULT_LLM_MODEL, InstructorBaseRagasLLM
 from ragas.metrics.base import SimpleBaseMetric, adopt_metric_run
 from ragas.metrics.sample_inputs import InputSpec, as_score, input_spec
 from ragas.run_config import RunConfig, run_scope
-from ragas.utils import convert_v1_to_v2_dataset
-from ragas.validation import get_supported_metric_type, remap_column_names
+from ragas.validation import convert_v1_to_v2_dataset, remap_column_names
 
 if t.TYPE_CHECKING:
     from ragas.callbacks import Callbacks
@@ -500,7 +500,7 @@ def _coerce_dataset(dataset: t.Any) -> t.Union[Dataset, EvaluationDataset]:
     if isinstance(dataset, (list, tuple)):
         if not dataset:
             raise ValueError("The dataset is empty.")
-        if all(isinstance(s, (SingleTurnSample, MultiTurnSample)) for s in dataset):
+        if all(isinstance(s, SAMPLE_TYPES) for s in dataset):
             return EvaluationDataset(samples=list(dataset))
         if all(isinstance(s, dict) for s in dataset):
             return EvaluationDataset.from_list(list(dataset))
@@ -623,7 +623,6 @@ class _MetricJob:
             )
 
     def check_sample_type(self, dataset: EvaluationDataset) -> None:
-        get_supported_metric_type(dataset)  # raises for an unknown sample type
         sample_type = dataset.get_sample_type()
         if not self.spec.supports(sample_type):
             raise ValueError(

@@ -30,33 +30,30 @@ def resolve_resource_path(data_dir: Path, name: str, suffix: str) -> Path:
     return data_dir / f"{name}{suffix}"
 
 
+Kind = t.Literal["datasets", "experiments"]
+"""Which store a backend call addresses. Datasets and experiments are kept apart."""
+
+
 class BaseBackend(ABC):
     """Abstract base class for dataset and experiment storage backends.
 
-    Backends provide persistent storage for datasets and experiments as lists of dictionaries.
-    The system stores datasets and experiments separately but with identical interfaces.
+    Backends store datasets and experiments as lists of dicts, by name, in
+    two separate stores. A backend implements three methods, each taking the
+    store ``kind`` (``"datasets"`` or ``"experiments"``):
 
-    Implementation Requirements:
-    - Handle datasets and experiments with same interface but separate storage
-    - Return data as List[Dict[str, Any]] format
-    - Raise FileNotFoundError for missing datasets/experiments
-    - Support empty datasets (return empty list, not None)
-    - Create storage directories/containers as needed
+    - ``_load(kind, name)``: the rows saved under ``name``. Raise
+      ``FileNotFoundError`` if there are none; return ``[]`` for an empty
+      dataset, never ``None``.
+    - ``_save(kind, name, data, data_model)``: replace whatever is saved
+      under ``name`` with ``data`` (already-validated dicts). ``data_model``
+      is context only and may be ignored. Create storage as needed.
+    - ``_list(kind)``: the saved names, sorted, without paths or suffixes.
 
-    Directory Structure (for file-based backends):
-        storage_root/
-        ├── datasets/     # Dataset storage
-        └── experiments/  # Experiment storage
+    The public ``load_dataset``/``save_dataset``/``list_datasets`` and their
+    ``*_experiment*`` twins call these; don't override them.
 
-    Usage for Implementers:
-        class MyBackend(BaseBackend):
-            def __init__(self, connection_config):
-                self.config = connection_config
-                # Initialize your storage connection
-
-            def load_dataset(self, name: str):
-                # Load dataset by name, raise FileNotFoundError if missing
-                pass
+    File backends subclass :class:`FileBackend` instead, which keeps one file
+    per name under ``root_dir/datasets`` and ``root_dir/experiments``.
 
     Usage by End Users:
         # Via string backend registration
@@ -68,109 +65,117 @@ class BaseBackend(ABC):
     """
 
     @abstractmethod
+    def _load(self, kind: Kind, name: str) -> t.List[t.Dict[str, t.Any]]:
+        """The rows saved as ``name`` in the ``kind`` store.
+
+        Raises:
+            FileNotFoundError: if nothing is saved under ``name``.
+        """
+
+    @abstractmethod
+    def _save(
+        self,
+        kind: Kind,
+        name: str,
+        data: t.List[t.Dict[str, t.Any]],
+        data_model: t.Optional[t.Type[BaseModel]],
+    ) -> None:
+        """Save ``data`` as ``name`` in the ``kind`` store, overwriting it."""
+
+    @abstractmethod
+    def _list(self, kind: Kind) -> t.List[str]:
+        """The names saved in the ``kind`` store, sorted."""
+
     def load_dataset(self, name: str) -> t.List[t.Dict[str, t.Any]]:
-        """Load dataset by name.
+        """Load a dataset's rows. Raises ``FileNotFoundError`` if it doesn't exist."""
+        return self._load("datasets", name)
 
-        Args:
-            name: Dataset identifier (alphanumeric, hyphens, underscores recommended)
-
-        Returns:
-            List of dictionaries representing dataset rows. Empty list for empty datasets.
-
-        Raises:
-            FileNotFoundError: If dataset doesn't exist
-
-        Implementation Notes:
-            - Return empty list [] for empty datasets, never None
-            - Each dict represents one data row/item
-            - Preserve data types where possible (JSONL) or document limitations (CSV)
-        """
-        pass
-
-    @abstractmethod
     def load_experiment(self, name: str) -> t.List[t.Dict[str, t.Any]]:
-        """Load experiment by name.
+        """Load an experiment's rows. Raises ``FileNotFoundError`` if it doesn't exist."""
+        return self._load("experiments", name)
 
-        Args:
-            name: Experiment identifier (alphanumeric, hyphens, underscores recommended)
-
-        Returns:
-            List of dictionaries representing experiment results. Empty list for empty experiments.
-
-        Raises:
-            FileNotFoundError: If experiment doesn't exist
-
-        Implementation Notes:
-            - Identical interface to load_dataset but separate storage
-            - Return empty list [] for empty experiments, never None
-        """
-        pass
-
-    @abstractmethod
     def save_dataset(
         self,
         name: str,
         data: t.List[t.Dict[str, t.Any]],
         data_model: t.Optional[t.Type[BaseModel]] = None,
     ) -> None:
-        """Save dataset with given name.
+        """Save a dataset, replacing any dataset of the same name."""
+        self._save("datasets", name, data, data_model)
 
-        Args:
-            name: Dataset identifier for storage
-            data: List of dictionaries to save
-            data_model: Optional Pydantic model for validation context (may be ignored)
-
-        Implementation Notes:
-            - Overwrite existing dataset with same name
-            - Create storage location if it doesn't exist
-            - Handle empty data list gracefully
-            - data_model is for context only; data is always pre-validated dicts
-        """
-        pass
-
-    @abstractmethod
     def save_experiment(
         self,
         name: str,
         data: t.List[t.Dict[str, t.Any]],
         data_model: t.Optional[t.Type[BaseModel]] = None,
     ) -> None:
-        """Save experiment with given name.
+        """Save an experiment, replacing any experiment of the same name."""
+        self._save("experiments", name, data, data_model)
 
-        Args:
-            name: Experiment identifier for storage
-            data: List of dictionaries to save
-            data_model: Optional Pydantic model for validation context (may be ignored)
-
-        Implementation Notes:
-            - Identical interface to save_dataset but separate storage
-            - Overwrite existing experiment with same name
-        """
-        pass
-
-    @abstractmethod
     def list_datasets(self) -> t.List[str]:
-        """List all available dataset names.
+        """The saved dataset names, sorted."""
+        return self._list("datasets")
 
-        Returns:
-            Sorted list of dataset names (without file extensions or paths)
+    def list_experiments(self) -> t.List[str]:
+        """The saved experiment names, sorted."""
+        return self._list("experiments")
 
-        Implementation Notes:
-            - Return empty list if no datasets exist
-            - Sort alphabetically for consistent ordering
-            - Return just the names, not full paths or metadata
-        """
-        pass
+
+class FileBackend(BaseBackend):
+    """A backend that keeps each dataset/experiment in one local file.
+
+    Layout::
+
+        root_dir/
+        ├── datasets/<name><suffix>
+        └── experiments/<name><suffix>
+
+    Subclasses set ``suffix`` and implement ``_read(path)`` and
+    ``_write(path, data)``. The base resolves names safely
+    (:func:`resolve_resource_path`), raises ``FileNotFoundError`` for a
+    missing file, creates directories on save and lists by suffix.
+    """
+
+    suffix: t.ClassVar[str]
+
+    def __init__(self, root_dir: t.Union[str, Path]):
+        self.root_dir = Path(root_dir)
 
     @abstractmethod
-    def list_experiments(self) -> t.List[str]:
-        """List all available experiment names.
+    def _read(self, path: Path) -> t.List[t.Dict[str, t.Any]]:
+        """Parse an existing file's rows."""
 
-        Returns:
-            Sorted list of experiment names (without file extensions or paths)
+    @abstractmethod
+    def _write(self, path: Path, data: t.List[t.Dict[str, t.Any]]) -> None:
+        """Write ``data`` to ``path`` (an empty list writes an empty file)."""
 
-        Implementation Notes:
-            - Identical interface to list_datasets but for experiments
-            - Return empty list if no experiments exist
-        """
-        pass
+    def _path(self, kind: Kind, name: str) -> Path:
+        return resolve_resource_path(self.root_dir / kind, name, self.suffix)
+
+    def _load(self, kind: Kind, name: str) -> t.List[t.Dict[str, t.Any]]:
+        path = self._path(kind, name)
+        if not path.exists():
+            raise FileNotFoundError(f"No {kind[:-1]} named '{name}' found at {path}")
+        return self._read(path)
+
+    def _save(
+        self,
+        kind: Kind,
+        name: str,
+        data: t.List[t.Dict[str, t.Any]],
+        data_model: t.Optional[t.Type[BaseModel]],
+    ) -> None:
+        path = self._path(kind, name)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self._write(path, data)
+
+    def _list(self, kind: Kind) -> t.List[str]:
+        data_dir = self.root_dir / kind
+        if not data_dir.exists():
+            return []
+        return sorted(f.stem for f in data_dir.glob(f"*{self.suffix}"))
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(root_dir='{self.root_dir}')"
+
+    __str__ = __repr__
