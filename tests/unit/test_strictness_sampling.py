@@ -93,7 +93,7 @@ def test_reasoning_models_still_force_temperature_one():
 def test_google_override_lands_in_generation_config():
     llm, client = instructor_llm(model="gemini-x", provider="google")
     llm.generate("p", Out, temperature=0.3)
-    config = client.create.call_args.kwargs["generation_config"]
+    config = client.chat.completions.create.call_args.kwargs["generation_config"]
     assert config["temperature"] == 0.3 and "top_p" not in config
 
 

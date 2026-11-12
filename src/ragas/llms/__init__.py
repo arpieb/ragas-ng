@@ -6,6 +6,7 @@ from ragas.llms.base import (
     default_llm,
     llm_factory,
 )
+from ragas.llms.provider_rules import is_reasoning_model
 
 __all__ = [
     "DEFAULT_LLM_MODEL",
@@ -13,5 +14,6 @@ __all__ = [
     "InstructorLLM",
     "InstructorTypeVar",
     "default_llm",
+    "is_reasoning_model",
     "llm_factory",
 ]

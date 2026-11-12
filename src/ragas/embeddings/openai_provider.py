@@ -29,20 +29,25 @@ class OpenAIEmbeddings(BaseRagasEmbedding):
         self.model = model
         self.is_async = self._check_client_async(client)
 
+    def _request(
+        self, input: t.Union[str, t.List[str]], kwargs: t.Dict[str, t.Any]
+    ) -> t.Dict[str, t.Any]:
+        """The keyword arguments for ``client.embeddings.create``."""
+        return dict(input=input, model=self.model, **kwargs)
+
+    @staticmethod
+    def _vectors(response: t.Any) -> t.List[t.List[float]]:
+        return [item.embedding for item in response.data]
+
     def embed_text(self, text: str, **kwargs: t.Any) -> t.List[float]:
         """Embed a single text using OpenAI.
 
         For async clients, this will run the async method in the appropriate event loop.
         """
         if self.is_async:
-            result = self._run_async_in_current_loop(self.aembed_text(text, **kwargs))
-        else:
-            response = self.client.embeddings.create(
-                input=text, model=self.model, **kwargs
-            )
-            result = response.data[0].embedding
-
-        return result
+            return self._run_async_in_current_loop(self.aembed_text(text, **kwargs))
+        response = self.client.embeddings.create(**self._request(text, kwargs))
+        return self._vectors(response)[0]
 
     async def aembed_text(self, text: str, **kwargs: t.Any) -> t.List[float]:
         """Asynchronously embed a single text using OpenAI."""
@@ -50,30 +55,19 @@ class OpenAIEmbeddings(BaseRagasEmbedding):
             # A sync client runs on a worker thread, so the async collections
             # metrics work with OpenAI() too (#68).
             return await asyncio.to_thread(self.embed_text, text, **kwargs)
-
-        response = await self.client.embeddings.create(
-            input=text, model=self.model, **kwargs
-        )
-        result = response.data[0].embedding
-
-        return result
+        response = await self.client.embeddings.create(**self._request(text, kwargs))
+        return self._vectors(response)[0]
 
     def embed_texts(self, texts: t.List[str], **kwargs: t.Any) -> t.List[t.List[float]]:
         """Embed multiple texts using OpenAI's batch API for optimization."""
         texts = validate_texts(texts)
         if not texts:
             return []
-
         if self.is_async:
-            result = self._run_async_in_current_loop(self.aembed_texts(texts, **kwargs))
-        else:
-            # OpenAI supports batch embedding natively
-            response = self.client.embeddings.create(
-                input=texts, model=self.model, **kwargs
-            )
-            result = [item.embedding for item in response.data]
-
-        return result
+            return self._run_async_in_current_loop(self.aembed_texts(texts, **kwargs))
+        # OpenAI supports batch embedding natively
+        response = self.client.embeddings.create(**self._request(texts, kwargs))
+        return self._vectors(response)
 
     async def aembed_texts(
         self, texts: t.List[str], **kwargs: t.Any
@@ -82,18 +76,12 @@ class OpenAIEmbeddings(BaseRagasEmbedding):
         texts = validate_texts(texts)
         if not texts:
             return []
-
         if not self.is_async:
             # A sync client runs on a worker thread, so the async collections
             # metrics work with OpenAI() too (#68).
             return await asyncio.to_thread(self.embed_texts, texts, **kwargs)
-
-        response = await self.client.embeddings.create(
-            input=texts, model=self.model, **kwargs
-        )
-        result = [item.embedding for item in response.data]
-
-        return result
+        response = await self.client.embeddings.create(**self._request(texts, kwargs))
+        return self._vectors(response)
 
     def _get_client_info(self) -> str:
         """Get client type and async status information."""
