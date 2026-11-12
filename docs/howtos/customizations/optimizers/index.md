@@ -86,7 +86,7 @@ DSPy calls the model your LLM calls: `DSPyOptimizer` builds a `dspy.LM` from the
 DSPy optimizer requires ground truth annotations. The keys of `prompts` are the metric's `get_prompts()` names; `prompt_input` and `prompt_output` are that prompt's input and output models as dicts:
 
 ```python
-from ragas.dataset_schema import (
+from ragas.optimizers.annotations import (
     PromptAnnotation,
     SampleAnnotation,
     SingleMetricAnnotation,

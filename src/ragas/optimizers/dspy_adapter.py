@@ -7,8 +7,8 @@ import typing as t
 
 from pydantic import BaseModel, ValidationError
 
-from ragas.dataset_schema import SingleMetricAnnotation
 from ragas.losses import Loss
+from ragas.optimizers.annotations import SingleMetricAnnotation
 
 if t.TYPE_CHECKING:
     from ragas.llms.base import InstructorBaseRagasLLM

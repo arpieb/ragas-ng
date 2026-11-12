@@ -17,12 +17,6 @@ import pytest
 from pydantic import BaseModel
 
 from ragas.config import DemonstrationConfig, InstructionConfig
-from ragas.dataset_schema import (
-    MetricAnnotation,
-    PromptAnnotation,
-    SampleAnnotation,
-    SingleMetricAnnotation,
-)
 from ragas.embeddings.base import BaseRagasEmbedding
 from ragas.llms import llm_factory
 from ragas.llms.base import InstructorBaseRagasLLM
@@ -37,6 +31,12 @@ from ragas.metrics.collections.aspect_critic.util import (
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
 from ragas.optimizers import GeneticOptimizer
+from ragas.optimizers.annotations import (
+    MetricAnnotation,
+    PromptAnnotation,
+    SampleAnnotation,
+    SingleMetricAnnotation,
+)
 from ragas.optimizers.demonstrations import (
     optimize_demonstrations,
     with_similar_examples,

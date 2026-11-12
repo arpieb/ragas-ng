@@ -37,6 +37,11 @@ REMOVED_MODULES = [
 
 # (module, name) pairs that must not resolve.
 REMOVED_NAMES = [
+    # moved to ragas.optimizers.annotations (#254)
+    ("ragas.dataset_schema", "PromptAnnotation"),
+    ("ragas.dataset_schema", "SampleAnnotation"),
+    ("ragas.dataset_schema", "MetricAnnotation"),
+    ("ragas.dataset_schema", "SingleMetricAnnotation"),
     ("ragas.llms", "BaseRagasLLM"),
     ("ragas.llms", "LlamaIndexLLMWrapper"),
     ("ragas.llms", "HaystackLLMWrapper"),
@@ -149,7 +154,11 @@ def test_removed_name_is_gone(module, name):
 # (class, attribute) pairs that must not exist (#240).
 REMOVED_ATTRIBUTES = [
     ("ragas.testset.TestsetGenerator", "generate_with_langchain_docs"),
-    ("ragas.dataset_schema.SingleMetricAnnotation", "train_test_split"),
+    ("ragas.optimizers.annotations.SingleMetricAnnotation", "train_test_split"),
+    # #254: the optimizers score candidates without evaluate()
+    ("ragas.optimizers.annotations.SingleMetricAnnotation", "to_evaluation_dataset"),
+    ("ragas.optimizers.GeneticOptimizer", "evaluate_candidate"),
+    ("ragas.optimizers.GeneticOptimizer", "aevaluate_candidate"),
 ]
 
 

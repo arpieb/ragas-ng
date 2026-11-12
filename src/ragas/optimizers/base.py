@@ -4,8 +4,8 @@ import typing as t
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from ragas.dataset_schema import SingleMetricAnnotation
 from ragas.losses import Loss
+from ragas.optimizers.annotations import SingleMetricAnnotation
 from ragas.run_config import RunConfig
 
 if t.TYPE_CHECKING:

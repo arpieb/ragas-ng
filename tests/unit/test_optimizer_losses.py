@@ -9,11 +9,11 @@ import typing as t
 from unittest.mock import MagicMock, Mock, patch
 
 import numpy as np
-import pandas as pd
 import pytest
 
 from ragas.llms.base import InstructorLLM
 from ragas.losses import BinaryMetricLoss, Loss, MSELoss
+from ragas.optimizers._scoring import RowScores
 
 
 @pytest.fixture
@@ -110,12 +110,11 @@ def _optimizer(predictions: t.Dict[str, t.List[float]]):
     metric.get_prompts.side_effect = lambda: {"p": Mock()}
     opt = GeneticOptimizer(metric=metric, llm=Mock())
 
-    def evaluate_candidate(*, candidate, **kwargs):
-        result = Mock()
-        result.to_pandas.return_value = pd.DataFrame({"m": predictions[candidate["p"]]})
-        return result
+    def score_candidate(*, candidate, **kwargs):
+        scores = predictions[candidate["p"]]
+        return RowScores(scores=list(scores), traces=[{} for _ in scores])
 
-    return opt, evaluate_candidate
+    return opt, score_candidate
 
 
 Y_TRUE = [1.0, 0.0, 1.0, 0.0]
@@ -129,10 +128,10 @@ def test_evaluate_fitness_passes_predicted_then_actual():
             calls.append((list(predicted), list(actual)))
             return 0.0
 
-    opt, evaluate_candidate = _optimizer({"a": [0.5, 0.5, 0.5, 0.5]})
+    opt, score_candidate = _optimizer({"a": [0.5, 0.5, 0.5, 0.5]})
     with (
-        patch.object(opt, "_get_evaluation_dataset", return_value=(None, Y_TRUE)),
-        patch.object(opt, "evaluate_candidate", side_effect=evaluate_candidate),
+        patch.object(opt, "_scoring_rows", return_value=(None, Y_TRUE)),
+        patch.object(opt, "score_candidate", side_effect=score_candidate),
     ):
         opt.evaluate_fitness(
             candidates=[{"p": "a"}], dataset=MagicMock(), loss_fn=Recording()
@@ -158,7 +157,7 @@ def test_optimize_picks_best_candidate(make_loss, good, bad):
     """The best candidate wins whether the loss is lower- or higher-is-better."""
     loss = make_loss()
     y_true = [int(v) for v in Y_TRUE] if isinstance(loss, BinaryMetricLoss) else Y_TRUE
-    opt, evaluate_candidate = _optimizer({"good": good, "bad": bad})
+    opt, score_candidate = _optimizer({"good": good, "bad": bad})
     # put the good candidate in either position
     for candidates in ([{"p": "good"}, {"p": "bad"}], [{"p": "bad"}, {"p": "good"}]):
         dataset = MagicMock()
@@ -167,8 +166,8 @@ def test_optimize_picks_best_candidate(make_loss, good, bad):
             patch.object(opt, "initialize_population", return_value=[]),
             patch.object(opt, "feedback_mutation", return_value=candidates),
             patch.object(opt, "cross_over_mutation", return_value=candidates),
-            patch.object(opt, "_get_evaluation_dataset", return_value=(None, y_true)),
-            patch.object(opt, "evaluate_candidate", side_effect=evaluate_candidate),
+            patch.object(opt, "_scoring_rows", return_value=(None, y_true)),
+            patch.object(opt, "score_candidate", side_effect=score_candidate),
         ):
             best = opt.optimize(dataset, loss, {"population_size": 2})
         assert best["p"].instruction == "good"
@@ -182,15 +181,15 @@ def test_cross_over_pairs_nearest_other_candidate():
         "c": [0.0, 1.0, 0.0, 1.0],
         "d": [0.0, 1.0, 0.0, 0.0],
     }
-    opt, evaluate_candidate = _optimizer(predictions)
+    opt, score_candidate = _optimizer(predictions)
 
     async def fake_cross_over(parent_x, parent_y, callbacks):
         return (parent_x["p"], parent_y["p"])
 
     candidates = [{"p": k} for k in predictions]
     with (
-        patch.object(opt, "_get_evaluation_dataset", return_value=(None, Y_TRUE)),
-        patch.object(opt, "evaluate_candidate", side_effect=evaluate_candidate),
+        patch.object(opt, "_scoring_rows", return_value=(None, Y_TRUE)),
+        patch.object(opt, "score_candidate", side_effect=score_candidate),
         patch.object(opt, "_cross_over_chain", side_effect=fake_cross_over),
     ):
         pairs = opt.cross_over_mutation(candidates=candidates, dataset=MagicMock())
@@ -236,9 +235,9 @@ def test_genetic_optimize_checks_metric_and_llm_first(kwargs, match):
         GeneticOptimizer(**kwargs).optimize(MagicMock(), MSELoss())
 
 
-def test_predict_reads_the_metric_column():
-    opt, evaluate_candidate = _optimizer({"a": [0.25, 0.75]})
-    with patch.object(opt, "evaluate_candidate", side_effect=evaluate_candidate):
+def test_predict_returns_the_candidate_scores():
+    opt, score_candidate = _optimizer({"a": [0.25, 0.75]})
+    with patch.object(opt, "score_candidate", side_effect=score_candidate):
         y_pred = opt._predict(
             {"p": "a"},
             MagicMock(),
@@ -246,7 +245,6 @@ def test_predict_reads_the_metric_column():
             batch_size=None,
             callbacks=None,
             raise_exceptions=True,
-            run_id=None,
             parent_pbar=None,
         )
     assert y_pred == [0.25, 0.75]

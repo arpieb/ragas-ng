@@ -27,14 +27,14 @@ def test_dspy_optimizer_basic_optimization():
     """Test basic optimization flow with real DSPy (minimal example)."""
     from pydantic import BaseModel, Field
 
-    from ragas.dataset_schema import (
+    from ragas.llms import llm_factory
+    from ragas.losses import MSELoss
+    from ragas.optimizers import DSPyOptimizer
+    from ragas.optimizers.annotations import (
         PromptAnnotation,
         SampleAnnotation,
         SingleMetricAnnotation,
     )
-    from ragas.llms import llm_factory
-    from ragas.losses import MSELoss
-    from ragas.optimizers import DSPyOptimizer
     from ragas.prompt.metrics.base_prompt import BasePrompt
 
     class QuestionInput(BaseModel):
@@ -115,12 +115,12 @@ def test_dspy_adapter_conversions():
     """Test adapter utilities without making API calls."""
     from pydantic import BaseModel, Field
 
-    from ragas.dataset_schema import (
+    from ragas.losses import MSELoss
+    from ragas.optimizers.annotations import (
         PromptAnnotation,
         SampleAnnotation,
         SingleMetricAnnotation,
     )
-    from ragas.losses import MSELoss
     from ragas.optimizers.dspy_adapter import (
         create_dspy_metric,
         prompt_to_dspy_signature,

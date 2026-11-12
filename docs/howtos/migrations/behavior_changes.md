@@ -885,3 +885,20 @@ New, as the first step of replacing `evaluate()` (#241). Nothing is removed yet.
   - `max_workers` counts rows, and a row's metrics run concurrently;
   - token usage goes to a `TokenUsageCollector` you pass as `usage=`;
   - traces come from OpenTelemetry spans.
+
+## Annotation types moved to `ragas.optimizers.annotations`; the genetic optimizer scores without `evaluate()` ([#254](https://github.com/arpieb/ragas-ng/issues/254))
+
+Step 2 of replacing `evaluate()` (#241).
+
+**The annotation types moved.** There is no alias at the old path.
+
+| Removed | Use instead |
+|---|---|
+| `from ragas.dataset_schema import PromptAnnotation, SampleAnnotation, MetricAnnotation, SingleMetricAnnotation` | `from ragas.optimizers.annotations import ...` (the same classes) |
+| `SingleMetricAnnotation.to_evaluation_dataset()` | `[s.metric_input for s in annotations]`, the rows it held |
+
+**`GeneticOptimizer` scores candidates directly.** Before, each candidate went through `evaluate()`.
+
+- `evaluate_candidate()` / `aevaluate_candidate(candidate=, eval_dataset=, ...)` are now `score_candidate()` / `ascore_candidate(candidate=, rows=, ...)`. `rows` are `metric_input` dicts, and the result is a `RowScores` with `scores` (one per row, NaN for a failed row) and `traces` (each row's traced prompt calls), not an `EvaluationResult`. The `run_id` argument is gone: the scoring run nests under `callbacks`.
+- Scores, traces, fitness ranking and feedback mutation are unchanged.
+- A metric that takes its `llm` or `embeddings` per call (such as `DiscreteMetric`) raises `ValueError`. Before, `evaluate()` filled in a default OpenAI model. Optimize a metric that holds its own models.

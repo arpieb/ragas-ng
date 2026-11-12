@@ -8,8 +8,8 @@ import typing as t
 from dataclasses import dataclass, field
 
 from ragas.cache import CacheInterface
-from ragas.dataset_schema import SingleMetricAnnotation
 from ragas.losses import Loss
+from ragas.optimizers.annotations import SingleMetricAnnotation
 from ragas.optimizers.base import Optimizer
 from ragas.run_config import RunConfig
 
