@@ -64,10 +64,10 @@ The metric supports multiple types of context inputs:
 
 - **Text contexts**: Plain text strings
 - **Image URLs**: HTTP/HTTPS URLs pointing to images on public hosts
-- **Local image paths**: File paths to local images (jpg, png, gif, webp, bmp), read only from the directory given as `ImageSourcePolicy(local_dir=...)`
+- **Local image paths**: File paths ending in an image extension (jpg, jpeg, png, gif, webp, bmp), read only from the directory given as `ImageSourcePolicy(local_dir=...)`
 - **Base64 data URIs**: Inline base64-encoded images
 
-A context that is not loaded as an image is sent to the LLM as text.
+Any other context is sent to the LLM as text. An image reference that can't be loaded (refused by the policy below, missing, not an image, or a failed download) raises `ragas.exceptions.ImageLoadError` before the LLM is called, so you never get a score from a judge that didn't see the image. The message says which context failed and why. To score anyway, with the reference sent as text, pass `ImageSourcePolicy(on_blocked="warn")`, which logs a warning instead.
 
 #### Where images are loaded from
 

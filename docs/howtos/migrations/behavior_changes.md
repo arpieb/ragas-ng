@@ -688,9 +688,19 @@ The legacy metrics, LLM and embedding wrappers and prompt classes are deleted, n
 
 `MultiModalFaithfulness` and `MultiModalRelevance` load the images named in `retrieved_contexts`. They used to open any local image path and fetch any http(s) URL, following redirects to any host, internal ones included. Upstream's checks for this (vibrantlabsai/ragas#1991) were only in the legacy `ImageTextPrompt`. They now apply to both metrics, configured through the new `ragas.metrics.collections.ImageSourcePolicy`, passed as `image_policy=`:
 
-- **⚠ silent:** local image paths are no longer read by default. Such a context is sent to the LLM as its path text, and a warning is logged. To read local images, pass `image_policy=ImageSourcePolicy(local_dir="images/")`. Paths are resolved against that directory, and a path that resolves outside it is refused, symlinks included.
-- **⚠ silent:** a URL whose host resolves to a non-public address (private, loopback, link-local, shared, reserved or multicast, IPv4 or IPv6) is not fetched, and neither is a redirect to one. Both are sent as text. For an internal image server, pass `ImageSourcePolicy(allow_private_urls=True)`.
+- Local image paths are no longer read by default; such a context raises `ImageLoadError` ([#231](https://github.com/arpieb/ragas-ng/issues/231)). To read local images, pass `image_policy=ImageSourcePolicy(local_dir="images/")`. Paths are resolved against that directory, and a path that resolves outside it is refused, symlinks included.
+- A URL whose host resolves to a non-public address (private, loopback, link-local, shared, reserved or multicast, IPv4 or IPv6) is not fetched, and neither is a redirect to one; it raises `ImageLoadError` (#231). For an internal image server, pass `ImageSourcePolicy(allow_private_urls=True)`.
 - URLs with credentials, a backslash in the host part, or a host that `urllib` and `requests` parse differently are refused. At most 5 redirects are followed.
 - The size limit (10 MB) is now `ImageSourcePolicy(max_bytes=...)`.
 - Data URIs are unchanged.
 - The image helpers `process_image_to_base64()` and `is_image_path_or_url()` moved from the `multi_modal_faithfulness.util` and `multi_modal_relevance.util` modules to `ragas.metrics.collections.image_sources`. `process_image_to_base64()` takes the policy as its second argument.
+
+## Multimodal metrics raise when an image context can't be loaded ([#231](https://github.com/arpieb/ragas-ng/issues/231))
+
+`MultiModalFaithfulness` and `MultiModalRelevance` used to send an image reference they could not load to the judge as text, such as `Context 1: path/to/tesla.jpg`, and still return a score. That covered missing files, failed downloads, non-image content, and everything #229 refuses. The judge never saw the image, so the score looked valid but was not.
+
+- An image reference that is refused or fails to load now raises `ragas.exceptions.ImageLoadError`, a `ValueError`, before the LLM is called. The message gives the context's position, the reason, and the setting that would allow it. Under `evaluate()` this follows `raise_exceptions`: it is raised, or the score is NaN and the error is logged.
+- `ImageSourcePolicy(on_blocked="warn")` restores the old fallback: a warning is logged and the reference is sent as text.
+- An image reference is an image data URI, an http(s) URL, or a path ending in an image extension (`.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.bmp`). Any other context is text, as before.
+- **⚠ silent:** under `local_dir`, a file without an image extension is no longer opened. It is sent as text, even if it holds an image.
+- Other URL schemes, such as `ftp://`, raise instead of being treated as file paths.

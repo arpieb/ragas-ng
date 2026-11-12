@@ -45,6 +45,53 @@ class LLMDidNotFinishException(RagasException):
         super().__init__(msg)
 
 
+class ImageLoadError(RagasException, ValueError):
+    """An image context was refused or could not be loaded (#231).
+
+    Raised by the multimodal metrics for a data URI, URL or image path in
+    ``retrieved_contexts`` that their ``ImageSourcePolicy`` refuses or that
+    fails to load, so a score is never computed from a judge that did not see
+    the image. ``ImageSourcePolicy(on_blocked="warn")`` logs instead.
+
+    Attributes:
+        source: The context string (data URIs are shortened in the message).
+        reason: Why it was not loaded.
+        hint: The setting that would allow it, if any.
+        context_index: 1-based position in ``retrieved_contexts``, when known.
+    """
+
+    def __init__(
+        self,
+        source: str,
+        reason: str,
+        hint: t.Optional[str] = None,
+        context_index: t.Optional[int] = None,
+    ):
+        self.source = source
+        self.reason = reason
+        self.hint = hint
+        self.context_index = context_index
+        super().__init__(
+            f"{self.describe()} To score without the image instead, use "
+            'ImageSourcePolicy(on_blocked="warn").'
+        )
+
+    def describe(self) -> str:
+        """The message without the ``on_blocked`` hint."""
+        source = self.source
+        shown = source if len(source) <= 120 else source[:60] + "..." + source[-20:]
+        where = (
+            f"Image context {self.context_index}"
+            if self.context_index
+            else "Image context"
+        )
+        message = f"{where} {shown!r} was not loaded: {self.reason}."
+        return f"{message} {self.hint}" if self.hint else message
+
+    def with_index(self, context_index: int) -> "ImageLoadError":
+        return ImageLoadError(self.source, self.reason, self.hint, context_index)
+
+
 # Exceptions migrated from experimental module
 class RagasError(Exception):
     """Base class for all Ragas-related exceptions."""

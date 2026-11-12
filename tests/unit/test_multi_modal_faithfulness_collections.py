@@ -7,6 +7,7 @@ import tempfile
 import pytest
 from PIL import Image
 
+from ragas.exceptions import ImageLoadError
 from ragas.metrics.collections.image_sources import (
     ImageSourcePolicy,
     is_image_path_or_url,
@@ -78,9 +79,9 @@ class TestImageProcessingUtilities:
             os.unlink(temp_path)
 
     def test_process_image_to_base64_with_invalid_file(self):
-        """Test processing a non-existent file."""
-        result = process_image_to_base64("/nonexistent/path/image.jpg")
-        assert result is None
+        """A missing image file raises, rather than being scored as text (#231)."""
+        with pytest.raises(ImageLoadError, match="no such file"):
+            process_image_to_base64("nonexistent/image.jpg", TMP_POLICY)
 
     def test_process_image_to_base64_with_text(self):
         """Test that text is not processed as image."""
