@@ -7,8 +7,6 @@
   which also counts hidden reasoning tokens and truncated structured output.
 - Anthropic always got the default ``top_p`` alongside temperature, which
   current Claude models reject with 400.
-- The LiteLLM path sent ``strictness`` sampling's temperature 0.3 to
-  reasoning models.
 """
 
 from __future__ import annotations
@@ -19,7 +17,6 @@ import pytest
 from pydantic import BaseModel
 
 from ragas.llms.base import InstructorLLM, is_reasoning_model
-from ragas.llms.litellm_llm import LiteLLMStructuredLLM
 
 
 @pytest.mark.parametrize(
@@ -204,55 +201,6 @@ def test_anthropic_args_reach_the_request():
     seen.clear()
     llm.generate("p", Answer, temperature=0.3)  # strictness sampling
     assert "top_p" not in seen and "temperature" not in seen
-
-
-# --- the LiteLLM path ----------------------------------------------------------
-
-
-def litellm(model: str, **kwargs) -> LiteLLMStructuredLLM:
-    return LiteLLMStructuredLLM(
-        client=object(), model=model, provider="litellm", **kwargs
-    )
-
-
-def test_litellm_reasoning_model_gets_no_sampling_temperature():
-    # strictness sampling sets temperature 0.3, which gpt-5 rejects
-    assert litellm("gpt-5.1")._request_args(0.3) == {}
-    assert litellm("openai/o3", top_p=0.5)._request_args(None) == {}
-
-
-def test_litellm_reasoning_keeps_other_args():
-    assert litellm("gpt-5", max_tokens=9000)._request_args(None) == {"max_tokens": 9000}
-
-
-def test_litellm_reasoning_override():
-    assert litellm("my-proxy-alias", reasoning=True)._request_args(0.3) == {}
-    assert litellm("gpt-5", reasoning=False)._request_args(0.3) == {
-        "temperature": 0.3,
-        "drop_params": True,
-    }
-
-
-def test_litellm_sampling_temperature_is_droppable_by_litellm():
-    # ragas chose 0.3 (strictness); LiteLLM drops it for models that reject
-    # it, e.g. current Claude, which accepts only temperature=1 (#177)
-    assert litellm("anthropic/claude-sonnet-5-5")._request_args(0.3) == {
-        "temperature": 0.3,
-        "drop_params": True,
-    }
-
-
-def test_litellm_callers_temperature_is_never_dropped():
-    assert litellm("anthropic/claude-sonnet-5-5", temperature=0.2)._request_args(
-        None
-    ) == {"temperature": 0.2}
-    assert "drop_params" not in litellm(
-        "anthropic/claude-sonnet-5-5", temperature=0.2
-    )._request_args(0.3)
-
-
-def test_litellm_unsampled_call_sends_nothing_extra():
-    assert litellm("anthropic/claude-sonnet-5-5")._request_args(None) == {}
 
 
 def test_llm_factory_passes_reasoning_through(monkeypatch):

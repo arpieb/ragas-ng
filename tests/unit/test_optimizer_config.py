@@ -18,14 +18,13 @@ def test_load_config():
     assert demo_config.embedding is embedding
 
 
-def test_configs_take_modern_models_only(fake_llm, fake_embedding):
+def test_configs_take_ragas_models_only():
     from ragas.config import DemonstrationConfig, InstructionConfig
 
-    # the conftest fakes are legacy BaseRagasLLM / BaseRagasEmbeddings
     with pytest.raises(ValidationError, match="InstructorBaseRagasLLM"):
-        InstructionConfig(llm=fake_llm)
+        InstructionConfig(llm=object())
     with pytest.raises(ValidationError, match="BaseRagasEmbedding"):
-        DemonstrationConfig(embedding=fake_embedding)
+        DemonstrationConfig(embedding=object())
 
 
 def test_each_config_gets_its_own_optimizer():

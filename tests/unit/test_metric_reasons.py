@@ -5,12 +5,10 @@ from __future__ import annotations
 import pickle
 import re
 import typing as t
-import warnings
 from unittest.mock import MagicMock
 
 import pytest
 
-import ragas.metrics as M
 from ragas import EvaluationDataset, SingleTurnSample, evaluate
 from ragas.dataset_schema import EvaluationResult
 from ragas.embeddings.base import BaseRagasEmbedding
@@ -117,23 +115,6 @@ def test_evaluate_keeps_collections_reasons():
     )
     assert result["faithfulness"] == [0.5]
     assert "1 of 2 statements" in result.reasons["faithfulness"][0]
-
-
-def test_short_import_hand_off_keeps_reasons_too():
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        Faithfulness = M.Faithfulness
-    ds = EvaluationDataset(
-        samples=[
-            SingleTurnSample(
-                user_input="q", response="r", retrieved_contexts=["Paris is in France."]
-            )
-        ]
-    )
-    result = evaluate(
-        ds, metrics=[Faithfulness(llm=faithfulness_llm())], show_progress=False
-    )
-    assert "population not mentioned" in result.reasons["faithfulness"][0]
 
 
 # --- per-metric explanations ---------------------------------------------------

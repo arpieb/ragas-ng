@@ -26,7 +26,7 @@ from ragas.llms import llm_factory
 from ragas.metrics.collections import AspectCritic, ExactMatch
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
-from ragas.prompt import PydanticPrompt
+from ragas.prompt import BasePrompt
 
 sdk_trace = pytest.importorskip("opentelemetry.sdk.trace")
 export = pytest.importorskip("opentelemetry.sdk.trace.export")
@@ -212,18 +212,9 @@ def dataset():
     )
 
 
-@pytest.mark.parametrize("legacy_import", [True, False])
-def test_evaluate_nests_llm_calls_under_the_metric(spans, legacy_import):
+def test_evaluate_nests_llm_calls_under_the_metric(spans):
     llm = make_llm()
-    if legacy_import:
-        # ragas.metrics.AspectCritic hands off to the collections metric
-        with pytest.warns(DeprecationWarning):
-            from ragas.metrics import AspectCritic as LegacyCritic
-        metric = LegacyCritic(
-            name="answers", definition="Does the response answer the question?"
-        )
-    else:
-        metric = critic(llm)
+    metric = critic(llm)
 
     result = evaluate(dataset(), metrics=[metric], llm=llm, show_progress=False)
 
@@ -258,7 +249,7 @@ def test_result_traces_work_without_an_otel_sdk(monkeypatch):
     assert list(dict(result.traces[0]["answers"])) == ["AspectCriticOutput"]
 
 
-# --- legacy prompts -------------------------------------------------------------
+# --- prompts --------------------------------------------------------------------
 
 
 class Question(BaseModel):
@@ -270,13 +261,13 @@ class Verdict(BaseModel):
     verdict: int
 
 
-class JudgePrompt(PydanticPrompt[Question, Verdict]):
+class JudgePrompt(BasePrompt[Question, Verdict]):
     instruction = "Judge the question."
     input_model = Question
     output_model = Verdict
 
 
-def test_llm_call_nests_under_a_legacy_prompt(spans):
+def test_llm_call_nests_under_a_prompt(spans):
     asyncio.run(JudgePrompt().generate(llm=make_llm(), data=Question(text="q")))
     assert kinds(spans) == [
         ("judge_prompt", "LLM", None),

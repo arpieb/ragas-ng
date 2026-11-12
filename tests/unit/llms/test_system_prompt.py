@@ -4,7 +4,6 @@ import pytest
 from pydantic import BaseModel
 
 from ragas.llms.base import InstructorLLM, InstructorModelArgs
-from ragas.llms.litellm_llm import LiteLLMStructuredLLM
 
 
 class ResponseModel(BaseModel):
@@ -120,84 +119,6 @@ class TestInstructorLLMSystemPrompt:
         assert "system_prompt" not in llm.model_args
         assert llm.model_args.get("temperature") == 0.5
         assert llm.system_prompt == "You are helpful"
-
-
-class TestLiteLLMStructuredLLMSystemPrompt:
-    def test_system_prompt_parameter(self):
-        client = MockInstructorClient(is_async=False)
-        llm = LiteLLMStructuredLLM(
-            client=client,
-            model="gemini-2.0-flash",
-            provider="google",
-            system_prompt="You are a code reviewer",
-        )
-
-        _ = llm.generate("Review this code", ResponseModel)
-
-        assert client.last_messages is not None
-        assert len(client.last_messages) == 2
-        assert client.last_messages[0]["role"] == "system"
-        assert client.last_messages[0]["content"] == "You are a code reviewer"
-        assert client.last_messages[1]["role"] == "user"
-        assert client.last_messages[1]["content"] == "Review this code"
-
-    def test_no_system_prompt(self):
-        client = MockInstructorClient(is_async=False)
-        llm = LiteLLMStructuredLLM(
-            client=client, model="gemini-2.0-flash", provider="google"
-        )
-
-        _ = llm.generate("Test", ResponseModel)
-
-        assert client.last_messages is not None
-        assert len(client.last_messages) == 1
-        assert client.last_messages[0]["role"] == "user"
-
-    @pytest.mark.asyncio
-    async def test_system_prompt_async(self):
-        client = MockInstructorClient(is_async=True)
-        llm = LiteLLMStructuredLLM(
-            client=client,
-            model="gemini-2.0-flash",
-            provider="google",
-            system_prompt="You are an analyst",
-        )
-
-        _ = await llm.agenerate("Analyze data", ResponseModel)
-
-        assert client.last_messages is not None
-        assert len(client.last_messages) == 2
-        assert client.last_messages[0]["role"] == "system"
-        assert client.last_messages[0]["content"] == "You are an analyst"
-        assert client.last_messages[1]["role"] == "user"
-
-    @pytest.mark.asyncio
-    async def test_no_system_prompt_async(self):
-        client = MockInstructorClient(is_async=True)
-        llm = LiteLLMStructuredLLM(
-            client=client, model="gemini-2.0-flash", provider="google"
-        )
-
-        _ = await llm.agenerate("Test", ResponseModel)
-
-        assert client.last_messages is not None
-        assert len(client.last_messages) == 1
-        assert client.last_messages[0]["role"] == "user"
-
-    def test_system_prompt_with_other_kwargs(self):
-        client = MockInstructorClient(is_async=False)
-        llm = LiteLLMStructuredLLM(
-            client=client,
-            model="gemini-2.0-flash",
-            provider="google",
-            system_prompt="You are helpful",
-            temperature=0.7,
-            max_tokens=2000,
-        )
-
-        assert llm.system_prompt == "You are helpful"
-        assert llm.model_args.get("temperature") == 0.7
-        assert llm.model_args.get("max_tokens") == 2000
 
 
 class TestLLMFactorySystemPrompt:

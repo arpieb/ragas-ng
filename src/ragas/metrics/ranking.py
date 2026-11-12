@@ -28,7 +28,7 @@ class RankingMetric(SimpleLLMMetric, RankingValidator):
     ----------
     allowed_values : int
         Expected number of items in the ranking list. Default is 2.
-    llm : Optional[BaseRagasLLM]
+    llm : Optional[InstructorBaseRagasLLM]
         The language model instance for evaluation. Can be created using llm_factory().
     prompt : Optional[Union[str, Prompt]]
         The prompt template for the metric. Should contain placeholders for

@@ -3,7 +3,7 @@ import typing as t
 from collections import Counter
 from dataclasses import dataclass
 
-from ragas.metrics._string import DistanceMeasure
+from ragas.metrics.collections._string import DistanceMeasure
 from ragas.testset.graph import KnowledgeGraph, Node, Relationship
 from ragas.testset.transforms.base import RelationshipBuilder
 from ragas.utils import rapidfuzz_distances

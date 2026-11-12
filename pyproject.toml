@@ -15,8 +15,6 @@ dependencies = [
     "tqdm",
     "instructor",
     "pillow>=10.4.0",
-    "networkx",
-    "scikit-network",
 
     # Provider-neutral LLM/embedding access. llm_factory()/embedding_factory()
     # route client-less calls here.
@@ -63,10 +61,6 @@ gdrive = [
     "google-auth>=2.40.3",
     "google-auth-oauthlib>=1.2.2"
 ]
-# Bounded to haystack 2.x: 3.x moved `AsyncPipeline`, which
-# ragas.llms.haystack_wrapper imports at module scope.
-ai-frameworks = ["haystack-ai<3.0.0"]
-oci = ["oci>=2.160.1"]
 ag-ui = ["ag-ui-protocol>=0.1.9", "httpx>=0.27.0"]
 dspy = ["dspy[optuna]>=3"]
 
@@ -185,7 +179,7 @@ dev-minimal = [
 ]
 
 # Dependencies required to run tests/unit. These are optional at runtime (they
-# live in the `all`/`git`/`ai-frameworks` extras) but tests/unit imports them
+# live in the `all`/`git` extras) but tests/unit imports them
 # unconditionally, so the test suite cannot pass without them.
 test = [
     "scipy",
@@ -193,10 +187,8 @@ test = [
     # the suite imports it directly (tests/utils/llm_setup.py and friends), so it
     # is declared here rather than relied on transitively.
     "openai>=1.0.0",
-    "sacrebleu",   # tests/unit/test_chrf_score.py
+    "sacrebleu",   # tests/unit/test_chrf_score_collections.py
     "GitPython",   # tests/unit/test_experiment.py
-    "haystack-ai<3.0.0", # tests/unit/test_import.py
-    "llama_index", # tests/unit/test_import.py
     "rapidfuzz",   # tests/unit/test_prechunked_generation.py
     # SDK is test-only: ragas itself depends on opentelemetry-api alone, so spans
     # are a no-op in production unless the user configures a provider. Tests need
@@ -212,7 +204,7 @@ dev = [
     "unstructured[md]",
     "arize-phoenix>=6.1.0",
     # Include all optional features
-    "ragas[all,tracing,gdrive,ai-frameworks]",
+    "ragas[all,tracing,gdrive]",
 ]
 docs = [
     "mkdocs>=1.6.1",

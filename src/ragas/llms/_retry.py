@@ -1,9 +1,9 @@
 """Retry with backoff for the structured-output LLMs (#73).
 
 ``RunConfig``'s ``max_retries`` / ``max_wait`` used to reach only the legacy
-``BaseRagasLLM``. ``InstructorLLM`` and ``LiteLLMStructuredLLM`` -- what
-``llm_factory`` builds -- had no backoff of their own, so a rate-limited run
-failed samples instead of slowing down.
+LLM wrappers (since removed, #215). ``InstructorLLM`` -- what ``llm_factory``
+builds -- had no backoff of its own, so a rate-limited run failed samples
+instead of slowing down.
 """
 
 from __future__ import annotations

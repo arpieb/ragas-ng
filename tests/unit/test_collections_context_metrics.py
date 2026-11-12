@@ -1,17 +1,11 @@
 """Collections ports of the four non-LLM context metrics.
 
 These four had no unit tests at all in their legacy form, so the port is also
-the first coverage they have ever had.
-
-The load-bearing tests are the equivalence ones: a port that quietly changes
-scores is worse than no port, because users comparing runs across a version
-bump would see drift with no signal. Each new metric is checked against its
-legacy counterpart over randomised inputs.
+the first coverage they have ever had. (The equivalence checks against the
+legacy metrics went with them, #215.)
 """
 
 from __future__ import annotations
-
-import random
 
 import numpy as np
 import pytest
@@ -35,13 +29,6 @@ CORPUS = [
     "Paris is the capitol of France",  # near-miss spelling
     "Completely unrelated sentence about turtles.",
 ]
-
-
-def legacy(name):
-    """Import the legacy counterpart lazily; importing warns by design."""
-    import ragas.metrics as m
-
-    return getattr(m, name)
 
 
 def same(a, b):
@@ -178,87 +165,6 @@ class TestAveragePrecisionHelper:
 
     def test_earlier_hits_score_higher(self):
         assert average_precision([1, 0, 0]) > average_precision([0, 0, 1])
-
-
-class TestEquivalenceWithLegacy:
-    """A port that moves scores is a silent regression for anyone comparing runs."""
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        "new_cls,legacy_name",
-        [
-            (IDBasedContextPrecision, "IDBasedContextPrecision"),
-            (IDBasedContextRecall, "IDBasedContextRecall"),
-        ],
-    )
-    async def test_id_based_matches_legacy(self, new_cls, legacy_name):
-        rng = random.Random(0)
-        ids = ["a", "b", "c", "d", 1, 2]
-        old_metric, new_metric = legacy(legacy_name)(), new_cls()
-
-        for _ in range(100):
-            retrieved = rng.sample(ids, rng.randint(0, 4))
-            reference = rng.sample(ids, rng.randint(0, 4))
-            old = await old_metric._single_turn_ascore(
-                SingleTurnSample(
-                    retrieved_context_ids=retrieved, reference_context_ids=reference
-                ),
-                None,
-            )
-            new = await new_metric.ascore(
-                retrieved_context_ids=retrieved, reference_context_ids=reference
-            )
-            assert same(old, new.value), (
-                f"{legacy_name}: retrieved={retrieved} reference={reference} "
-                f"legacy={old} port={new.value}"
-            )
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        "new_cls,legacy_name",
-        [
-            (
-                NonLLMContextPrecisionWithReference,
-                "NonLLMContextPrecisionWithReference",
-            ),
-            (NonLLMContextRecall, "NonLLMContextRecall"),
-        ],
-    )
-    async def test_non_llm_matches_legacy(self, new_cls, legacy_name):
-        rng = random.Random(1)
-        old_metric, new_metric = legacy(legacy_name)(), new_cls()
-
-        for _ in range(40):
-            retrieved = rng.sample(CORPUS, rng.randint(1, 4))
-            reference = rng.sample(CORPUS, rng.randint(1, 3))
-            old = await old_metric._single_turn_ascore(
-                SingleTurnSample(
-                    retrieved_contexts=retrieved, reference_contexts=reference
-                ),
-                None,
-            )
-            new = await new_metric.ascore(
-                retrieved_contexts=retrieved, reference_contexts=reference
-            )
-            assert same(old, new.value), (
-                f"{legacy_name}: retrieved={retrieved} reference={reference} "
-                f"legacy={old} port={new.value}"
-            )
-
-    @pytest.mark.asyncio
-    async def test_threshold_is_inclusive_for_both(self):
-        """Both use `>=` (#64); legacy recall used `>`, so an exact match at
-        threshold=1.0 counted for precision but scored 0 for recall."""
-        exact = ["Paris is the capital of France."]
-        precision = NonLLMContextPrecisionWithReference(threshold=1.0)
-        recall = NonLLMContextRecall(threshold=1.0)
-
-        assert (
-            await precision.ascore(retrieved_contexts=exact, reference_contexts=exact)
-        ).value == pytest.approx(1.0)
-        assert (
-            await recall.ascore(retrieved_contexts=exact, reference_contexts=exact)
-        ).value == pytest.approx(1.0)
 
 
 class TestRunsThroughEvaluate:

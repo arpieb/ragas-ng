@@ -5,7 +5,8 @@ from dataclasses import dataclass, field
 
 from ragas.llms import default_llm
 from ragas.llms.base import InstructorBaseRagasLLM
-from ragas.testset._modern import TestsetPromptMixin, require_llm
+from ragas.prompt.mixin import PromptMixin
+from ragas.testset._modern import require_llm
 from ragas.testset.graph import KnowledgeGraph, Node, Relationship
 from ragas.tokenizers import DEFAULT_TOKENIZER, BaseTokenizer
 
@@ -208,7 +209,7 @@ class Extractor(BaseGraphTransformation):
 
 
 @dataclass
-class LLMBasedExtractor(Extractor, TestsetPromptMixin):
+class LLMBasedExtractor(Extractor, PromptMixin):
     llm: InstructorBaseRagasLLM = field(default_factory=_default_llm_factory)
     merge_if_possible: bool = True
     max_token_limit: int = 32000
@@ -432,7 +433,7 @@ class NodeFilter(BaseGraphTransformation):
 
 
 @dataclass
-class LLMBasedNodeFilter(NodeFilter, TestsetPromptMixin):
+class LLMBasedNodeFilter(NodeFilter, PromptMixin):
     llm: InstructorBaseRagasLLM = field(default_factory=_default_llm_factory)
 
     def __post_init__(self):

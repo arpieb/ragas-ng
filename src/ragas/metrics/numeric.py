@@ -27,7 +27,7 @@ class NumericMetric(SimpleLLMMetric, NumericValidator):
     allowed_values : Union[Tuple[float, float], range]
         The valid range for metric outputs. Can be a tuple of (min, max) floats
         or a range object. Default is (0.0, 1.0).
-    llm : Optional[BaseRagasLLM]
+    llm : Optional[InstructorBaseRagasLLM]
         The language model instance for evaluation. Can be created using llm_factory().
     prompt : Optional[Union[str, Prompt]]
         The prompt template for the metric. Should contain placeholders for

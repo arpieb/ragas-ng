@@ -174,8 +174,8 @@ def test_string_metrics_can_be_deep_copied_and_still_score():
     copy.deepcopy(NonLLMContextRecall())
 
 
-def test_legacy_string_metric_and_relationship_builder_can_be_deep_copied():
-    from ragas.metrics._string import NonLLMStringSimilarity
+def test_string_metric_and_relationship_builder_can_be_deep_copied():
+    from ragas.metrics.collections import NonLLMStringSimilarity
     from ragas.testset.transforms.relationship_builders.traditional import (
         OverlapScoreBuilder,
     )

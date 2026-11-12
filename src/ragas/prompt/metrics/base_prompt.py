@@ -6,8 +6,7 @@ This is ragas' one prompt implementation (#214). Collections metrics render it
 and call ``llm.agenerate`` themselves; testset generation and the optimizers
 call ``generate`` / ``generate_multiple``, which go through the same
 ``llm.agenerate`` path (retries, cache, rate limit, tracing, usage).
-``ragas.prompt.PydanticPrompt`` is a subclass that only adds the legacy-LLM
-branch, which #215 deletes.
+It is exported as ``ragas.prompt.BasePrompt``.
 """
 
 from __future__ import annotations

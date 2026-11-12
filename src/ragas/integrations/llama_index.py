@@ -5,24 +5,20 @@ import math
 import typing as t
 
 from ragas.dataset_schema import EvaluationDataset, EvaluationResult, SingleTurnSample
-from ragas.embeddings import LlamaIndexEmbeddingsWrapper
 from ragas.evaluation import evaluate as ragas_evaluate
 from ragas.executor import Executor
-from ragas.llms import LlamaIndexLLMWrapper
 from ragas.messages import AIMessage, HumanMessage, Message, ToolCall, ToolMessage
-from ragas.metrics.base import Metric
 from ragas.run_config import RunConfig
 
 if t.TYPE_CHECKING:
-    from llama_index.core.base.embeddings.base import (
-        BaseEmbedding as LlamaIndexEmbeddings,
-    )
-    from llama_index.core.base.llms.base import BaseLLM as LlamaindexLLM
     from llama_index.core.base.response.schema import Response as LlamaIndexResponse
     from llama_index.core.workflow import Event
 
     from ragas.callbacks import Callbacks
     from ragas.cost import TokenUsageParser
+    from ragas.embeddings.base import BaseRagasEmbedding
+    from ragas.llms.base import InstructorBaseRagasLLM
+    from ragas.metrics.base import SimpleBaseMetric
 
 
 logger = logging.getLogger(__name__)
@@ -31,9 +27,9 @@ logger = logging.getLogger(__name__)
 def evaluate(
     query_engine,
     dataset: EvaluationDataset,
-    metrics: list[Metric],
-    llm: t.Optional[LlamaindexLLM] = None,
-    embeddings: t.Optional[LlamaIndexEmbeddings] = None,
+    metrics: t.List[SimpleBaseMetric],
+    llm: t.Optional[InstructorBaseRagasLLM] = None,
+    embeddings: t.Optional[BaseRagasEmbedding] = None,
     callbacks: t.Optional[Callbacks] = None,
     in_ci: bool = False,
     run_config: t.Optional[RunConfig] = None,
@@ -43,15 +39,15 @@ def evaluate(
     column_map: t.Optional[t.Dict[str, str]] = None,
     show_progress: bool = True,
 ) -> EvaluationResult:
-    column_map = column_map or {}
+    """Run a LlamaIndex query engine over ``dataset`` and score the answers.
 
-    # wrap llms and embeddings
-    li_llm = None
-    if llm is not None:
-        li_llm = LlamaIndexLLMWrapper(llm, run_config=run_config)
-    li_embeddings = None
-    if embeddings is not None:
-        li_embeddings = LlamaIndexEmbeddingsWrapper(embeddings, run_config=run_config)
+    ``metrics`` are ``ragas.metrics.collections`` metrics; ``llm`` and
+    ``embeddings`` are ragas models (``llm_factory()``, ``embedding_factory()``)
+    used for metrics that take them per call and for the default metrics.
+    LlamaIndex LLMs are no longer wrapped (#215): reach the same provider with
+    ``llm_factory()``.
+    """
+    column_map = column_map or {}
 
     # validate and transform dataset
     if dataset is None or not isinstance(dataset, EvaluationDataset):
@@ -103,8 +99,8 @@ def evaluate(
     results = ragas_evaluate(
         dataset=dataset,
         metrics=metrics,
-        llm=li_llm,
-        embeddings=li_embeddings,
+        llm=llm,
+        embeddings=embeddings,
         raise_exceptions=raise_exceptions,
         _callbacks=callbacks,
         show_progress=show_progress,

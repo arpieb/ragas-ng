@@ -180,18 +180,6 @@ def test_adapter_argument_is_deprecated_and_ignored():
     assert llm._litellm
 
 
-def test_adapters_package_is_a_deprecated_shim():
-    from ragas.llms.adapters import auto_detect_adapter, get_adapter
-
-    with pytest.warns(DeprecationWarning):
-        assert auto_detect_adapter(None, "google") == "litellm"
-    with pytest.warns(DeprecationWarning):
-        llm = get_adapter("instructor").create_llm(None, "gpt-6-luna", "openai")
-    assert isinstance(llm, InstructorLLM) and llm._litellm
-    with pytest.raises(ValueError, match="Unknown adapter"):
-        get_adapter("nope")
-
-
 # --- default modes ------------------------------------------------------------
 
 
@@ -299,7 +287,6 @@ def test_evaluate_builds_default_embeddings_from_the_callers_client(monkeypatch)
     # an OpenAI-client LLM's .client is now instructor over LiteLLM; the
     # embeddings must use the caller's client (base_url, proxy, credentials)
     import ragas.evaluation as evaluation
-    from ragas.metrics import answer_relevancy
 
     seen = {}
 
@@ -314,5 +301,6 @@ def test_evaluate_builds_default_embeddings_from_the_callers_client(monkeypatch)
 
     ds = EvaluationDataset.from_list([{"user_input": "q", "response": "a"}])
     with pytest.raises(RuntimeError, match="stop here"):
-        evaluation.evaluate(ds, metrics=[answer_relevancy], llm=llm)
+        # the default metrics include AnswerRelevancy, which needs embeddings
+        evaluation.evaluate(ds, llm=llm)
     assert seen == {"provider": "openai", "client": client}

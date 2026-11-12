@@ -20,7 +20,7 @@ if t.TYPE_CHECKING:
 
 T = t.TypeVar("T", bound=BaseModel)
 
-# Matches the legacy BaseRagasLLM.get_temperature(n > 1).
+# Matches the removed legacy LLM wrappers' get_temperature(n > 1).
 SAMPLING_TEMPERATURE = 0.3
 
 

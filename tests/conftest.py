@@ -6,12 +6,7 @@ import numpy as np
 import pytest
 from pydantic import BaseModel
 
-from ragas.embeddings.base import BaseRagasEmbeddings
-from ragas.llms.base import BaseRagasLLM
-from ragas.llms.output import Generation, LLMResult
-
-if t.TYPE_CHECKING:
-    from ragas.prompt.value import PromptValue
+from ragas.embeddings.base import BaseRagasEmbedding
 
 
 def pytest_configure(config):
@@ -29,51 +24,6 @@ def pytest_configure(config):
         "markers",
         "e2e: End-to-End tests for Ragas",
     )
-
-
-class EchoLLM(BaseRagasLLM):
-    def generate_text(  # type: ignore
-        self,
-        prompt: PromptValue,
-        *args,
-        **kwargs,
-    ) -> LLMResult:
-        return LLMResult(generations=[[Generation(text=prompt.to_string())]])
-
-    async def agenerate_text(  # type: ignore
-        self,
-        prompt: PromptValue,
-        *args,
-        **kwargs,
-    ) -> LLMResult:
-        return LLMResult(generations=[[Generation(text=prompt.to_string())]])
-
-    def is_finished(self, response: LLMResult) -> bool:
-        return True
-
-
-class EchoEmbedding(BaseRagasEmbeddings):
-    async def aembed_documents(self, texts: t.List[str]) -> t.List[t.List[float]]:
-        return [np.random.rand(768).tolist() for _ in texts]
-
-    async def aembed_query(self, text: str) -> t.List[float]:
-        return [np.random.rand(768).tolist()]
-
-    def embed_documents(self, texts: t.List[str]) -> t.List[t.List[float]]:
-        return [np.random.rand(768).tolist() for _ in texts]
-
-    def embed_query(self, text: str) -> t.List[float]:
-        return [np.random.rand(768).tolist()]
-
-
-@pytest.fixture
-def fake_llm():
-    return EchoLLM()
-
-
-@pytest.fixture
-def fake_embedding():
-    return EchoEmbedding()
 
 
 # ====================
@@ -100,7 +50,7 @@ class MockLLM:
         return response_model()
 
 
-class MockEmbedding(BaseRagasEmbeddings):
+class MockEmbedding(BaseRagasEmbedding):
     """Mock Embedding for testing purposes"""
 
     def embed_text(self, text: str, **kwargs: t.Any) -> t.List[float]:

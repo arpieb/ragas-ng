@@ -1,8 +1,7 @@
 """RunConfig retry/backoff reaches the llm_factory LLMs (#73).
 
-Only the legacy ``BaseRagasLLM`` used to retry. ``InstructorLLM`` and
-``LiteLLMStructuredLLM`` -- the default path -- failed a sample on the
-first rate limit. They now retry transient errors with exponential backoff
+Only the (since removed) legacy LLM wrappers used to retry. ``InstructorLLM``
+-- the default path -- failed a sample on the first rate limit. It now retries transient errors with exponential backoff
 per ``RunConfig``, and never retry a 400.
 """
 
@@ -15,7 +14,6 @@ from pydantic import BaseModel
 
 from ragas.llms._retry import is_transient
 from ragas.llms.base import InstructorLLM
-from ragas.llms.litellm_llm import LiteLLMStructuredLLM
 from ragas.run_config import RunConfig
 
 FAST = dict(max_wait=0)
@@ -197,15 +195,6 @@ def test_custom_exception_types_are_honoured():
     assert flaky.attempts == 1
 
 
-@pytest.mark.asyncio
-async def test_litellm_llm_is_retried():
-    flaky = Flaky(HTTPError(429), is_async=True)
-    llm = LiteLLMStructuredLLM(client=flaky.client(), model="m", provider="litellm")
-    llm.set_run_config(RunConfig(**FAST))
-    assert llm.is_async
-    assert (await llm.agenerate("p", Answer)).value == 2
-
-
 def test_default_run_config_is_per_instance():
     a = InstructorLLM(client=Flaky().client(), model="m", provider="openai")
     b = InstructorLLM(client=Flaky().client(), model="m", provider="openai")
@@ -216,8 +205,6 @@ def test_default_run_config_is_per_instance():
 def test_a_runs_config_applies_inside_the_run_only():
     # evaluate() passes its RunConfig through a run scope (#76). It used to
     # set it on the (possibly shared) LLM, where it stuck after the run.
-    from ragas.metrics._collections_bridge import adapt_collections_metric
-    from ragas.metrics.collections import ContextEntityRecall
     from ragas.run_config import run_scope
 
     llm = InstructorLLM(client=Flaky().client(), model="m", provider="openai")
@@ -225,7 +212,6 @@ def test_a_runs_config_applies_inside_the_run_only():
     llm.set_run_config(own)
     rc = RunConfig(max_retries=2)
     with run_scope(run_config=rc):
-        adapt_collections_metric(ContextEntityRecall(llm=llm)).init(rc)
         assert llm.run_config is rc
     assert llm.run_config is own
 

@@ -18,7 +18,6 @@ from pydantic import BaseModel
 
 from ragas.llms import llm_factory
 from ragas.llms.base import InstructorLLM
-from ragas.llms.litellm_llm import LiteLLMStructuredLLM
 from ragas.metrics.collections import ContextEntityRecall
 
 
@@ -104,17 +103,6 @@ class SyncClient:
 async def test_instructor_llm_with_sync_client_runs_off_the_event_loop():
     client = SyncClient()
     llm = InstructorLLM(client=client, model="m", provider="openai")
-    assert not llm.is_async
-
-    result = await llm.agenerate("p", Answer)
-    assert result.value == 1
-    assert client.chat.completions.threads[0] != threading.get_ident()
-
-
-@pytest.mark.asyncio
-async def test_litellm_llm_with_sync_client_runs_off_the_event_loop():
-    client = SyncClient()
-    llm = LiteLLMStructuredLLM(client=client, model="m", provider="litellm")
     assert not llm.is_async
 
     result = await llm.agenerate("p", Answer)

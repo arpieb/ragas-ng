@@ -659,3 +659,27 @@ These had no callers in ragas, and the CLI command could not run.
 - `ragas.async_utils.as_completed()` and `ragas.async_utils.process_futures()` are removed. Use `concurrent_results()`, which ragas has used since #207 and which cancels what is still running when you stop iterating, or `asyncio.as_completed()`.
 - `KnowledgeGraph.find_indirect_clusters()` is removed. Testset generation uses `find_n_indirect_clusters()`, which stays. With it goes ragas' last use of `scikit-network` (its Leiden clustering) and of `networkx`.
 - The module `ragas.backends.utils` is removed. Its `MemorableNames` was a copy of `ragas.utils.MemorableNames`; import it from there.
+
+## The legacy layer is removed ([#215](https://github.com/arpieb/ragas-ng/issues/215))
+
+The legacy metrics, LLM and embedding wrappers and prompt classes are deleted, not deprecated. Everything they did has a modern replacement, which #214 moved testset generation, the optimizers and `evaluate()` onto.
+
+| Removed | Use instead |
+|---|---|
+| The legacy metrics: `from ragas.metrics import Faithfulness`, `faithfulness`, `RubricsScore`, …, and the private modules `ragas.metrics._*` | `from ragas.metrics.collections import Faithfulness`; `Faithfulness(llm=llm)`. Collections metrics take their models at construction and score with `await metric.ascore(user_input=..., response=...)`. |
+| Renamed metrics | `LLMContextRecall` → `ContextRecall`, `ResponseRelevancy` → `AnswerRelevancy`, `RubricsScore` → `DomainSpecificRubrics`, `AnswerSimilarity` → `SemanticSimilarity`, `ChrfScore` → `CHRFScore`, `InstanceRubrics` → `InstanceSpecificRubrics`, `LLMContextPrecisionWith[out]Reference` → `ContextPrecisionWith[out]Reference`, `LLMSQLEquivalence` → `SQLSemanticEquivalence`, `SummarizationScore` → `SummaryScore`, `TopicAdherenceScore` → `TopicAdherence` |
+| `ragas.metrics.quoted_spans` | `ragas.metrics.collections.QuotedSpansAlignment` |
+| `Metric`, `MetricWithLLM`, `MetricWithEmbeddings`, `SingleTurnMetric`, `MultiTurnMetric`, `ModeMetric`, `ensembler` (`ragas.metrics.base`) | Subclass `ragas.metrics.collections.BaseMetric`, or use `DiscreteMetric` / `NumericMetric` / `RankingMetric` |
+| `BaseRagasLLM`, `LlamaIndexLLMWrapper`, `HaystackLLMWrapper`, `OCIGenAIWrapper` / `oci_genai_factory`, `LiteLLMStructuredLLM`, the `ragas.llms.adapters` package, `ragas.llms.output` (`LLMResult`, `Generation`) | `llm_factory()`, which reaches providers through LiteLLM model prefixes (e.g. `llm_factory("anthropic/...")`) |
+| `BaseRagasEmbeddings`, `HuggingfaceEmbeddings`, `LlamaIndexEmbeddingsWrapper`, `HaystackEmbeddingsWrapper` | `BaseRagasEmbedding` and its providers: `embedding_factory()`, `HuggingFaceEmbeddings`, `LiteLLMEmbeddings`, `OpenAIEmbeddings`, `GoogleEmbeddings` |
+| `ragas.run_config.add_retry` / `add_async_retry`, which retried every exception, a 400 included | `llm_factory()` LLMs retry transient errors per `RunConfig` themselves |
+| `PydanticPrompt`, `StringPrompt`, the legacy `ragas.prompt.base.BasePrompt`, `FewShotPydanticPrompt`, `ExampleStore` / `InMemoryExampleStore`, `ImageTextPrompt` / `ImageTextPromptValue`, `RagasOutputParser`, `FixOutputFormat`, `TranslateStatements`, `ragas.prompt.value`, `ragas.prompt.utils.extract_json` | `ragas.prompt.BasePrompt`, which is now `ragas.prompt.metrics.BasePrompt` (subclass it the way you subclassed `PydanticPrompt`); `DynamicFewShotPrompt` for few-shot examples; messages-based `llm.agenerate` for images |
+| `ragas.validation.validate_required_columns` / `validate_supported_metrics`, `ragas.utils.get_required_columns_v1`, `get_metric_language`, `DeprecationHelper` | Nothing: they only served the legacy metrics |
+| The `ai-frameworks` (Haystack) and `oci` extras | `llm_factory()` over LiteLLM |
+
+- `from ragas.metrics import <old name>` raises `ImportError` with the replacement import, e.g. `'RubricsScore' was removed from 'ragas.metrics' along with the legacy metrics. Use: from ragas.metrics.collections import DomainSpecificRubrics`. It is a hint, not a shim: nothing is re-exported. `DiscreteMetric`, `NumericMetric`, `RankingMetric`, the `*_metric` decorators, `MetricResult`, `BaseMetric`, `LLMMetric`, `MetricType` and `MetricOutputType` stay in `ragas.metrics`.
+- `evaluate()` and `aevaluate()` take only `SimpleBaseMetric` metrics (collections metrics and the `DiscreteMetric` family), an `llm_factory()` LLM and a `BaseRagasEmbedding`; anything else raises `TypeError` before the run starts. `evaluate(metrics=None)` always runs the collections defaults.
+- `ragas.integrations.llama_index.evaluate()` no longer wraps LlamaIndex LLMs and embeddings. Its `llm` and `embeddings` are now ragas models (`llm_factory()`, `embedding_factory()`), and its `metrics` are collections metrics.
+- `PromptMixin.get_prompts()` / `set_prompts()` (testset synthesizers and transforms) find and take any `ragas.prompt.BasePrompt`; the testset-only override is folded into it.
+- `ragas.metrics._collections_bridge` is gone; the sample-to-`ascore()` mapping `evaluate()` uses is `ragas.metrics.sample_inputs`.
+- `DistanceMeasure` for `OverlapScoreBuilder` comes from `ragas.metrics.collections`; the values are unchanged.

@@ -31,7 +31,7 @@ def _dataset():
 
 
 def _metrics():
-    from ragas.metrics import ExactMatch
+    from ragas.metrics.collections import ExactMatch
 
     return [ExactMatch()]
 

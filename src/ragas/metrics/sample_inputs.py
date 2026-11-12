@@ -6,36 +6,19 @@ has ``ascore(**kwargs)`` and nothing else. Collections metrics name their
 so a sample maps onto the call by reading the signature. Nothing here is
 metric-specific.
 
-The module has two parts:
-
-- :func:`input_spec` and :func:`as_score`: what ``evaluate()`` uses to run
-  modern metrics natively (#214).
-- The legacy adapter (:func:`adapt_collections_metric`), which presents a
-  collections metric through the legacy ``Metric`` protocol. Only
-  ``_legacy_handoff`` uses it; it goes with the legacy metrics (#215).
+:func:`input_spec` reads how a metric is called; :func:`as_score` turns what it
+returns into the number ``evaluate()`` aggregates.
 """
 
 from __future__ import annotations
 
 import inspect
 import typing as t
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from ragas.dataset_schema import MultiTurnSample, SingleTurnSample
-from ragas.metrics.base import (
-    Metric,  # legacy adapter only (#215)
-    MetricType,  # legacy adapter only (#215)
-    MultiTurnMetric,  # legacy adapter only (#215)
-    SimpleBaseMetric,
-    SimpleLLMMetric,
-    SingleTurnMetric,  # legacy adapter only (#215)
-    adopt_metric_run,
-)
+from ragas.metrics.base import SimpleBaseMetric, SimpleLLMMetric
 from ragas.metrics.result import ScoreWithReason
-from ragas.run_config import RunConfig
-
-if t.TYPE_CHECKING:
-    from ragas.callbacks import Callbacks
 
 SINGLE_TURN_FIELDS = frozenset(SingleTurnSample.model_fields)
 MULTI_TURN_FIELDS = frozenset(MultiTurnSample.model_fields)
@@ -214,122 +197,3 @@ def as_score(result: t.Any, name: str) -> float:
     score = _as_score(getattr(result, "value", result), name)
     reason = getattr(result, "reason", None)
     return ScoreWithReason(score, reason) if reason else score
-
-
-# --- legacy adapter ------------------------------------------------------------
-# Presents a collections metric through the legacy ``Metric`` protocol for
-# ``_legacy_handoff``. evaluate() no longer uses it. Delete this section with
-# the legacy metrics (#215).
-
-
-def _required_columns_for(
-    params: t.Dict[str, bool], metric_type: MetricType
-) -> t.Dict[MetricType, t.Set[str]]:
-    """Build the legacy ``_required_columns`` mapping from the signature.
-
-    Optional parameters carry the ``:optional`` suffix the legacy machinery uses,
-    so dataset validation does not demand them but the sample is not stripped of
-    them before the call.
-    """
-    return {
-        metric_type: {
-            name if req else f"{name}:optional" for name, req in params.items()
-        }
-    }
-
-
-@dataclass(repr=False)
-class _CollectionsMetricAdapter(Metric):
-    """Presents a collections metric through the legacy ``Metric`` interface.
-
-    Not constructed directly -- ``adapt_collections_metric`` picks the subclass
-    matching the sample types the wrapped metric can actually accept.
-    """
-
-    metric: SimpleBaseMetric = field(default=None)  # type: ignore[assignment]
-    _spec: t.Optional[InputSpec] = field(default=None)
-
-    def __post_init__(self):
-        if self.metric is not None and not self.name:
-            self.name = self.metric.name
-
-    def __repr__(self) -> str:
-        return f"{type(self.metric).__name__}(name={self.name!r}) [via evaluate()]"
-
-    def init(self, run_config: RunConfig) -> None:
-        """No-op: a collections metric takes its LLM at construction.
-
-        ``evaluate()``'s retry settings reach the LLM through the run scope
-        (``ragas.run_config.run_scope``), not by setting them on an LLM that
-        may be shared (#76).
-        """
-
-    async def _ascore_from_sample(
-        self, sample: t.Any, callbacks: "Callbacks" = None
-    ) -> float:
-        assert self._spec is not None
-        kwargs = self._spec.inputs_for(sample)
-        # evaluate() has already opened this metric's run for the row; the
-        # metric's LLM calls go under it (#196).
-        with adopt_metric_run(callbacks):
-            result = await self.metric.ascore(**kwargs)
-        return as_score(result, self.name)
-
-
-@dataclass(repr=False)
-class _SingleTurnAdapter(_CollectionsMetricAdapter, SingleTurnMetric):
-    async def _single_turn_ascore(
-        self, sample: SingleTurnSample, callbacks: "Callbacks"
-    ) -> float:
-        return await self._ascore_from_sample(sample, callbacks)
-
-
-@dataclass(repr=False)
-class _MultiTurnAdapter(_CollectionsMetricAdapter, MultiTurnMetric):
-    async def _multi_turn_ascore(
-        self, sample: MultiTurnSample, callbacks: "Callbacks"
-    ) -> float:
-        return await self._ascore_from_sample(sample, callbacks)
-
-
-@dataclass(repr=False)
-class _EitherTurnAdapter(_SingleTurnAdapter, _MultiTurnAdapter):
-    """For metrics whose inputs exist on both sample types."""
-
-
-def adapt_collections_metric(metric: SimpleBaseMetric) -> Metric:
-    """Wrap a collections metric so the legacy ``Metric`` machinery can run it.
-
-    Raises
-    ------
-    ValueError
-        If the metric's ``ascore`` signature names something that is not a field
-        of either sample type, or takes a model as an argument (the legacy
-        protocol has no way to pass one).
-    """
-    spec = input_spec(metric)
-    if spec.components:
-        raise ValueError(
-            f"Cannot adapt '{metric.name}': its ascore() takes "
-            f"{sorted(spec.components)} as arguments. Pass it to evaluate() "
-            f"directly, which supplies them."
-        )
-    params = spec.params
-
-    if spec.single_turn and spec.multi_turn:
-        required = _required_columns_for(params, MetricType.SINGLE_TURN)
-        required.update(_required_columns_for(params, MetricType.MULTI_TURN))
-        cls: t.Type[_CollectionsMetricAdapter] = _EitherTurnAdapter
-    elif spec.single_turn:
-        required = _required_columns_for(params, MetricType.SINGLE_TURN)
-        cls = _SingleTurnAdapter
-    else:
-        required = _required_columns_for(params, MetricType.MULTI_TURN)
-        cls = _MultiTurnAdapter
-
-    adapter = cls(metric=metric, _spec=spec, name=metric.name)
-    # Set the backing field directly: the `required_columns` setter validates
-    # against VALID_COLUMNS, which is narrower than the sample models (it has
-    # `rubric`, while SingleTurnSample has `rubrics`, and omits the agent fields).
-    adapter._required_columns = required
-    return adapter

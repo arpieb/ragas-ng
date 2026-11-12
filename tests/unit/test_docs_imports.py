@@ -34,6 +34,19 @@ DOCS = REPO_ROOT / "docs"
 # reason that has nothing to do with the docs being correct.
 SKIP_PREFIXES = ("ragas_examples",)
 
+# Migration guides show the code you are migrating *from*, which may import a
+# module ragas-ng has deleted (#215). Those modules are allowed on migration
+# pages only; everywhere else they still fail. The list is the boundary test's,
+# so a module only gets this exemption if it is also asserted to be gone.
+MIGRATION_PAGES = DOCS / "howtos" / "migrations"
+
+
+def _removed_modules() -> frozenset:
+    from tests.unit.test_legacy_boundary import REMOVED_MODULES
+
+    return frozenset(REMOVED_MODULES)
+
+
 IMPORT_RE = re.compile(
     r"^\s*(?:from|import)\s+(ragas(?:_\w+)?(?:\.\w+)*)", re.MULTILINE
 )
@@ -46,6 +59,8 @@ def documented_modules() -> dict[str, list[str]]:
         text = page.read_text(errors="ignore")
         for module in IMPORT_RE.findall(text):
             if module.startswith(SKIP_PREFIXES):
+                continue
+            if page.is_relative_to(MIGRATION_PAGES) and module in _removed_modules():
                 continue
             found.setdefault(module, []).append(str(page.relative_to(REPO_ROOT)))
     return found

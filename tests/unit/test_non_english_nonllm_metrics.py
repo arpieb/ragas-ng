@@ -9,7 +9,6 @@ import pytest
 from ragas.metrics.collections import QuotedSpansAlignment
 from ragas.metrics.collections._text import unicode_words
 from ragas.metrics.collections.quoted_spans.util import extract_quoted_spans
-from ragas.metrics.quoted_spans import _extract_quoted_spans as legacy_extract
 
 # --- tokenizer ------------------------------------------------------------------
 
@@ -133,12 +132,6 @@ async def test_custom_tokenizer_object():
 )
 def test_extracts_quotes_in_other_conventions(answer, span):
     assert extract_quoted_spans(answer, min_len=3) == [span]
-
-
-def test_legacy_module_extracts_curly_quotes_again():
-    assert legacy_extract("He wrote “the quick brown fox” here") == [
-        "the quick brown fox"
-    ]
 
 
 @pytest.mark.asyncio

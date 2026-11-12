@@ -4,11 +4,13 @@ import typing as t
 import pytest
 
 from ragas import EvaluationDataset, evaluate
-from ragas.metrics import (
-    answer_relevancy,
-    context_precision,
-    context_recall,
-    faithfulness,
+from ragas.embeddings.base import embedding_factory
+from ragas.llms import llm_factory
+from ragas.metrics.collections import (
+    AnswerRelevancy,
+    ContextPrecision,
+    ContextRecall,
+    Faithfulness,
 )
 from tests.e2e.test_dataset_utils import load_amnesty_dataset_safe
 
@@ -29,9 +31,16 @@ def assert_in_range(score: float, value: float, plus_or_minus: float):
 @pytest.mark.ragas_ci
 @pytest.mark.skipif(not os.getenv("OPENAI_API_KEY"), reason="OPENAI_API_KEY not set")
 def test_amnesty_e2e():
+    llm = llm_factory("gpt-6-luna")
+    embeddings = embedding_factory("openai", model="text-embedding-3-small")
     result = evaluate(
         EvaluationDataset.from_hf_dataset(t.cast("Dataset", amnesty_qa))[:1],
-        metrics=[answer_relevancy, faithfulness, context_recall, context_precision],
+        metrics=[
+            AnswerRelevancy(llm=llm, embeddings=embeddings),
+            Faithfulness(llm=llm),
+            ContextRecall(llm=llm),
+            ContextPrecision(llm=llm),
+        ],
         show_progress=False,
     )
     assert result is not None
