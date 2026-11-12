@@ -10,6 +10,7 @@ R2R responses and griptape module are fakes.
 from __future__ import annotations
 
 import importlib
+import math
 import sys
 import types
 from dataclasses import dataclass, field
@@ -21,7 +22,7 @@ from ragas.backends import InMemoryBackend
 from ragas.dataset import Dataset
 from ragas.dataset_schema import SingleTurnSample
 from ragas.experiment import Experiment
-from ragas.metrics.collections import ExactMatch
+from ragas.metrics.collections import ExactMatch, NonLLMStringSimilarity
 
 # --- llama_index -----------------------------------------------------------------
 
@@ -100,14 +101,40 @@ async def test_aevaluate_query_engine_with_dict_rows_and_a_column_map():
     assert row["user_input"] == "q1" and row["exact_match"] == 1.0
 
 
-def test_a_failed_query_leaves_the_row_unanswered_unless_raise_exceptions():
+def test_a_failed_query_scores_missing_for_every_metric():
+    """Even a metric that would score a None response (ExactMatch: 0.0) (#264)."""
+    from ragas import check
+    from ragas.exceptions import ThresholdError
     from ragas.integrations.llama_index import evaluate_query_engine
 
     dataset = questions(("q1", "a1"), ("boom", "x"))
-    exp = evaluate_query_engine(QueryEngine(), dataset, [ExactMatch()])
+    metrics = [ExactMatch(), NonLLMStringSimilarity()]
+    exp = evaluate_query_engine(QueryEngine(), dataset, metrics)
+
     failed = next(r for r in exp if r["user_input"] == "boom")
     assert failed.get("response") is None
+    for name in ("exact_match", "non_llm_string_similarity"):
+        assert math.isnan(failed[name])
+        assert failed[f"{name}_reason"] == (
+            "query engine failed: RuntimeError: engine down"
+        )
+    assert summarize(exp)["exact_match"] == {"mean": 1.0, "count": 1, "missing": 1}
+    with pytest.raises(ThresholdError):
+        check(exp, min_mean={"exact_match": 0.5})
+    check(exp, min_mean={"exact_match": 0.5}, allow_missing=1)
 
+
+def test_every_query_failing_still_runs_and_scores_missing():
+    from ragas.integrations.llama_index import evaluate_query_engine
+
+    exp = evaluate_query_engine(QueryEngine(), questions(("boom", "x")), [ExactMatch()])
+    assert summarize(exp)["exact_match"]["missing"] == 1
+
+
+def test_raise_exceptions_stops_on_a_failed_query():
+    from ragas.integrations.llama_index import evaluate_query_engine
+
+    dataset = questions(("q1", "a1"), ("boom", "x"))
     with pytest.raises(RuntimeError, match="engine down"):
         evaluate_query_engine(
             QueryEngine(), dataset, [ExactMatch()], raise_exceptions=True

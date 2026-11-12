@@ -921,3 +921,12 @@ Step 3 of replacing `evaluate()` (#241). Score the results with [`metrics_experi
   - `callbacks` and `in_ci` are gone; traces come from OpenTelemetry spans.
   - `name`, `backend` and `backend_kwargs` name the experiment and choose where it's saved (in memory by default).
   - There's no default LLM or embeddings for metrics that take them per call.
+
+## `evaluate_query_engine()`: a failed query scores missing ([#264](https://github.com/arpieb/ragas-ng/issues/264))
+
+**⚠ silent.** When the query engine failed on a row, the row was still scored with `response=None`. A metric that accepts a missing response, such as `ExactMatch`, gave it a real score (0.0), which lowered the mean while `summarize()` reported nothing missing. The old `ragas.integrations.llama_index.evaluate()` did the same.
+
+- Now a row whose query failed scores NaN for every metric, and each `<metric>_reason` is `query engine failed: <ExceptionType>: <message>`.
+- `summarize()` counts the row as missing, and `check()` fails on it unless `allow_missing` permits it.
+- If every query fails, the run still completes, with every row missing. Before, the up-front column check raised.
+- With `raise_exceptions=True`, the first failed query still stops the run.
