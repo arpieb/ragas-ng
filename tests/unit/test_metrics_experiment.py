@@ -394,3 +394,44 @@ def test_exported_from_ragas_experiment():
 
     assert (m, s, c) == (metrics_experiment, summarize, check)
     assert not hasattr(module, "no_such_name")
+
+
+def test_a_blank_string_counts_as_a_value_through_csv(tmp_path):
+    """Documented: only None is missing, and CSV loads a missing str as "".
+
+    A sample with no reference raises up front from inmemory/jsonl, but after
+    a CSV round trip its reference is "" and it is scored (storage_backends.md,
+    "What each backend keeps").
+    """
+    from ragas.dataset import Dataset
+
+    row = SingleTurnSample(user_input="q", response="a")
+    run = metrics_experiment([ExactMatch()])
+    results = {}
+    for backend in ("local/jsonl", "local/csv"):
+        saved = Dataset(
+            "d",
+            backend,
+            data_model=SingleTurnSample,
+            data=[row],
+            root_dir=str(tmp_path / backend.replace("/", "_")),
+        )
+        saved.save()
+        loaded = Dataset.load(
+            "d",
+            backend,
+            data_model=SingleTurnSample,
+            root_dir=str(tmp_path / backend.replace("/", "_")),
+        )
+        results[backend] = loaded[0].reference
+        if backend == "local/jsonl":
+            with pytest.raises(ValueError, match=r"\['reference'\]"):
+                run.run(loaded)
+        else:
+            exp = run.run(loaded)
+            assert summarize(exp)["exact_match"] == {
+                "mean": 0.0,
+                "count": 1,
+                "missing": 0,
+            }
+    assert results == {"local/jsonl": None, "local/csv": ""}

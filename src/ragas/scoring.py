@@ -368,6 +368,12 @@ def metrics_experiment(
     input that no row has, or a metric that can't score the sample type,
     raises ``ValueError``.
 
+    Only ``None`` counts as missing: a field set to ``""`` is passed to the
+    metric and scored. The CSV and Google Sheets backends load a missing text
+    value as ``""``, so a row without a ``reference`` that went through CSV is
+    scored against an empty one instead of raising. Keep datasets to be
+    scored in ``local/jsonl`` or ``inmemory``, which keep ``None``.
+
     Args:
         metrics: Metric objects (``ragas.metrics.collections``, or any
             ``SimpleBaseMetric``). Their names name the columns.

@@ -72,8 +72,8 @@ Each sample records where its reference contexts came from. The
 `reference_contexts_metadata` column holds the metadata of the source
 document for each reference context, in the same order, e.g.
 `[{"source": "docs/intro.md"}]`. The column stays in place through
-`to_evaluation_dataset()` and appears next to the scores in
-`result.to_pandas()`, so you can group scores by source file. Dates and other
+`to_dataset()` and appears next to the scores in the
+`metrics_experiment` result's `to_pandas()`, so you can group scores by source file. Dates and other
 values that JSON can't hold are stored as strings.
 
 ### What the columns are for

@@ -42,6 +42,8 @@ REMOVED_NAMES = [
     ("ragas.dataset_schema", "SampleAnnotation"),
     ("ragas.dataset_schema", "MetricAnnotation"),
     ("ragas.dataset_schema", "SingleMetricAnnotation"),
+    # renamed evaluate_query_engine(); returns an Experiment (#255)
+    ("ragas.integrations.llama_index", "evaluate"),
     ("ragas.llms", "BaseRagasLLM"),
     ("ragas.llms", "LlamaIndexLLMWrapper"),
     ("ragas.llms", "HaystackLLMWrapper"),
@@ -159,6 +161,10 @@ REMOVED_ATTRIBUTES = [
     ("ragas.optimizers.annotations.SingleMetricAnnotation", "to_evaluation_dataset"),
     ("ragas.optimizers.GeneticOptimizer", "evaluate_candidate"),
     ("ragas.optimizers.GeneticOptimizer", "aevaluate_candidate"),
+    # #255: Testset.to_dataset() replaces them
+    ("ragas.testset.Testset", "to_evaluation_dataset"),
+    ("ragas.testset.Testset", "to_hf_dataset"),
+    ("ragas.testset.Testset", "from_hf_dataset"),
 ]
 
 

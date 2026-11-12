@@ -142,7 +142,7 @@ dataset = generator.generate_with_docs(
 
 
 ```python
-eval_dataset = dataset.to_evaluation_dataset()
+eval_dataset = dataset.to_dataset("spanish_testset")
 
 for sample in eval_dataset:
     print("Query:", sample.user_input)

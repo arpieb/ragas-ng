@@ -105,10 +105,8 @@ You need a Ragas `EvaluationDataset` that includes all necessary inputs required
 Ragas provides various evaluation metrics to assess different aspects of the RAG, such as faithfulness, answer relevance, and context recall. You can explore the full list of available metrics in the [Ragas documentation](../../concepts/metrics/available_metrics/index.md).
 
 
-#### Constructing a Ragas EvaluationDataset
-The [`EvaluationDataset`](../../concepts/components/eval_dataset.md) is a data type in Ragas designed to represent evaluation samples. You can find more details about its structure and usage in the [core concepts section](../../concepts/components/eval_dataset.md).
-
-We will use the `transform_to_ragas_dataset` function from ragas to get the EvaluationDataset for our data.
+#### Constructing a Ragas Dataset
+We will use the `transform_to_ragas_dataset` function from ragas to get a `Dataset` of `SingleTurnSample` rows for our data. It's in memory; pass `backend=` (and its arguments, e.g. `root_dir=`) and call `save()` to keep it.
 
 ```python
 questions = [
@@ -145,7 +143,7 @@ ragas_eval_dataset = transform_to_ragas_dataset(
 ```
 Output
 ```
-EvaluationDataset(features=['user_input', 'retrieved_contexts', 'response', 'reference'], len=3)
+Dataset(name=r2r, model=SingleTurnSample,  len=3)
 ```
 
 
@@ -161,7 +159,7 @@ To evaluate our RAG endpoint, we will use the following metrics:
 ```python
 from openai import AsyncOpenAI
 
-from ragas import evaluate
+from ragas import metrics_experiment
 from ragas.embeddings import embedding_factory
 from ragas.llms import llm_factory
 from ragas.metrics.collections import AnswerRelevancy, ContextPrecision, Faithfulness
@@ -178,7 +176,7 @@ ragas_metrics = [
     Faithfulness(llm=evaluator_llm),
 ]
 
-results = evaluate(dataset=ragas_eval_dataset, metrics=ragas_metrics)
+results = metrics_experiment(ragas_metrics).run(ragas_eval_dataset, name="r2r_eval")
 results.to_pandas()
 ```
 
@@ -250,14 +248,8 @@ Example output from an earlier run (your scores will differ):
 
 #### Understanding the Scores
 
-To see why each response got its scores, ask for the metrics' explanations alongside the scores:
+Each metric's explanation is in the `<metric>_reason` column next to its score, for example which statements in a response the retrieved context didn't support. `ragas.summarize(results)` gives each metric's mean.
 
-```python
-results.to_pandas(include_reasons=True)
-```
-
-This adds a `<metric>_reason` column after each metric that explains its score, for example which statements in a response the retrieved context didn't support. `results.reasons` gives the same explanations as a dict, keyed by metric name.
-
-`results.traces` holds the full run tree: every prompt sent to the evaluator LLM and its output. To view these runs in an observability tool, export ragas' OpenTelemetry spans to it (Langfuse, Phoenix and others ingest them; see the [Langfuse guide](./langfuse.md) for an example set-up).
+To see every prompt sent to the evaluator LLM and its output, or to view these runs in an observability tool, export ragas' OpenTelemetry spans to it (Langfuse, Phoenix and others ingest them; see the [Langfuse guide](./langfuse.md) for an example set-up).
 
 Happy Coding

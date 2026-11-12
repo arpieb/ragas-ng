@@ -4,19 +4,24 @@ import logging
 import math
 import typing as t
 
-from ragas.dataset_schema import EvaluationDataset, EvaluationResult, SingleTurnSample
-from ragas.evaluation import evaluate as ragas_evaluate
+from pydantic import BaseModel
+
+from ragas.async_utils import run_sync
+from ragas.dataset import Dataset, DataTable
+from ragas.dataset_schema import SingleTurnSample
 from ragas.executor import Executor
 from ragas.messages import AIMessage, HumanMessage, Message, ToolCall, ToolMessage
 from ragas.run_config import RunConfig
+from ragas.scoring import metrics_experiment
 
 if t.TYPE_CHECKING:
     from llama_index.core.base.response.schema import Response as LlamaIndexResponse
     from llama_index.core.workflow import Event
 
-    from ragas.callbacks import Callbacks
-    from ragas.cost import TokenUsageParser
+    from ragas.backends.base import BaseBackend
+    from ragas.cost import TokenUsageCollector
     from ragas.embeddings.base import BaseRagasEmbedding
+    from ragas.experiment import Experiment
     from ragas.llms.base import InstructorBaseRagasLLM
     from ragas.metrics.base import SimpleBaseMetric
 
@@ -24,34 +29,80 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def evaluate(
-    query_engine,
-    dataset: EvaluationDataset,
-    metrics: t.List[SimpleBaseMetric],
-    llm: t.Optional[InstructorBaseRagasLLM] = None,
-    embeddings: t.Optional[BaseRagasEmbedding] = None,
-    callbacks: t.Optional[Callbacks] = None,
-    in_ci: bool = False,
+async def aevaluate_query_engine(
+    query_engine: t.Any,
+    dataset: DataTable,
+    metrics: t.Sequence["SimpleBaseMetric"],
+    *,
+    llm: t.Optional["InstructorBaseRagasLLM"] = None,
+    embeddings: t.Optional["BaseRagasEmbedding"] = None,
     run_config: t.Optional[RunConfig] = None,
     batch_size: t.Optional[int] = None,
-    token_usage_parser: t.Optional[TokenUsageParser] = None,
+    usage: t.Optional["TokenUsageCollector"] = None,
     raise_exceptions: bool = False,
-    column_map: t.Optional[t.Dict[str, str]] = None,
+    column_map: t.Optional[t.Mapping[str, str]] = None,
     show_progress: bool = True,
-) -> EvaluationResult:
+    name: t.Optional[str] = None,
+    backend: t.Optional[t.Union["BaseBackend", str]] = None,
+    backend_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
+) -> "Experiment":
     """Run a LlamaIndex query engine over ``dataset`` and score the answers.
 
-    ``metrics`` are ``ragas.metrics.collections`` metrics; ``llm`` and
-    ``embeddings`` are ragas models (``llm_factory()``, ``embedding_factory()``)
-    used for metrics that take them per call and for the default metrics.
-    LlamaIndex LLMs are no longer wrapped (#215): reach the same provider with
-    ``llm_factory()``.
-    """
-    column_map = column_map or {}
+    Each row's ``user_input`` goes to ``query_engine.aquery()``; the answer
+    and its source nodes become the row's ``response`` and
+    ``retrieved_contexts``. The filled-in rows are then scored with
+    :func:`ragas.metrics_experiment`, and its ``Experiment`` is returned:
+    use ``ragas.summarize()`` / ``ragas.check()`` on it.
 
-    # validate and transform dataset
-    if dataset is None or not isinstance(dataset, EvaluationDataset):
-        raise ValueError("Please provide a dataset that is of type EvaluationDataset")
+    Args:
+        query_engine: A LlamaIndex query engine (anything with ``aquery``).
+        dataset: A ``Dataset`` of single-turn rows (``SingleTurnSample``
+            objects or dicts). It isn't modified.
+        metrics: ``ragas.metrics.collections`` metrics (or any
+            ``SimpleBaseMetric``).
+        llm, embeddings: For metrics that take them per call; there is no
+            default. LlamaIndex LLMs aren't wrapped (#215): reach the same
+            provider with ``llm_factory()``.
+        run_config: Timeouts and retries for the queries and the metrics.
+        batch_size: How many queries run at once (default: all).
+        usage: A ``TokenUsageCollector`` for the metrics' token usage.
+        column_map: ``{sample_field: dataset_column}``, for a dataset whose
+            columns are named differently, e.g. ``{"user_input": "question"}``.
+        raise_exceptions: Stop at the first failed query or metric. Otherwise
+            a failed query leaves the row's response empty (None) and a failed
+            metric scores NaN; both are logged.
+        show_progress: Show the query progress bar.
+        name, backend, backend_kwargs: The experiment's name, and where to
+            save it (default: in memory).
+
+    Raises:
+        NotImplementedError: multi-turn rows.
+    """
+    if not isinstance(dataset, DataTable):
+        raise TypeError(
+            "dataset must be a ragas Dataset of single-turn rows, e.g. "
+            "Dataset('questions', 'inmemory', data_model=SingleTurnSample, "
+            f"data=rows); got {type(dataset).__name__}."
+        )
+    samples = []
+    for i, row in enumerate(dataset):
+        if isinstance(row, SingleTurnSample):
+            samples.append(row.model_copy(deep=True))
+            continue
+        fields = row.model_dump() if isinstance(row, BaseModel) else dict(row)
+        for sample_field, column in (column_map or {}).items():
+            if column in fields:
+                fields[sample_field] = fields.pop(column)
+        if isinstance(fields.get("user_input"), list):
+            raise NotImplementedError(
+                "Multi-turn evaluation is not implemented yet. Please do raise "
+                "an issue on GitHub if you need this feature and we will "
+                "prioritize it"
+            )
+        try:
+            samples.append(SingleTurnSample(**fields))
+        except Exception as e:
+            raise ValueError(f"Row {i} is not a single-turn sample: {e}") from e
 
     exec = Executor(
         desc="Running Query Engine",
@@ -61,56 +112,48 @@ def evaluate(
         run_config=run_config,
         batch_size=batch_size,
     )
-
-    # check if multi-turn
-    if dataset.is_multi_turn():
-        raise NotImplementedError(
-            "Multi-turn evaluation is not implemented yet. Please do raise an issue on GitHub if you need this feature and we will prioritize it"
-        )
-    samples = t.cast(t.List[SingleTurnSample], dataset.samples)
-
-    # get query and make jobs
     queries = [sample.user_input for sample in samples]
     for i, q in enumerate(queries):
         exec.submit(query_engine.aquery, q, name=f"query-{i}")
 
-    # get responses and retrieved contexts
-    responses: t.List[t.Optional[str]] = []
-    retrieved_contexts: t.List[t.Optional[t.List[str]]] = []
-    results = exec.results()
-    for i, r in enumerate(results):
-        # Handle failed jobs which are recorded as NaN in the executor
+    for i, (sample, r) in enumerate(zip(samples, await exec.aresults())):
+        # A failed query is recorded as NaN by the executor
         if isinstance(r, float) and math.isnan(r):
-            responses.append(None)
-            retrieved_contexts.append(None)
             logger.warning(f"Query engine failed for query {i}: '{queries[i]}'")
+            sample.response = None
+            sample.retrieved_contexts = None
             continue
-
-        # Cast to LlamaIndex Response type for proper type checking
         response: LlamaIndexResponse = t.cast("LlamaIndexResponse", r)
-        responses.append(response.response if response.response is not None else "")
-        retrieved_contexts.append([n.get_text() for n in response.source_nodes])
+        sample.response = response.response if response.response is not None else ""
+        sample.retrieved_contexts = [n.get_text() for n in response.source_nodes]
 
-    # append the extra information to the dataset
-    for i, sample in enumerate(samples):
-        sample.response = responses[i]
-        sample.retrieved_contexts = retrieved_contexts[i]
-
-    results = ragas_evaluate(
-        dataset=dataset,
-        metrics=metrics,
+    answered = Dataset(
+        f"{dataset.name}_answers",
+        "inmemory",
+        data_model=SingleTurnSample,
+        data=samples,
+    )
+    run = metrics_experiment(
+        metrics,
         llm=llm,
         embeddings=embeddings,
+        run_config=run_config,
+        usage=usage,
+        backend=backend or "inmemory",
+        backend_kwargs=backend_kwargs,
         raise_exceptions=raise_exceptions,
-        _callbacks=callbacks,
-        show_progress=show_progress,
-        run_config=run_config or RunConfig(),
-        token_usage_parser=token_usage_parser,
-        return_executor=False,
     )
+    return await run.arun(answered, name=name)
 
-    # Type assertion since return_executor=False guarantees EvaluationResult
-    return t.cast(EvaluationResult, results)
+
+def evaluate_query_engine(
+    query_engine: t.Any,
+    dataset: DataTable,
+    metrics: t.Sequence["SimpleBaseMetric"],
+    **kwargs: t.Any,
+) -> "Experiment":
+    """Sync :func:`aevaluate_query_engine`; takes the same arguments."""
+    return run_sync(aevaluate_query_engine(query_engine, dataset, metrics, **kwargs))
 
 
 def convert_to_ragas_messages(events: t.List[Event]) -> t.List[Message]:

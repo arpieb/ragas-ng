@@ -1,6 +1,8 @@
 import typing as t
 
-from ragas.dataset_schema import EvaluationDataset
+from ragas.backends.base import BaseBackend
+from ragas.dataset import Dataset
+from ragas.dataset_schema import SingleTurnSample
 
 try:
     from griptape.engines.rag import RagContext  # type: ignore
@@ -16,7 +18,17 @@ def transform_to_ragas_dataset(
     reference_contexts: t.Optional[t.List[str]] = None,
     references: t.Optional[t.List[str]] = None,
     rubrics: t.Optional[t.List[t.Dict[str, str]]] = None,
-):
+    *,
+    name: str = "griptape",
+    backend: t.Union[BaseBackend, str] = "inmemory",
+    **backend_kwargs: t.Any,
+) -> Dataset:
+    """Griptape RAG contexts as a ``Dataset`` of ``SingleTurnSample`` rows.
+
+    ``name``, ``backend`` and ``backend_kwargs`` make the ``Dataset``
+    (in memory by default; call ``save()`` to write it). Score it with
+    ``metrics_experiment``.
+    """
     # Collect only the non-None lists
     provided_lists = {
         "grip_tape_rag_context": grip_tape_rag_contexts or [],
@@ -59,4 +71,10 @@ def transform_to_ragas_dataset(
         }
         samples.append(sample)
 
-    return EvaluationDataset.from_list(data=samples)
+    return Dataset(
+        name,
+        backend,
+        data_model=SingleTurnSample,
+        data=[SingleTurnSample(**sample) for sample in samples],
+        **backend_kwargs,
+    )
