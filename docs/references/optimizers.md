@@ -130,7 +130,7 @@ DSPy calls the model the `llm_factory()` LLM calls, through a `dspy.LM` over the
 `train()`'s options apply as follows:
 
 - `run_config`: its `max_retries` and `timeout` become the `dspy.LM`'s `num_retries` and `timeout`, unless your `llm_factory()` arguments set them. A DSPy LM passed as `lm=` keeps its own settings.
-- `raise_exceptions`: with `max_errors=None`, `True` (the default) stops MIPROv2 at its first failed call, and `False` never stops on errors. DSPy logs each error.
+- `raise_exceptions`: with `max_errors=None`, `True` (the default) keeps DSPy's own error limit (`dspy.settings.max_errors`, 10 by default), and `False` never stops on errors. DSPy logs each error; when it stops, its error is a generic "Execution cancelled" and the cause is in the log.
 - `batch_size`: not supported. MIPROv2 sizes its own minibatches, and any value raises `NotImplementedError`.
 
 Learn more about DSPy concepts:

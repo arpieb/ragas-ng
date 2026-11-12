@@ -71,8 +71,9 @@ class DSPyOptimizer(Optimizer):
         Number of parallel threads for optimization.
     max_errors : int, optional
         Maximum errors tolerated during optimization before stopping. When
-        unset, ``optimize()``'s ``raise_exceptions`` decides: stop at the
-        first error (True), or never stop on errors (False).
+        unset, ``optimize()``'s ``raise_exceptions`` decides: DSPy's own
+        limit (``dspy.settings.max_errors``, 10 by default) when True, or
+        never stop on errors when False.
     seed : int
         Random seed for reproducibility.
     verbose : bool
@@ -186,9 +187,10 @@ class DSPyOptimizer(Optimizer):
             DSPy traces its own calls; ragas callbacks raise
             ``NotImplementedError``.
         raise_exceptions : bool
-            Without ``max_errors``, stop MIPROv2 at its first failed call
-            (True, the default) or never stop on errors (False). DSPy logs
-            each error; at the limit it raises.
+            Without ``max_errors``, True (the default) keeps DSPy's own error
+            limit (``dspy.settings.max_errors``, 10 by default), so a few bad
+            replies don't end a long, paid run; False never stops on errors.
+            DSPy logs each error; at the limit it raises.
 
         Returns
         -------
@@ -215,9 +217,10 @@ class DSPyOptimizer(Optimizer):
                 "DSPyOptimizer can't honor ragas callbacks: DSPy runs and "
                 "traces its own calls. Leave callbacks unset."
             )
+        # None leaves DSPy's own limit (dspy.settings.max_errors) in place.
         max_errors = self.max_errors
-        if max_errors is None:
-            max_errors = 1 if raise_exceptions else sys.maxsize
+        if max_errors is None and not raise_exceptions:
+            max_errors = sys.maxsize
 
         metric = self.metric
         config = dict(config or {})
