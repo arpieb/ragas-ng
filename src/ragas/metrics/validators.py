@@ -3,6 +3,7 @@
 __all__ = [
     "DiscreteValidator",
     "NumericValidator",
+    "BaseValidator",
     "RankingValidator",
     "AllowedValuesType",
     "get_validator_for_allowed_values",
@@ -90,36 +91,35 @@ class RankingValidator(BaseValidator):
         return None
 
 
+# The one place that maps an ``allowed_values`` shape to its metric kind:
+# (isinstance check, validator mixin, metric type name), first match wins.
+_ALLOWED_VALUES_KINDS: t.Tuple[
+    t.Tuple[t.Union[type, t.Tuple[type, ...]], t.Type[BaseValidator], str], ...
+] = (
+    (list, DiscreteValidator, "DiscreteMetric"),
+    ((tuple, range), NumericValidator, "NumericMetric"),
+    (int, RankingValidator, "RankingMetric"),
+)
+
+
+def _kind_for(
+    allowed_values: AllowedValuesType,
+) -> t.Optional[t.Tuple[t.Type[BaseValidator], str]]:
+    for types, validator, type_name in _ALLOWED_VALUES_KINDS:
+        if isinstance(allowed_values, types):
+            return validator, type_name
+    return None
+
+
 def get_validator_for_allowed_values(
     allowed_values: AllowedValuesType,
 ) -> t.Type[BaseValidator]:
-    """
-    Get the appropriate validator class based on allowed_values type.
-
-    Args:
-        allowed_values: The allowed_values to determine validator type
-
-    Returns:
-        The appropriate validator class
-    """
-    if isinstance(allowed_values, list):
-        return DiscreteValidator
-    elif isinstance(allowed_values, (tuple, range)):
-        return NumericValidator
-    elif isinstance(allowed_values, int):
-        return RankingValidator
-    else:
-        # Default to discrete if unclear
-        return DiscreteValidator
+    """The validator mixin for ``allowed_values`` (discrete when unrecognised)."""
+    kind = _kind_for(allowed_values)
+    return kind[0] if kind else DiscreteValidator
 
 
 def get_metric_type_name(allowed_values: AllowedValuesType) -> str:
-    """Get the metric type name based on allowed_values type."""
-    if isinstance(allowed_values, list):
-        return "DiscreteMetric"
-    elif isinstance(allowed_values, (tuple, range)):
-        return "NumericMetric"
-    elif isinstance(allowed_values, int):
-        return "RankingMetric"
-    else:
-        return "CustomMetric"
+    """The metric type name for ``allowed_values`` ("CustomMetric" when unrecognised)."""
+    kind = _kind_for(allowed_values)
+    return kind[1] if kind else "CustomMetric"

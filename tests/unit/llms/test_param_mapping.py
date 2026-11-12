@@ -16,7 +16,13 @@ import typing as t
 import pytest
 from pydantic import BaseModel
 
-from ragas.llms.base import InstructorLLM, is_reasoning_model
+from ragas.llms import InstructorLLM, is_reasoning_model
+from ragas.llms.provider_rules import (
+    PROVIDER_RULES,
+    ClaudeSampling,
+    GoogleGenerationConfig,
+    OpenAIReasoning,
+)
 
 
 @pytest.mark.parametrize(
@@ -162,7 +168,7 @@ def test_anthropic_explicit_temperature_is_sent():
 
 def test_anthropic_sampled_call_sends_no_temperature_and_says_so_once(caplog):
     llm = make("claude-sonnet-5-5", "anthropic")
-    with caplog.at_level("WARNING", logger="ragas.llms.base"):
+    with caplog.at_level("WARNING", logger="ragas.llms.provider_rules"):
         for _ in range(3):
             args = llm._map_provider_params(
                 llm._with_sampling(llm.model_args, 0.3), sampled=True
@@ -210,3 +216,22 @@ def test_llm_factory_passes_reasoning_through(monkeypatch):
     llm = llm_factory("proxy-alias", reasoning=True)
     assert llm.reasoning is True  # type: ignore[attr-defined]
     assert "reasoning" not in llm.model_args  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize(
+    "model, provider, litellm, expected",
+    [
+        ("gemini-x", "google", False, GoogleGenerationConfig),
+        ("gemini/gemini-x", "google", True, None),  # LiteLLM maps it
+        ("claude-sonnet-5-5", "anthropic", False, ClaudeSampling),
+        ("o3-mini", "openai", False, OpenAIReasoning),
+        ("gpt-4o", "openai", False, None),
+    ],
+)
+def test_the_first_matching_rule_maps_the_args(model, provider, litellm, expected):
+    # The provider rules are a list (#217): the first that applies wins, and
+    # with none the arguments are sent unchanged.
+    llm = InstructorLLM(client=object(), model=model, provider=provider)
+    llm._litellm = litellm
+    rule = next((r for r in PROVIDER_RULES if r.applies(llm)), None)
+    assert type(rule) is expected if expected else rule is None

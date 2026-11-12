@@ -4,9 +4,6 @@ import logging
 
 from datasets import Dataset
 
-from ragas.dataset_schema import EvaluationDataset, MultiTurnSample, SingleTurnSample
-from ragas.metrics.base import MetricType
-
 logger = logging.getLogger(__name__)
 
 
@@ -19,15 +16,16 @@ def remap_column_names(dataset: Dataset, column_map: dict[str, str]) -> Dataset:
     return dataset.rename_columns(inverse_column_map)
 
 
-def get_supported_metric_type(ds: EvaluationDataset):
-    """
-    get the supported metric type for the given dataset
-    """
+# ragas v1 column names, by their current name
+REQUIRED_COLS_v1 = {
+    "user_input": "question",
+    "retrieved_contexts": "contexts",
+    "response": "answer",
+    "reference": "ground_truth",
+}
 
-    sample_type = ds.get_sample_type()
-    if sample_type == SingleTurnSample:
-        return MetricType.SINGLE_TURN.name
-    elif sample_type == MultiTurnSample:
-        return MetricType.MULTI_TURN.name
-    else:
-        raise ValueError(f"Unsupported sample type {sample_type}")
+
+def convert_v1_to_v2_dataset(dataset: Dataset) -> Dataset:
+    """Rename a dataset's v1 columns (``question``, ``answer``, ...) to the current names."""
+    columns_map = {v: k for k, v in REQUIRED_COLS_v1.items() if v in dataset.features}
+    return dataset.rename_columns(columns_map)

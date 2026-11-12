@@ -11,33 +11,36 @@ Registry (dict-like) → Backend (implements BaseBackend) → Storage
 ```
 
 **Key Files:**
-- `base.py` - Abstract interface (6 methods)
+- `base.py` - `BaseBackend` (three abstract methods) and `FileBackend` (one local file per name)
 - `registry.py` - Plugin discovery & dict-like access
-- `local_csv.py`, `local_jsonl.py` - Reference implementations
+- `local_csv.py`, `local_jsonl.py` - `FileBackend` reference implementations
+- `inmemory.py`, `gdrive_backend.py` - `BaseBackend` reference implementations
 
 ## Quick Start
 
 **1. Implement BaseBackend:**
 ```python
-from ragas.backends.base import BaseBackend
+from ragas.backends.base import BaseBackend, Kind
 
 
 class MyBackend(BaseBackend):
     def __init__(self, connection_string: str):
         self.conn = connection_string
 
-    def load_dataset(self, name: str) -> List[Dict[str, Any]]:
-        # Load dataset from your storage
+    def _load(self, kind: Kind, name: str) -> List[Dict[str, Any]]:
+        # kind is "datasets" or "experiments"; raise FileNotFoundError if missing
         return [{"id": 1, "text": "example"}]
 
-    def save_dataset(
-        self, name: str, data: List[Dict], model: Optional[Type[BaseModel]]
-    ):
-        # Save dataset to your storage
+    def _save(self, kind: Kind, name: str, data: List[Dict], data_model):
+        # Overwrite whatever is stored under (kind, name)
         pass
 
-    # ... implement other 4 methods (see base.py)
+    def _list(self, kind: Kind) -> List[str]:
+        return []
 ```
+
+`BaseBackend` provides `load_dataset`, `load_experiment`, `save_dataset`,
+`save_experiment`, `list_datasets` and `list_experiments` on top of these.
 
 **2. Register via entry points:**
 ```toml
@@ -56,19 +59,26 @@ backend = registry["my_backend"](connection_string="...")
 
 ## Required Methods
 
-**BaseBackend (6 methods):**
+**BaseBackend (3 abstract methods):**
 ```python
-# Data loading
-def load_dataset(name: str) -> List[Dict[str, Any]]
-def load_experiment(name: str) -> List[Dict[str, Any]]
+def _load(kind: Kind, name: str) -> List[Dict[str, Any]]   # FileNotFoundError if missing, [] if empty
+def _save(kind: Kind, name: str, data: List[Dict], data_model: Optional[Type[BaseModel]]) -> None
+def _list(kind: Kind) -> List[str]                          # sorted names
+```
 
-# Data saving  
-def save_dataset(name: str, data: List[Dict], model: Optional[Type[BaseModel]])
-def save_experiment(name: str, data: List[Dict], model: Optional[Type[BaseModel]])
+`Kind` is `Literal["datasets", "experiments"]`.
 
-# Listing
-def list_datasets() -> List[str]
-def list_experiments() -> List[str]
+**FileBackend (local files):** set `suffix` and implement two methods. The base
+handles name validation (`resolve_resource_path`), the `datasets/` and
+`experiments/` directories, missing-file errors and listing.
+```python
+class MyFileBackend(FileBackend):
+    suffix = ".ext"
+
+    def _read(self, path: Path) -> List[Dict[str, Any]]: ...
+    def _write(
+        self, path: Path, data: List[Dict[str, Any]]
+    ) -> None: ...  # [] -> empty file
 ```
 
 ## Registry Usage
@@ -105,54 +115,16 @@ if "my_backend" in registry:
 
 **GDriveBackend** (`gdrive_backend.py`, see `gdrive_backend.md`):
 - **Pattern:** Cloud storage with Google Sheets format
-- **Init:** `GDriveBackend(folder_id, service_account_file)`
+- **Init:** `GDriveBackend(folder_id, service_account_path=...)`
 - **Storage:** Google Drive folder with sheets for datasets/experiments
 - **Features:** Collaborative editing, cloud sync, multiple auth methods
 
-## Implementation Patterns
+## Implementation Notes
 
-**Common backend structure:**
-```python
-class MyBackend(BaseBackend):
-    def __init__(self, **config):
-        # Initialize connection/client
-        
-    def _get_storage_path(self, data_type: str, name: str):
-        # Generate storage location
-        
-    def _load(self, data_type: str, name: str):
-        # Generic load implementation
-        
-    def _save(self, data_type: str, name: str, data, model):
-        # Generic save implementation
-        
-    # Implement required methods using _load/_save
-    def load_dataset(self, name): return self._load("datasets", name)
-    def save_dataset(self, name, data, model): self._save("datasets", name, data, model)
-    # ... etc
-```
-
-**Error handling:**
-```python
-def load_dataset(self, name: str):
-    try:
-        return self._load("datasets", name)
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Dataset '{name}' not found")
-    except ConnectionError:
-        raise RuntimeError(f"Storage connection failed")
-```
-
-**Pydantic model handling:**
-```python
-def save_dataset(self, name: str, data: List[Dict], model: Optional[Type[BaseModel]]):
-    if model:
-        # Validate data against model if provided
-        validated_data = [model(**item).model_dump() for item in data]
-        self._save(name, validated_data)
-    else:
-        self._save(name, data)
-```
+- `data_model` is context only: `Dataset` validates rows itself before saving
+  and after loading. Text-only stores (CSV, Sheets) use `flat.py` to encode
+  cells and `Dataset` decodes them for the model on load.
+- Return copies if the store is in memory, so callers can't mutate it.
 
 ## Testing Your Backend
 
@@ -239,4 +211,4 @@ for name in registry:
 
 ---
 
-**Quick Start:** Copy `local_csv.py`, replace CSV logic with your storage, add entry point, done.
+**Quick Start:** subclass `FileBackend` for a local file format (see `local_jsonl.py`) or `BaseBackend` otherwise (see `inmemory.py`), then add an entry point.

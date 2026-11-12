@@ -63,6 +63,10 @@ class NumericMetric(SimpleLLMMetric, NumericValidator):
 
     def __post_init__(self):
         super().__post_init__()
+        if isinstance(self.allowed_values, list):  # e.g. read back from JSON
+            self.allowed_values = t.cast(
+                t.Tuple[float, float], tuple(self.allowed_values)
+            )
         # Use the factory to create and mark the model as auto-generated
         from ragas.metrics.base import create_auto_response_model
 
@@ -96,50 +100,14 @@ class NumericMetric(SimpleLLMMetric, NumericValidator):
     def load(
         cls, path: str, embedding_model: t.Optional["EmbeddingModelType"] = None
     ) -> "NumericMetric":
+        """Load a NumericMetric saved by ``save()``.
+
+        Only narrows ``SimpleLLMMetric.load``: the response model is built
+        from ``allowed_values``, so none is taken. ``embedding_model`` is
+        needed if the saved prompt is a DynamicFewShotPrompt. Raises
+        ``ValueError`` if the file holds another metric type.
         """
-        Load a NumericMetric from a JSON file.
-
-        Parameters:
-        -----------
-        path : str
-            File path to load from. Supports .gz compressed files.
-        embedding_model : Optional[Any]
-            Embedding model for DynamicFewShotPrompt. Required if the original used one.
-
-        Returns:
-        --------
-        NumericMetric
-            Loaded metric instance
-
-        Raises:
-        -------
-        ValueError
-            If file cannot be loaded or is not a NumericMetric
-        """
-        # Validate metric type before loading
-        cls._validate_metric_type(path)
-
-        # Load using parent class method
-        metric = super().load(path, embedding_model=embedding_model)
-
-        # Additional type check for safety
-        if not isinstance(metric, cls):
-            raise ValueError(f"Loaded metric is not a {cls.__name__}")
-
-        # Convert allowed_values back to tuple if it's a list (due to JSON serialization)
-        if hasattr(metric, "allowed_values") and isinstance(
-            metric.allowed_values, list
-        ):
-            # Ensure it's a 2-element tuple for NumericMetric
-            if len(metric.allowed_values) == 2:
-                metric.allowed_values = (
-                    metric.allowed_values[0],
-                    metric.allowed_values[1],
-                )
-            else:
-                metric.allowed_values = tuple(metric.allowed_values)  # type: ignore
-
-        return metric
+        return super().load(path, embedding_model=embedding_model)
 
 
 def numeric_metric(

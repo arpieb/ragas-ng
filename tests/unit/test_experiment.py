@@ -11,7 +11,8 @@ from pydantic import BaseModel
 from ragas.backends.inmemory import InMemoryBackend
 from ragas.dataset import Dataset
 from ragas.experiment import Experiment, experiment, version_experiment
-from ragas.utils import find_git_root, memorable_names
+from ragas.names import memorable_names
+from ragas.utils import find_git_root
 
 
 # Test data models
@@ -238,7 +239,7 @@ class TestExperimentDecorator:
 
         # Mock memorable_names to return predictable name
         with patch(
-            "ragas.utils.memorable_names.generate_unique_name",
+            "ragas.names.memorable_names.generate_unique_name",
             return_value="test_experiment_name",
         ):
             experiment_result = await test_experiment.arun(sample_dataset)
@@ -267,7 +268,7 @@ class TestExperimentDecorator:
             )
 
         with patch(
-            "ragas.utils.memorable_names.generate_unique_name",
+            "ragas.names.memorable_names.generate_unique_name",
             return_value="random_name",
         ):
             experiment_result = await prefixed_experiment.arun(sample_dataset)
@@ -335,7 +336,7 @@ class TestExperimentDecorator:
 
         # Should continue processing other items even if some fail
         with patch(
-            "ragas.utils.memorable_names.generate_unique_name",
+            "ragas.names.memorable_names.generate_unique_name",
             return_value="error_test",
         ):
             experiment_result = await failing_experiment.arun(sample_dataset)
@@ -352,7 +353,7 @@ class TestExperimentDecorator:
             return {"question": row.question, "answer": row.answer, "processed": True}
 
         with patch(
-            "ragas.utils.memorable_names.generate_unique_name",
+            "ragas.names.memorable_names.generate_unique_name",
             return_value="untyped_test",
         ):
             experiment_result = await untyped_experiment.arun(sample_dataset)
@@ -376,7 +377,7 @@ class TestMemorableNames:
     def test_unique_name_generation(self):
         """Test that unique names are generated."""
         # Create a fresh instance to avoid state from other tests
-        from ragas.utils import MemorableNames
+        from ragas.names import MemorableNames
 
         generator = MemorableNames()
 
@@ -385,7 +386,7 @@ class TestMemorableNames:
 
     def test_unique_names_batch_generation(self):
         """Test batch generation of unique names."""
-        from ragas.utils import MemorableNames
+        from ragas.names import MemorableNames
 
         generator = MemorableNames()
 

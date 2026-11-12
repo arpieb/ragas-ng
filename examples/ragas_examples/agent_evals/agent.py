@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional
 
 import openai
 
-from ragas.llms.base import is_reasoning_model
+from ragas.llms import is_reasoning_model
 
 # The model the app under test calls. Override with RAGAS_EXAMPLE_APP_MODEL.
 DEFAULT_MODEL = os.getenv("RAGAS_EXAMPLE_APP_MODEL", "gpt-6-luna")

@@ -29,7 +29,7 @@ except ImportError:
         raise ImportError("Google API client not available")
 
 
-from .base import BaseBackend
+from .base import BaseBackend, Kind
 from .flat import encode_flat_value
 
 # Every column a sheet can have (ZZZ is the last). "A:Z" dropped every column
@@ -247,18 +247,12 @@ class GDriveBackend(BaseBackend):
         results = self.drive_service.files().list(q=query).execute()
         return len(results.get("files", [])) > 0
 
-    def _load_data_from_spreadsheet(
-        self, name: str, data_type: str
-    ) -> t.List[t.Dict[str, t.Any]]:
+    def _load(self, kind: Kind, name: str) -> t.List[t.Dict[str, t.Any]]:
         """Load data from a Google Sheet."""
-        if not self._spreadsheet_exists(name, data_type):
-            # Use singular form for error message
-            singular_type = (
-                data_type.rstrip("s") if data_type.endswith("s") else data_type
-            )
-            raise FileNotFoundError(f"{singular_type.capitalize()} '{name}' not found")
+        if not self._spreadsheet_exists(name, kind):
+            raise FileNotFoundError(f"{kind[:-1].capitalize()} '{name}' not found")
 
-        spreadsheet_id = self._get_or_create_spreadsheet(name, data_type)
+        spreadsheet_id = self._get_or_create_spreadsheet(name, kind)
 
         try:
             # Get all data from the sheet
@@ -305,22 +299,22 @@ class GDriveBackend(BaseBackend):
             logger.error(f"Error processing data from spreadsheet {name}: {e}")
             raise
 
-    def _save_data_to_spreadsheet(
+    def _save(
         self,
+        kind: Kind,
         name: str,
         data: t.List[t.Dict[str, t.Any]],
-        data_type: str,
-        data_model: t.Optional[t.Type[BaseModel]] = None,
+        data_model: t.Optional[t.Type[BaseModel]],
     ) -> None:
         """Save data to a Google Sheet."""
-        spreadsheet_id = self._get_or_create_spreadsheet(name, data_type)
+        spreadsheet_id = self._get_or_create_spreadsheet(name, kind)
 
         if not data:
             # Clear the spreadsheet for empty data
             self.sheets_service.spreadsheets().values().clear(
                 spreadsheetId=spreadsheet_id, range=_ALL_COLUMNS
             ).execute()
-            logger.debug(f"Cleared spreadsheet for empty {data_type} '{name}'")
+            logger.debug(f"Cleared spreadsheet for empty {kind} '{name}'")
             return
 
         # Get all unique keys from all dictionaries to create headers
@@ -354,7 +348,7 @@ class GDriveBackend(BaseBackend):
                 body={"values": sheet_data},
             ).execute()
 
-            logger.debug(f"Saved {len(data)} rows to {data_type} '{name}'")
+            logger.debug(f"Saved {len(data)} rows to {kind} '{name}'")
 
         except HttpError as e:
             logger.error(
@@ -365,9 +359,9 @@ class GDriveBackend(BaseBackend):
             logger.error(f"Error processing data for spreadsheet {name}: {e}")
             raise
 
-    def _list_data_names(self, data_type: str) -> t.List[str]:
+    def _list(self, kind: Kind) -> t.List[str]:
         """List all available dataset or experiment names."""
-        folder_id = self._get_folder_id_for_type(data_type)
+        folder_id = self._get_folder_id_for_type(kind)
 
         query = f"'{folder_id}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false"
         results = self.drive_service.files().list(q=query).execute()
@@ -383,42 +377,6 @@ class GDriveBackend(BaseBackend):
                 names.append(name)
 
         return sorted(names)
-
-    # BaseBackend interface implementation
-
-    def load_dataset(self, name: str) -> t.List[t.Dict[str, t.Any]]:
-        """Load dataset by name."""
-        return self._load_data_from_spreadsheet(name, "datasets")
-
-    def load_experiment(self, name: str) -> t.List[t.Dict[str, t.Any]]:
-        """Load experiment by name."""
-        return self._load_data_from_spreadsheet(name, "experiments")
-
-    def save_dataset(
-        self,
-        name: str,
-        data: t.List[t.Dict[str, t.Any]],
-        data_model: t.Optional[t.Type[BaseModel]] = None,
-    ) -> None:
-        """Save dataset with given name."""
-        self._save_data_to_spreadsheet(name, data, "datasets", data_model)
-
-    def save_experiment(
-        self,
-        name: str,
-        data: t.List[t.Dict[str, t.Any]],
-        data_model: t.Optional[t.Type[BaseModel]] = None,
-    ) -> None:
-        """Save experiment with given name."""
-        self._save_data_to_spreadsheet(name, data, "experiments", data_model)
-
-    def list_datasets(self) -> t.List[str]:
-        """List all available dataset names."""
-        return self._list_data_names("datasets")
-
-    def list_experiments(self) -> t.List[str]:
-        """List all available experiment names."""
-        return self._list_data_names("experiments")
 
     def __repr__(self) -> str:
         return f"GDriveBackend(folder_id='{self.folder_id}')"

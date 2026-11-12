@@ -1,6 +1,6 @@
 """Backend factory and exports for all backends."""
 
-from .base import BaseBackend
+from .base import BaseBackend, FileBackend
 from .inmemory import InMemoryBackend
 
 # concrete backends
@@ -26,6 +26,7 @@ except ImportError:
 
 __all__ = [
     "BaseBackend",
+    "FileBackend",
     "BackendRegistry",
     "LocalCSVBackend",
     "LocalJSONLBackend",

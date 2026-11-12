@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
 import model_ids  # noqa: E402
 
-from ragas.llms.base import (  # noqa: E402
+from ragas.llms import (  # noqa: E402
     DEFAULT_LLM_MODEL,
     is_reasoning_model,
     llm_factory,
