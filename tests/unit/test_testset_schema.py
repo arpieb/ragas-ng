@@ -1,7 +1,7 @@
 import pytest
 
+from ragas.dataset import Dataset
 from ragas.dataset_schema import (
-    EvaluationDataset,
     HumanMessage,
     MultiTurnSample,
     SingleTurnSample,
@@ -20,14 +20,58 @@ samples = [
 ]
 
 
+def _testset(eval_sample) -> RagasTestset:
+    sample = RagasTestsetSample(eval_sample=eval_sample, synthesizer_name="test")
+    return RagasTestset(samples=[sample, sample])
+
+
 @pytest.mark.parametrize("eval_sample", samples)
-def test_testset_to_evaluation_dataset(eval_sample):
-    testset_sample = RagasTestsetSample(
-        eval_sample=eval_sample, synthesizer_name="test"
+def test_testset_to_dataset(eval_sample):
+    dataset = _testset(eval_sample).to_dataset("ts")
+    assert isinstance(dataset, Dataset)
+    assert dataset.name == "ts"
+    assert dataset.data_model is type(eval_sample)
+    assert list(dataset) == [eval_sample, eval_sample]
+    # rows are copies: changing one leaves the testset alone
+    assert dataset[0] is not eval_sample
+
+
+@pytest.mark.parametrize("backend", ["local/csv", "local/jsonl"])
+@pytest.mark.parametrize("eval_sample", samples)
+def test_testset_to_dataset_round_trips_through_a_file_backend(
+    tmp_path, backend, eval_sample
+):
+    dataset = _testset(eval_sample).to_dataset("ts", backend, root_dir=str(tmp_path))
+    dataset.save()
+    loaded = Dataset.load(
+        "ts", backend, data_model=type(eval_sample), root_dir=str(tmp_path)
     )
-    testset = RagasTestset(samples=[testset_sample, testset_sample])
-    evaluation_dataset = testset.to_evaluation_dataset()
-    assert evaluation_dataset == EvaluationDataset(samples=[eval_sample, eval_sample])
+    if backend == "local/jsonl":
+        assert list(loaded) == [eval_sample, eval_sample]
+    else:
+        # CSV can't tell None from "" in a str field (ragas.backends.flat)
+        def blank_to_none(sample):
+            return {k: (None if v == "" else v) for k, v in sample.model_dump().items()}
+
+        assert [blank_to_none(s) for s in loaded] == [blank_to_none(eval_sample)] * 2
+
+
+def test_testset_to_dataset_rejects_mixed_sample_types():
+    testset = RagasTestset(
+        samples=[
+            RagasTestsetSample(eval_sample=s, synthesizer_name="test") for s in samples
+        ]
+    )
+    with pytest.raises(ValueError, match="mixes SingleTurnSample and MultiTurnSample"):
+        testset.to_dataset("ts")
+
+
+def test_testset_is_no_longer_a_ragas_dataset():
+    from ragas.dataset_schema import RagasDataset
+
+    assert not issubclass(RagasTestset, RagasDataset)
+    for name in ("to_evaluation_dataset", "to_hf_dataset", "from_hf_dataset"):
+        assert not hasattr(RagasTestset, name)
 
 
 @pytest.mark.parametrize("eval_sample", samples)
@@ -47,15 +91,4 @@ def test_testset_save_load_jsonl(tmpdir, eval_sample):
     testset = RagasTestset(samples=[testset_sample, testset_sample])
     testset.to_jsonl(tmpdir / "jsonlfile.jsonl")
     loaded_testset = RagasTestset.from_jsonl(tmpdir / "jsonlfile.jsonl")
-    assert loaded_testset == testset
-
-
-@pytest.mark.parametrize("eval_sample", samples)
-def test_testset_save_load_hf(tmpdir, eval_sample):
-    testset_sample = RagasTestsetSample(
-        eval_sample=eval_sample, synthesizer_name="test"
-    )
-    testset = RagasTestset(samples=[testset_sample, testset_sample])
-    hf_testset = testset.to_hf_dataset()
-    loaded_testset = RagasTestset.from_hf_dataset(hf_testset)
     assert loaded_testset == testset

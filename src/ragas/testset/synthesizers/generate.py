@@ -329,7 +329,7 @@ class TestsetGenerator:
         2. Generate scenarios using an Executor.
         3. Calculate split values for different scenario types.
         4. Generate samples for each scenario.
-        5. Compile the results into an EvaluationDataset.
+        5. Compile the results into a Testset.
         """
         return self._transform_and_generate(
             None,

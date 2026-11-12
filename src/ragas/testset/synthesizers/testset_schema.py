@@ -1,22 +1,22 @@
 from __future__ import annotations
 
+import json
 import typing as t
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
 from ragas.cost import TokenUsage, TokenUsageCollector
-from ragas.dataset_schema import (
-    BaseSample,
-    EvaluationDataset,
-    MultiTurnSample,
-    RagasDataset,
-    SingleTurnSample,
-)
+from ragas.dataset_schema import BaseSample, MultiTurnSample, SingleTurnSample
 
 if t.TYPE_CHECKING:
+    from pandas import DataFrame as PandasDataframe
+
+    from ragas.backends.base import BaseBackend
+    from ragas.dataset import Dataset
     from ragas.testset.persona import Persona
 
 
@@ -47,7 +47,7 @@ class TestsetPacket(BaseModel):
 
 
 @dataclass
-class Testset(RagasDataset[TestsetSample]):
+class Testset:
     """
     Represents a test set containing multiple test samples.
 
@@ -69,12 +69,58 @@ class Testset(RagasDataset[TestsetSample]):
         default=None, repr=False, compare=False
     )
 
-    def to_evaluation_dataset(self) -> EvaluationDataset:
+    def __post_init__(self):
+        for i, sample in enumerate(self.samples):
+            if not isinstance(sample, TestsetSample):
+                raise ValueError(
+                    f"Sample at index {i} is of type {type(sample)}, expected "
+                    f"{TestsetSample}"
+                )
+
+    def __iter__(self) -> t.Iterator[TestsetSample]:
+        return iter(self.samples)
+
+    def __len__(self) -> int:
+        return len(self.samples)
+
+    def to_dataset(
+        self,
+        name: str,
+        backend: t.Union["BaseBackend", str] = "inmemory",
+        **backend_kwargs: t.Any,
+    ) -> "Dataset":
+        """The generated samples as a ``Dataset``, to score or save.
+
+        Rows are copies of each sample's ``eval_sample``, and ``data_model``
+        is their type (``SingleTurnSample`` or ``MultiTurnSample``). The
+        synthesizer names are left out; ``to_list()`` keeps them. Nothing is
+        written until you call ``save()``::
+
+            dataset = testset.to_dataset("testset", "local/csv", root_dir="data")
+            dataset.save()
+            exp = metrics_experiment([Faithfulness(llm=llm)]).run(dataset)
+
+        Args:
+            name: The dataset's name.
+            backend: A backend name (default ``"inmemory"``) or instance.
+            **backend_kwargs: Constructor arguments for a backend given by
+                name, e.g. ``root_dir``.
+
+        Raises:
+            ValueError: the testset mixes single- and multi-turn samples.
         """
-        Converts the Testset to an EvaluationDataset.
-        """
-        return EvaluationDataset(
-            samples=[sample.eval_sample for sample in self.samples]
+        from ragas.dataset import Dataset
+
+        rows = [sample.eval_sample.model_copy(deep=True) for sample in self.samples]
+        types = {type(row) for row in rows}
+        if len(types) > 1:
+            raise ValueError(
+                "The testset mixes SingleTurnSample and MultiTurnSample samples; "
+                "a Dataset holds one sample type."
+            )
+        data_model = types.pop() if types else SingleTurnSample
+        return Dataset(
+            name, backend, data_model=data_model, data=rows, **backend_kwargs
         )
 
     def to_list(self) -> t.List[t.Dict]:
@@ -118,6 +164,46 @@ class Testset(RagasDataset[TestsetSample]):
         # then create the testset
         return Testset(samples=samples)
 
+    def to_pandas(self) -> "PandasDataframe":
+        """The samples (as ``to_list()``) as a pandas DataFrame."""
+        try:
+            import pandas as pd
+        except ImportError:
+            raise ImportError(
+                "pandas is not installed. Please install it to use this function."
+            )
+        return pd.DataFrame(self.to_list())
+
+    def to_csv(self, path: t.Union[str, Path]) -> None:
+        """Write the samples (as ``to_list()``) to a CSV file."""
+        import csv
+
+        from ragas.backends.flat import encode_flat_rows
+
+        data = self.to_list()
+        if not data:
+            return
+        # Every sample's fields make the header, and lists/dicts are JSON
+        # text rather than Python repr (#100).
+        fieldnames, rows = encode_flat_rows(data)
+        with open(path, "w", newline="", encoding="utf-8") as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
+
+    def to_jsonl(self, path: t.Union[str, Path]) -> None:
+        """Write the samples (as ``to_list()``) to a JSONL file."""
+        with open(path, "w", encoding="utf-8") as jsonlfile:
+            for sample in self.to_list():
+                jsonlfile.write(json.dumps(sample, ensure_ascii=False) + "\n")
+
+    @classmethod
+    def from_jsonl(cls, path: t.Union[str, Path]) -> Testset:
+        """Read a testset written by ``to_jsonl()``."""
+        with open(path, "r", encoding="utf-8") as jsonlfile:
+            data = [json.loads(line) for line in jsonlfile if line.strip()]
+        return cls.from_list(data)
+
     def total_tokens(self) -> t.Union[t.List[TokenUsage], TokenUsage]:
         """
         Compute the total tokens used in the evaluation.
@@ -150,9 +236,7 @@ class Testset(RagasDataset[TestsetSample]):
         """
         Loads a testset from an annotated JSON file.
         """
-        import json
-
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             annotated_testset = json.load(f)
 
         samples = []

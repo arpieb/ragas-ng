@@ -4,7 +4,9 @@ import logging
 import typing as t
 import warnings
 
-from ragas.dataset_schema import EvaluationDataset
+from ragas.backends.base import BaseBackend
+from ragas.dataset import Dataset
+from ragas.dataset_schema import SingleTurnSample
 
 if t.TYPE_CHECKING:
     pass
@@ -54,10 +56,14 @@ def transform_to_ragas_dataset(
     reference_contexts: t.Optional[t.List[str]] = None,
     references: t.Optional[t.List[str]] = None,
     rubrics: t.Optional[t.List[t.Dict[str, str]]] = None,
-) -> EvaluationDataset:
+    *,
+    name: str = "r2r",
+    backend: t.Union[BaseBackend, str] = "inmemory",
+    **backend_kwargs: t.Any,
+) -> Dataset:
     """
-    Converts input data into a Ragas EvaluationDataset, ensuring flexibility
-    for cases where only some lists are provided.
+    Converts input data into a ragas ``Dataset`` of ``SingleTurnSample`` rows,
+    ensuring flexibility for cases where only some lists are provided.
 
     Parameters
     ----------
@@ -72,10 +78,19 @@ def transform_to_ragas_dataset(
     rubrics : Optional[List[Dict[str, str]]]
         List of evaluation rubrics.
 
+    name : str
+        The dataset's name.
+    backend : BaseBackend or str
+        Where the dataset lives: a backend name (default ``"inmemory"``) or
+        instance. Call ``save()`` on the result to write it.
+    **backend_kwargs
+        Constructor arguments for a backend given by name.
+
     Returns
     -------
-    EvaluationDataset
-        A dataset containing structured evaluation samples.
+    Dataset
+        A dataset of ``SingleTurnSample`` rows, to score with
+        ``metrics_experiment``.
 
     Raises
     ------
@@ -124,4 +139,10 @@ def transform_to_ragas_dataset(
 
         samples.append(sample)
 
-    return EvaluationDataset.from_list(data=samples)
+    return Dataset(
+        name,
+        backend,
+        data_model=SingleTurnSample,
+        data=[SingleTurnSample(**sample) for sample in samples],
+        **backend_kwargs,
+    )

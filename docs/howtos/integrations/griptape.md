@@ -216,7 +216,7 @@ We will use `ContextPrecision`, `ContextRecall` and `ContextRelevance` to measur
 
 ```python
 from ragas.metrics.collections import ContextPrecision, ContextRecall, ContextRelevance
-from ragas import evaluate
+from ragas import metrics_experiment
 from openai import OpenAI
 from ragas.llms import llm_factory
 
@@ -228,7 +228,9 @@ ragas_metrics = [
     ContextRelevance(llm=evaluator_llm),
 ]
 
-retrieval_results = evaluate(dataset=ragas_eval_dataset, metrics=ragas_metrics)
+retrieval_results = metrics_experiment(ragas_metrics).run(
+    ragas_eval_dataset, name="griptape_retrieval"
+)
 retrieval_results.to_pandas()
 ```
 ```
@@ -321,7 +323,9 @@ ragas_metrics = [
     ResponseGroundedness(llm=evaluator_llm),
 ]
 
-genration_results = evaluate(dataset=ragas_eval_dataset, metrics=ragas_metrics)
+genration_results = metrics_experiment(ragas_metrics).run(
+    ragas_eval_dataset, name="griptape_generation"
+)
 genration_results.to_pandas()
 ```
 ```

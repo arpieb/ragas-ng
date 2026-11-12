@@ -217,59 +217,47 @@ metrics = [
 ]
 ```
 
-The testset holds the questions (`user_input`) and the expected answers (`reference`). Convert it to an `EvaluationDataset`:
+The testset holds the questions (`user_input`) and the expected answers (`reference`). Convert it to a `Dataset`:
 
 
 ```python
-# convert to Ragas Evaluation Dataset
-ragas_dataset = testset.to_evaluation_dataset()
-ragas_dataset
+dataset = testset.to_dataset("nyc_questions")
+len(dataset)
 ```
 
 
 
 
-    EvaluationDataset(features=['user_input', 'reference_contexts', 'reference'], len=6)
+    6
 
 
 
-The metrics also need what the `QueryEngine` returns for each question: the answer (`response`) and the text of the nodes it retrieved (`retrieved_contexts`). Run the engine over the dataset and fill them in:
-
-
-```python
-for sample in ragas_dataset:
-    llama_response = query_engine.query(sample.user_input)
-    sample.response = str(llama_response)
-    sample.retrieved_contexts = [
-        node.get_content() for node in llama_response.source_nodes
-    ]
-```
-
-For an async engine, call `await query_engine.aquery(...)` instead.
-
-Finally, let's run the evaluation
+The metrics also need what the `QueryEngine` returns for each question: the answer (`response`) and the text of the nodes it retrieved (`retrieved_contexts`). `evaluate_query_engine()` runs the engine over the dataset, fills them in, and scores the rows with [`metrics_experiment`](../../concepts/experimentation.md#scoring-a-dataset-in-one-call-metrics_experiment):
 
 
 ```python
-from ragas import evaluate
+from ragas import summarize
+from ragas.integrations.llama_index import evaluate_query_engine
 
-result = evaluate(dataset=ragas_dataset, metrics=metrics)
+exp = evaluate_query_engine(query_engine, dataset, metrics, name="nyc_wiki")
 ```
+
+In async code, `await aevaluate_query_engine(...)` instead. The dataset isn't modified; the returned `Experiment` holds the filled-in rows and a column per metric.
 
 
 ```python
 # final scores
-print(result)
+summarize(exp)
 ```
 
-    {'faithfulness': 0.7454, 'answer_relevancy': 0.9348, 'context_precision': 0.6667, 'context_recall': 0.4667}
+    {'faithfulness': {'mean': 0.7454, 'count': 6, 'missing': 0}, 'answer_relevancy': {'mean': 0.9348, 'count': 6, 'missing': 0}, 'context_precision': {'mean': 0.6667, 'count': 6, 'missing': 0}, 'context_recall': {'mean': 0.4667, 'count': 6, 'missing': 0}}
 
 
 You can convert into a pandas DataFrame to run more analysis on it.
 
 
 ```python
-result.to_pandas()
+exp.to_pandas()
 ```
 
 

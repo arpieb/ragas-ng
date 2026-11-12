@@ -37,6 +37,8 @@ REMOVED_MODULES = [
 
 # (module, name) pairs that must not resolve.
 REMOVED_NAMES = [
+    # renamed evaluate_query_engine(); returns an Experiment (#255)
+    ("ragas.integrations.llama_index", "evaluate"),
     ("ragas.llms", "BaseRagasLLM"),
     ("ragas.llms", "LlamaIndexLLMWrapper"),
     ("ragas.llms", "HaystackLLMWrapper"),
@@ -150,6 +152,10 @@ def test_removed_name_is_gone(module, name):
 REMOVED_ATTRIBUTES = [
     ("ragas.testset.TestsetGenerator", "generate_with_langchain_docs"),
     ("ragas.dataset_schema.SingleMetricAnnotation", "train_test_split"),
+    # #255: Testset.to_dataset() replaces them
+    ("ragas.testset.Testset", "to_evaluation_dataset"),
+    ("ragas.testset.Testset", "to_hf_dataset"),
+    ("ragas.testset.Testset", "from_hf_dataset"),
 ]
 
 

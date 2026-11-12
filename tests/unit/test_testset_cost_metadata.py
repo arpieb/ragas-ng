@@ -15,7 +15,8 @@ from pathlib import Path
 import pytest
 
 from ragas.cost import TokenUsage
-from ragas.dataset_schema import EvaluationDataset, SingleTurnSample
+from ragas.dataset import Dataset
+from ragas.dataset_schema import SingleTurnSample
 from ragas.run_config import RunConfig, scoped_run_config, scoped_usage_collector
 from ragas.testset.document import Document
 from ragas.testset.graph import KnowledgeGraph, Node, NodeType, Relationship
@@ -334,13 +335,15 @@ def test_metadata_survives_to_list_and_from_list(testset_with_metadata):
     ]
 
 
-def test_metadata_survives_to_evaluation_dataset_and_jsonl(
-    testset_with_metadata, tmp_path
-):
-    dataset = testset_with_metadata.to_evaluation_dataset()
-    assert dataset.samples[0].reference_contexts_metadata == [{"source": "a.txt"}]
+def test_metadata_survives_to_dataset_and_jsonl(testset_with_metadata, tmp_path):
+    dataset = testset_with_metadata.to_dataset("ds")
+    assert dataset[0].reference_contexts_metadata == [{"source": "a.txt"}]
 
-    path = tmp_path / "ds.jsonl"
-    dataset.to_jsonl(path)
-    loaded = EvaluationDataset.from_jsonl(path)
-    assert loaded.samples[0].reference_contexts_metadata == [{"source": "a.txt"}]
+    saved = testset_with_metadata.to_dataset(
+        "ds", "local/jsonl", root_dir=str(tmp_path)
+    )
+    saved.save()
+    loaded = Dataset.load(
+        "ds", "local/jsonl", data_model=type(dataset[0]), root_dir=str(tmp_path)
+    )
+    assert loaded[0].reference_contexts_metadata == [{"source": "a.txt"}]
