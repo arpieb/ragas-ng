@@ -10,6 +10,7 @@ from ragas.dataset_schema import (
     SampleAnnotation,
     SingleMetricAnnotation,
     SingleTurnSample,
+    sample_type_for,
 )
 
 samples = [
@@ -257,3 +258,42 @@ def test_evaluation_result_aggregates_every_metric():
         "response",
         "user_input",
     ]
+
+
+def test_sample_type_for_dispatches_on_user_input():
+    assert sample_type_for({"user_input": "q"}) is SingleTurnSample
+    assert sample_type_for({"response": "a"}) is SingleTurnSample
+    messages = [{"content": "hi", "type": "human"}]
+    assert sample_type_for({"user_input": messages}) is MultiTurnSample
+
+
+def test_from_list_rejects_mixed_single_and_multi_turn_rows():
+    rows = [
+        {"user_input": [{"content": "hi", "type": "human"}]},
+        {"user_input": "q", "response": "a"},
+    ]
+    with pytest.raises(ValueError, match="Sample at index 1"):
+        EvaluationDataset.from_list(rows)
+
+
+def test_from_dict_takes_columns():
+    ds = EvaluationDataset.from_dict(
+        {"user_input": ["q1", "q2"], "response": ["a1", "a2"]}
+    )
+    assert ds.to_list() == [
+        {"user_input": "q1", "response": "a1"},
+        {"user_input": "q2", "response": "a2"},
+    ]
+
+
+def test_from_dict_rejects_rows_and_ragged_columns():
+    with pytest.raises(TypeError, match="from_list"):
+        EvaluationDataset.from_dict([{"user_input": "q"}])  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="same length"):
+        EvaluationDataset.from_dict({"user_input": ["q1", "q2"], "response": ["a"]})
+
+
+def test_evaluation_dataset_has_no_backend_or_name():
+    ds = EvaluationDataset.from_list([{"user_input": "q"}])
+    assert not hasattr(ds, "backend")
+    assert not hasattr(ds, "name")

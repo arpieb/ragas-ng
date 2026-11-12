@@ -704,3 +704,49 @@ The legacy metrics, LLM and embedding wrappers and prompt classes are deleted, n
 - An image reference is an image data URI, an http(s) URL, or a path ending in an image extension (`.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.bmp`). Any other context is text, as before.
 - **⚠ silent:** under `local_dir`, a file without an image extension is no longer opened. It is sent as text, even if it holds an image.
 - Other URL schemes, such as `ftp://`, raise instead of being treated as file paths.
+
+## Custom backends implement `_load`, `_save` and `_list` ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+`BaseBackend` used to have six abstract methods (`load_dataset`, `load_experiment`, `save_dataset`, `save_experiment`, `list_datasets`, `list_experiments`), and every backend wrote the same six one-line wrappers. Now the six are concrete, and a backend implements three abstract methods that take the store, `kind` (`"datasets"` or `"experiments"`):
+
+- `_load(kind, name)`, `_save(kind, name, data, data_model)` and `_list(kind)`. A custom backend that only defines the six public methods can no longer be instantiated (`TypeError: Can't instantiate abstract class`); rename them to these three.
+- The new `ragas.backends.FileBackend(root_dir)` is the base for one-file-per-name backends: set `suffix` and implement `_read(path)` and `_write(path, data)`. `LocalCSVBackend` and `LocalJSONLBackend` are built on it.
+- The private helpers `_get_data_dir()`, `_get_file_path()` (now `FileBackend._path(kind, name)`) and `LocalJSONLBackend._serialize_datetime()` are gone, as are `GDriveBackend`'s `_load_data_from_spreadsheet()`, `_save_data_to_spreadsheet()` and `_list_data_names()`.
+- The registry names, on-disk formats and error messages are unchanged. See [Storage backends](../customizations/storage_backends.md#adding-a-backend).
+
+## `run_async_tasks()` returns results in order and runs on `Executor` ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+`ragas.async_utils.run_async_tasks()` had its own copy of `Executor`'s batching, progress-bar and cancellation loop. It is now a thin wrapper over `Executor`, and `@experiment`'s `arun()` runs its rows through `concurrent_results()` instead of its own semaphore-and-`as_completed` loop.
+
+- `run_async_tasks()` returns results in the order of `tasks`; they used to come back in completion order. Errors are unchanged: with `fail_fast=True` the first failure cancels the rest and is raised; without it every task runs and the first error to happen is raised at the end.
+- Its unused keyword argument `cancel_check` is removed. To stop a run early, use `Executor` and call `executor.cancel()`.
+- `arun()`'s `max_workers`, `raise_exceptions`, `save_partial`, ordering and cancellation behave as before.
+
+## `EvaluationDataset`: one rule for sample types, `from_dict` takes columns ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+Which sample class a row becomes was decided in three places. It is now `ragas.dataset_schema.sample_type_for(row)`: a row whose `user_input` is a list (of messages) is a `MultiTurnSample`, any other row a `SingleTurnSample`. `SAMPLE_TYPES` lists the two classes.
+
+- `EvaluationDataset.from_list()` decides per row. It used to look only at the first row's `user_input` and build every row as that type. A list mixing single- and multi-turn rows now raises `ValueError: Sample at index N is of type ...`; it used to raise a pydantic validation error on the first row that didn't fit.
+- `EvaluationDataset.from_dict()` takes columns, `{"user_input": [...], "response": [...]}`, as its `Dict` annotation said, and calls `from_list()`. It used to iterate its argument as a list of rows, so only a list worked and a real dict raised `TypeError`. Pass a list of rows to `from_list()`; `from_dict()` raises `TypeError` for one.
+- `EvaluationDataset.backend` and `.name`, and `from_list()`'s `backend=` and `name=` arguments, are removed. Nothing read them. For a named dataset saved to a backend, use `ragas.Dataset`.
+- `ragas.validation.get_supported_metric_type()` is removed. `evaluate()` reports an unsupported sample class as `The metric '<name>' does not support the sample type <class>`, instead of `Unsupported sample type <class>`.
+
+## Names moved out of `ragas.utils` ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+`ragas.utils` is split up. Nothing is re-exported from the old location:
+
+| Was | Now |
+|---|---|
+| `ragas.utils.MemorableNames`, `memorable_names`, `create_nano_id` | `ragas.names` |
+| `ragas.utils.async_to_sync` | `ragas.async_utils.async_to_sync` |
+| `ragas.utils.convert_v1_to_v2_dataset`, `REQUIRED_COLS_v1` | `ragas.validation` |
+| `ragas.utils.convert_row_v1_to_v2`, `convert_v2_to_v1_dataset` | Removed: nothing used them |
+
+## `Dataset.train_test_split()` no longer shuffles the dataset or the global `random` ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+With `random_state` set, `train_test_split()` called `random.seed(random_state)` and shuffled the dataset's own rows in place. Now it shuffles a copy with `random.Random(random_state)`.
+
+- For a given seed and dataset, the same rows land in each split as before.
+- The dataset keeps its row order, and the global `random` state is not reseeded. Code that relied on `train_test_split()` seeding `random` for later calls must seed it itself.
+- Calling it twice with the same seed now gives the same split. It used to shuffle the already-shuffled rows again, so the second call gave a different split.
+- With `random_state=None` the rows are not shuffled, as before: the last `test_size` of them are the test split.
