@@ -342,11 +342,15 @@ def _load_local_file(item: str, policy: ImageSourcePolicy) -> ImageData:
             "To read them, pass image_policy=ImageSourcePolicy(local_dir=...) "
             "to the metric.",
         )
+    if "\x00" in item:
+        # Checked here because os.path handles NUL bytes differently by
+        # platform (it raises on POSIX, not always on Windows).
+        raise ImageLoadError(item, "the path contains a NUL byte")
     try:
         path = os.path.realpath(os.path.join(base, item))
         inside = os.path.commonpath([path, base]) == base
     except (TypeError, ValueError, OSError):
-        # ValueError includes a NUL byte, or a path on another drive on Windows.
+        # ValueError includes a path on another drive on Windows.
         inside = False
     if not inside:
         raise ImageLoadError(item, f"the path is outside local_dir {base!r}")

@@ -146,7 +146,7 @@ def test_plain_text_is_not_an_image_under_local_dir(image_dir):
 
 
 def test_a_nul_byte_in_an_image_path_is_refused(image_dir):
-    refused("a\x00.png", ImageSourcePolicy(image_dir), reason="outside local_dir")
+    refused("a\x00.png", ImageSourcePolicy(image_dir), reason="NUL byte")
 
 
 def test_local_dir_must_be_a_directory(tmp_path):
