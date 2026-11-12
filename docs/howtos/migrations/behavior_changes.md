@@ -865,7 +865,7 @@ Metrics built with `@discrete_metric`, `@numeric_metric` and `@ranking_metric` n
 **`DSPyOptimizer` uses `train()`'s run options.** It used to accept them and ignore them.
 
 - `run_config`: its `max_retries` and `timeout` become the `dspy.LM`'s `num_retries` and `timeout`, unless the `llm_factory()` arguments set them. `train()` always passes a `RunConfig`, so by default DSPy's calls now retry up to 10 times (DSPy's default was 3), with a 180-second timeout. A DSPy LM passed as `DSPyOptimizer(lm=...)` keeps its own settings.
-- **⚠ silent: `raise_exceptions` sets MIPROv2's error limit** when `DSPyOptimizer(max_errors=...)` is unset. With `True`, `train()`'s default, MIPROv2 stops at its first failed call. Before, it tolerated DSPy's default of 10. `False` never stops on errors. An explicit `max_errors` still wins.
+- `raise_exceptions` sets MIPROv2's error limit when `DSPyOptimizer(max_errors=...)` is unset. With `True`, `train()`'s default, DSPy's own limit applies (`dspy.settings.max_errors`, 10), as before. **`False` now never stops on errors.** An explicit `max_errors` still wins.
 - `batch_size` and `callbacks` raise `NotImplementedError` instead of being ignored. MIPROv2 sizes its own minibatches and traces its own calls.
 
 **`SingleMetricAnnotation.sample()`, `batch()` and `stratified_batches()` take `seed`.**

@@ -270,7 +270,7 @@ class TestDSPyOptimizer:
             init_temperature=1.0,
             auto="light",
             num_threads=None,
-            max_errors=1,  # raise_exceptions defaults to True
+            max_errors=None,  # DSPy's own limit
             seed=9,
             verbose=False,
             track_stats=True,

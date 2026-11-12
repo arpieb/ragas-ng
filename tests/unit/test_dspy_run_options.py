@@ -105,7 +105,7 @@ def test_a_dspy_lm_passed_as_lm_is_used_as_is(dspy):
 
 @pytest.mark.parametrize(
     "raise_exceptions, max_errors, expected",
-    [(True, None, 1), (False, None, sys.maxsize), (True, 4, 4), (False, 4, 4)],
+    [(True, None, None), (False, None, sys.maxsize), (True, 4, 4), (False, 4, 4)],
 )
 def test_raise_exceptions_sets_the_error_limit(
     dspy, raise_exceptions, max_errors, expected
