@@ -8,6 +8,7 @@ import numpy as np
 
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
+from ragas.metrics.utils import fbeta_from_precision_recall, precision_recall
 
 logger = logging.getLogger(__name__)
 
@@ -107,39 +108,25 @@ class DataCompyScore(BaseMetric):
         compare = self._Compare(reference_df, response_df, on_index=True)
 
         if self.mode == "rows":
-            matching_rows = compare.count_matching_rows()
-            recall = (
-                matching_rows / reference_df.shape[0]
-                if reference_df.shape[0] > 0
-                else 0.0
-            )
-            precision = (
-                matching_rows / response_df.shape[0]
-                if response_df.shape[0] > 0
-                else 0.0
-            )
+            matched = compare.count_matching_rows()
+            expected, produced = reference_df.shape[0], response_df.shape[0]
         else:
-            matched_cols = len(
+            matched = len(
                 [col for col in compare.column_stats if col["unequal_cnt"] == 0]
             )
-            recall = (
-                matched_cols / reference_df.shape[1]
-                if reference_df.shape[1] > 0
-                else 0.0
-            )
-            precision = (
-                matched_cols / response_df.shape[1] if response_df.shape[1] > 0 else 0.0
-            )
+            expected, produced = reference_df.shape[1], response_df.shape[1]
+        # Matched rows/columns are the true positives; the rest of the response
+        # is false positives and the rest of the reference false negatives.
+        precision, recall = precision_recall(
+            matched, produced - matched, expected - matched
+        )
 
         if self.metric == "precision":
             score = precision
         elif self.metric == "recall":
             score = recall
         else:
-            if precision + recall == 0:
-                score = 0.0
-            else:
-                score = 2 * (precision * recall) / (precision + recall)
+            score = fbeta_from_precision_recall(precision, recall)
 
         return MetricResult(
             value=float(score),

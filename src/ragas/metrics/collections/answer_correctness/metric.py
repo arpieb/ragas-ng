@@ -12,6 +12,7 @@ from ragas.metrics.collections.faithfulness.util import (
     StatementGeneratorPrompt,
 )
 from ragas.metrics.result import MetricResult
+from ragas.metrics.utils import fbeta_score
 
 from .util import (
     ClassificationWithReason,
@@ -231,33 +232,12 @@ class AnswerCorrectness(BaseMetric):
 
     def _compute_f1_score(self, classification: ClassificationWithReason) -> float:
         """Compute F1 score from TP/FP/FN classification."""
-        tp = len(classification.TP)
-        fp = len(classification.FP)
-        fn = len(classification.FN)
-
-        # Calculate precision and recall
-        if tp + fp == 0:
-            precision = 1.0 if fn == 0 else 0.0
-        else:
-            precision = tp / (tp + fp)
-
-        if tp + fn == 0:
-            recall = 1.0 if fp == 0 else 0.0
-        else:
-            recall = tp / (tp + fn)
-
-        # Calculate F-beta score
-        if precision + recall == 0:
-            return 0.0
-
-        beta_squared = self.beta**2
-        f_score = (
-            (1 + beta_squared)
-            * (precision * recall)
-            / (beta_squared * precision + recall)
+        return fbeta_score(
+            len(classification.TP),
+            len(classification.FP),
+            len(classification.FN),
+            beta=self.beta,
         )
-
-        return float(f_score)
 
     async def _calculate_similarity(self, response: str, reference: str) -> float:
         """Calculate semantic similarity between response and reference using embeddings."""

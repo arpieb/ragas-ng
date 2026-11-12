@@ -10,6 +10,7 @@ from ragas.metrics.collections._concurrency import gather_bounded
 from ragas.metrics.collections._verdicts import judge_each
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
+from ragas.metrics.utils import fbeta_from_precision_recall, precision_recall
 
 from .util import (
     TopicClassificationInput,
@@ -226,13 +227,11 @@ class TopicAdherence(BaseMetric):
         false_positives = np.sum(topic_answered & ~topic_classifications)
         false_negatives = np.sum(~topic_answered & topic_classifications)
 
-        eps = 1e-10
-
+        precision, recall = precision_recall(
+            int(true_positives), int(false_positives), int(false_negatives)
+        )
         if self.mode == "precision":
-            return true_positives / (true_positives + false_positives + eps)
-        elif self.mode == "recall":
-            return true_positives / (true_positives + false_negatives + eps)
-        else:  # f1
-            precision = true_positives / (true_positives + false_positives + eps)
-            recall = true_positives / (true_positives + false_negatives + eps)
-            return 2 * (precision * recall) / (precision + recall + eps)
+            return precision
+        if self.mode == "recall":
+            return recall
+        return fbeta_from_precision_recall(precision, recall)

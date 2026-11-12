@@ -1,28 +1,41 @@
+"""Precision, recall and F-beta with one edge-case policy for every metric.
+
+Edge cases, where a denominator is zero:
+
+- **Nothing expected and nothing produced** (``tp + fp + fn == 0``):
+  precision, recall and F are all 1.0. Nothing was missed and nothing was
+  wrong, e.g. an agent that correctly made no tool calls.
+- **Nothing produced, something expected** (``tp + fp == 0``, ``fn > 0``):
+  precision and recall are 0.0, so F is 0.0.
+- **Nothing expected, something produced** (``tp + fn == 0``, ``fp > 0``):
+  precision and recall are 0.0, so F is 0.0.
+- Otherwise ``tp == 0`` gives precision = recall = F = 0.0.
+
+No epsilon is added anywhere, so a perfect score is exactly 1.0.
+"""
+
+from __future__ import annotations
+
 import math
+import typing as t
 
 
-def fbeta_score(tp, fp, fn, beta=1.0):
-    if tp + fp == 0:
-        precision = 0
-    else:
-        precision = tp / (tp + fp)
+def precision_recall(tp: int, fp: int, fn: int) -> t.Tuple[float, float]:
+    """``(precision, recall)`` from counts, under the module's edge-case policy."""
+    if tp + fp + fn == 0:
+        return 1.0, 1.0
+    precision = tp / (tp + fp) if tp + fp > 0 else 0.0
+    recall = tp / (tp + fn) if tp + fn > 0 else 0.0
+    return precision, recall
 
-    if tp + fn == 0:
-        recall = 0
-    else:
-        recall = tp / (tp + fn)
 
-    if precision == 0 and recall == 0:
-        return 0.0
+def fbeta_score(tp: int, fp: int, fn: int, beta: float = 1.0) -> float:
+    """F-beta from true positive, false positive and false negative counts.
 
-    beta_squared = beta**2
-    fbeta = (
-        (1 + beta_squared)
-        * (precision * recall)
-        / ((beta_squared * precision) + recall)
-    )
-
-    return fbeta
+    ``beta > 1`` weighs recall more, ``beta < 1`` precision. See the module
+    docstring for the zero-denominator cases.
+    """
+    return fbeta_from_precision_recall(*precision_recall(tp, fp, fn), beta=beta)
 
 
 def fbeta_from_precision_recall(

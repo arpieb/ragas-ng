@@ -150,8 +150,8 @@ class TestToolCallF1Collections:
             user_input=user_input,
             reference_tool_calls=[],
         )
-        # No predictions, no references -> F1=0.0
-        assert result.value == 0.0
+        # No calls expected and none made is a perfect score (#217); it used to be 0.0.
+        assert result.value == 1.0
 
     @pytest.mark.asyncio
     async def test_only_predicted_no_reference(self, tool_call_f1):
