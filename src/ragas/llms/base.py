@@ -9,6 +9,7 @@ LiteLLM. The model arguments each provider takes are in
 from __future__ import annotations
 
 import asyncio
+import functools
 import inspect
 import logging
 import typing as t
@@ -265,6 +266,39 @@ class InstructorLLM(CachedCopyable, InstructorBaseRagasLLM):
     def _messages(self, prompt: LLMInput) -> t.List[ChatMessage]:
         return build_messages(prompt, self.system_prompt)
 
+    def _prepare_call(
+        self,
+        prompt: LLMInput,
+        response_model: t.Type[BaseModel],
+        temperature: t.Optional[float],
+    ) -> t.Tuple[t.Dict[str, t.Any], t.Optional[t.Callable[[t.Any], None]]]:
+        """``(request, record)`` for one structured-output call.
+
+        ``request`` is the keyword arguments for instructor's ``create``.
+        ``record`` is set when a usage collector or a recording span wants
+        the provider's raw response: the call then uses
+        ``create_with_completion``, the only place token counts are
+        available, and passes the raw response to ``record``. Gated so the
+        default path (no collector, no tracing SDK) is a plain ``create``.
+        """
+        provider_kwargs = self._map_provider_params(
+            self._with_sampling(self.model_args, temperature),
+            sampled=temperature is not None,
+        )
+        request = dict(
+            model=self.model,
+            messages=self._messages(prompt),
+            response_model=response_model,
+            **provider_kwargs,
+        )
+        collector = self._active_usage_collector()
+        span = llm_span()
+        if collector is None and span is None:
+            return request, None
+        return request, functools.partial(
+            record_raw, collector, span, provider_kwargs=provider_kwargs
+        )
+
     def _call_sync(
         self,
         client: t.Any,
@@ -273,31 +307,13 @@ class InstructorLLM(CachedCopyable, InstructorBaseRagasLLM):
         temperature: t.Optional[float],
     ) -> InstructorTypeVar:
         """One blocking structured-output call on a sync instructor client."""
-        provider_kwargs = self._map_provider_params(
-            self._with_sampling(self.model_args, temperature),
-            sampled=temperature is not None,
-        )
-        target = client.chat.completions
-        collector = self._active_usage_collector()
-        span = llm_span()
-        if collector is not None or span is not None:
-            # create_with_completion also returns the provider's raw response,
-            # which is the only place token counts are available. Gated so the
-            # default path (no collector, no tracing SDK) is byte-identical.
-            result, raw = target.create_with_completion(
-                model=self.model,
-                messages=self._messages(prompt),
-                response_model=response_model,
-                **provider_kwargs,
-            )
-            record_raw(collector, span, raw, provider_kwargs)
-            return result
-        return target.create(
-            model=self.model,
-            messages=self._messages(prompt),
-            response_model=response_model,
-            **provider_kwargs,
-        )
+        request, record = self._prepare_call(prompt, response_model, temperature)
+        completions = client.chat.completions
+        if record is None:
+            return completions.create(**request)
+        result, raw = completions.create_with_completion(**request)
+        record(raw)
+        return result
 
     def generate(
         self,
@@ -352,28 +368,14 @@ class InstructorLLM(CachedCopyable, InstructorBaseRagasLLM):
         response_model: t.Type[InstructorTypeVar],
         temperature: t.Optional[float],
     ) -> InstructorTypeVar:
-        provider_kwargs = self._map_provider_params(
-            self._with_sampling(self.model_args, temperature),
-            sampled=temperature is not None,
-        )
-        target = self.client.chat.completions
-        collector = self._active_usage_collector()
-        span = llm_span()
-        if collector is not None or span is not None:
-            result, raw = await target.create_with_completion(
-                model=self.model,
-                messages=self._messages(prompt),
-                response_model=response_model,
-                **provider_kwargs,
-            )
-            record_raw(collector, span, raw, provider_kwargs)
-            return result
-        return await target.create(
-            model=self.model,
-            messages=self._messages(prompt),
-            response_model=response_model,
-            **provider_kwargs,
-        )
+        """One structured-output call on the async instructor client."""
+        request, record = self._prepare_call(prompt, response_model, temperature)
+        completions = self.client.chat.completions
+        if record is None:
+            return await completions.create(**request)
+        result, raw = await completions.create_with_completion(**request)
+        record(raw)
+        return result
 
     async def agenerate(
         self,
