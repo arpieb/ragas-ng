@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img style="vertical-align:middle" height="200" src="docs/_static/imgs/logo.png">
+  <img style="vertical-align:middle" height="200" src="https://raw.githubusercontent.com/arpieb/ragas-ng/main/docs/_static/imgs/logo.png">
 </h1>
 <p align="center">
   <i>Objective, provider-neutral evaluation for LLM applications</i>
@@ -26,11 +26,11 @@
 
 Changes so far:
 
-- **No LangChain.** `import ragas` loads no LangChain modules, and nothing LangChain-related is installed as a dependency. The LangChain, LangSmith, LangGraph and Opik integrations are gone. See the [LangChain migration guide](docs/howtos/migrations/migrate_off_langchain.md).
+- **No LangChain.** `import ragas` loads no LangChain modules, and nothing LangChain-related is installed as a dependency. The LangChain, LangSmith, LangGraph and Opik integrations are gone. See the [LangChain migration guide](https://arpieb.github.io/ragas-ng/howtos/migrations/migrate_off_langchain/).
 - **Provider-neutral by default.** `openai` is no longer a declared dependency. Every `llm_factory()` call goes through [LiteLLM](https://github.com/BerriAI/litellm), addressed by model name (`"anthropic/claude-sonnet-5-5"`, `"gemini/gemini-3.6-flash"`, `"ollama/..."`), so any provider LiteLLM supports works without its SDK. `embedding_factory()` works without a client too.
 - **Native tracing.** The LangChain callback system has been replaced by a native run tree plus the OpenTelemetry API. Spans cost nothing until you configure an OpenTelemetry SDK.
 - **Collections metrics everywhere.** Metrics have been ported to `ragas.metrics.collections`, including the non-LLM context metrics, AspectCritic, SimpleCriteriaScore and FaithfulnesswithHHEM, and `metrics_experiment()` scores them over a `Dataset`. The legacy metrics are removed; `ragas.metrics` keeps only the base classes and the `DiscreteMetric` / `NumericMetric` / `RankingMetric` family.
-- **Upstream bugs fixed, with migration notes.** Fixes that change behavior or scores are listed in [Behavior changes](docs/howtos/migrations/behavior_changes.md) and [Score changes](docs/howtos/migrations/score_changes.md), so you can see what differs from upstream before upgrading.
+- **Upstream bugs fixed, with migration notes.** Fixes that change behavior or scores are listed in [Behavior changes](https://arpieb.github.io/ragas-ng/howtos/migrations/behavior_changes/) and [Score changes](https://arpieb.github.io/ragas-ng/howtos/migrations/score_changes/), so you can see what differs from upstream before upgrading.
 - **Modern toolchain.** Requires Python 3.11+. Uses uv with a committed lockfile, and the docs build in CI with `mkdocs --strict`.
 
 The distribution is published as **`ragas-ng`**; the import name is still `ragas`, so existing code keeps importing the same way.
@@ -107,7 +107,7 @@ Templates: `rag_eval`, `improve_rag`, `agent_evals`, `llamaIndex_agent_evals`, `
 
 ## Documentation
 
-The documentation lives in [`docs/`](docs/) and is kept current with this fork. To build and browse it locally:
+The documentation lives in [`docs/`](https://github.com/arpieb/ragas-ng/tree/main/docs) and is kept current with this fork. To build and browse it locally:
 
 ```bash
 make serve-docs
@@ -132,7 +132,7 @@ make check             # format + type check
 make test              # unit tests
 ```
 
-Run `make install` for the full ML stack, which the e2e tests need. Some e2e and docs tests also call real providers and need an API key, such as `OPENAI_API_KEY`. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development guide.
+Run `make install` for the full ML stack, which the e2e tests need. Some e2e and docs tests also call real providers and need an API key, such as `OPENAI_API_KEY`. See [CONTRIBUTING.md](https://github.com/arpieb/ragas-ng/blob/main/CONTRIBUTING.md) for the full development guide.
 
 Contributions are welcome. Fork the repo, create a feature branch, and open a pull request against `main`.
 
@@ -142,7 +142,7 @@ ragas-ng collects no usage data. The upstream analytics module, which sent anony
 
 ## Acknowledgements and citation
 
-ragas-ng is built on the work of the original Ragas authors and contributors at VibrantLabs, and is distributed under the same [Apache-2.0 license](./LICENSE). If you use Ragas in research, please cite the original project:
+ragas-ng is built on the work of the original Ragas authors and contributors at VibrantLabs, and is distributed under the same [Apache-2.0 license](https://github.com/arpieb/ragas-ng/blob/main/LICENSE). If you use Ragas in research, please cite the original project:
 
 ```
 @misc{ragas2024,

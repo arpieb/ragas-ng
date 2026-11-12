@@ -76,9 +76,19 @@ This repository is organized as a single project with integrated experimental fe
 ### Examples Package (ragas-ng-examples)
 - Lives under `examples/` as an installable package `ragas-ng-examples` (import name `ragas_examples`)
 - Published to PyPI together with `ragas-ng` by `.github/workflows/publish.yml` when a GitHub release is published, using PyPI trusted publishing
-- Both packages take their version from the same Git tag (`vX.Y.Z`) via setuptools_scm
+- Both packages take their version from the same Git tag via setuptools_scm (see [Releasing](#releasing))
 - Local development: `uv sync --locked` (the workspace installs both `ragas-ng` and `ragas-ng-examples` in editable mode)
 - Run examples: `python -m ragas_examples.benchmark_llm.prompt`
+
+### Releasing
+
+ragas-ng uses calendar versioning, `YYYY.M.PATCH`: the year, the month without a leading zero, and a counter that starts at 0 each month (`2026.11.0`, `2026.11.1`, `2026.12.0`). The numbers are unrelated to upstream ragas's `0.x` versions.
+
+1. Tag the release commit on `main` as `vYYYY.M.PATCH`, with no zero padding (`v2026.1.0`, not `v2026.01.0`: PEP 440 drops the zero, and the tag would no longer match the version).
+2. Publish a GitHub release for the tag. `.github/workflows/publish.yml` checks the tag format and that setuptools_scm derives the same version, builds both packages, and waits for approval in the `pypi-release` environment (a required reviewer; only `v*` tags may deploy).
+3. Approve the deployment. `ragas-ng` is published first, then `ragas-ng-examples`.
+
+Between releases, setuptools_scm gives development versions such as `2026.11.1.dev3+g1a2b3c4`.
 
 ## Development Environment Setup
 
