@@ -94,11 +94,9 @@ def nearest_indices(
 
     if check_example_count(top_k) == 0 or len(embeddings) == 0:
         return []
-    query = np.asarray(query_embedding, dtype=float)
-    matrix = np.asarray(embeddings, dtype=float)
-    similarities = (
-        matrix @ query / (np.linalg.norm(matrix, axis=1) * np.linalg.norm(query) + 1e-8)
-    )
+    from ragas.similarity import cosine_matrix
+
+    similarities = cosine_matrix(embeddings, query_embedding).reshape(-1)
     valid = np.where(similarities >= threshold)[0]
     if len(valid) == 0:
         return []

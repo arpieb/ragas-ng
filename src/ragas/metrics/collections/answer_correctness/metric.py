@@ -13,6 +13,7 @@ from ragas.metrics.collections.faithfulness.util import (
 )
 from ragas.metrics.result import MetricResult
 from ragas.metrics.utils import fbeta_score
+from ragas.similarity import cosine
 
 from .util import (
     ClassificationWithReason,
@@ -245,26 +246,11 @@ class AnswerCorrectness(BaseMetric):
         if self.embeddings is None:
             raise RuntimeError("Embeddings required for similarity calculation")
 
-        # Get embeddings for both texts
-        response_embedding = np.asarray(
-            await self.embeddings.aembed_text(response)
-        ).reshape(1, -1)
-        reference_embedding = np.asarray(
-            await self.embeddings.aembed_text(reference)
-        ).reshape(1, -1)
-
-        # Calculate cosine similarity
-        norm_response = np.linalg.norm(response_embedding, axis=1)
-        norm_reference = np.linalg.norm(reference_embedding, axis=1)
-
-        if norm_response == 0 or norm_reference == 0:
-            return 0.0
-
-        cosine_similarity = np.dot(response_embedding, reference_embedding.T)[0, 0] / (
-            norm_response[0] * norm_reference[0]
+        similarity = cosine(
+            await self.embeddings.aembed_text(response),
+            await self.embeddings.aembed_text(reference),
         )
-
         # Cosine similarity spans [-1, 1]; the similarity term is defined on
         # [0, 1]. Unclipped, a negative cosine pulled the final score below 0.
         # Same clipping as SemanticSimilarity (#107).
-        return float(np.clip(cosine_similarity, 0.0, 1.0))
+        return max(similarity, 0.0)

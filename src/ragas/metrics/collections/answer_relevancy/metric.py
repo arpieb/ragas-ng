@@ -7,6 +7,7 @@ import numpy as np
 from ragas.metrics.collections._sampling import sample_n
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
+from ragas.similarity import cosine_matrix
 
 from .util import (
     AnswerRelevanceInput,
@@ -144,16 +145,7 @@ class AnswerRelevancy(BaseMetric):
             await self.embeddings.aembed_texts(generated_questions)
         ).reshape(len(generated_questions), -1)
 
-        # Calculate cosine similarity
-        norm = np.linalg.norm(gen_question_vec, axis=1) * np.linalg.norm(
-            question_vec, axis=1
-        )
-        cosine_sim = (
-            np.dot(gen_question_vec, question_vec.T).reshape(
-                -1,
-            )
-            / norm
-        )
+        cosine_sim = cosine_matrix(gen_question_vec, question_vec).reshape(-1)
 
         # Score is average cosine similarity, reduced to 0 if response is noncommittal.
         # Cosine similarity can be slightly negative for unrelated embeddings;
