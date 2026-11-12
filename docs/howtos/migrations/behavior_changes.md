@@ -828,3 +828,8 @@ class MyMetric(BaseMetric):
 | `ragas.testset.transforms.relationship_builders.cosine.cosine_similarity_matrix` | `ragas.similarity.cosine_matrix` |
 
 The private methods `_calculate_average_precision` (ContextPrecision), `_format_conversation` (AgentGoalAccuracy, TopicAdherence), `_compare_outcomes` (AgentGoalAccuracy) and `_get_judge_rating` / `_average_scores` (the dual-judge metrics) are gone. ContextPrecision no longer logs `"Invalid response format ..."`: the warning could not fire.
+
+## `MLflowTrace.get_url()` checks `MLFLOW_HOST` and escapes trace IDs ([#243](https://github.com/arpieb/ragas-ng/issues/243))
+
+- `MLFLOW_HOST` must be an http(s) URL with a host, with no query string or fragment; anything else raises `ValueError`. A port and a path prefix (`https://example.com/mlflow`) still work, and the URL for a valid host is unchanged.
+- The experiment ID and trace ID are percent-encoded, so an ID containing `/`, `?`, `&` or `#` can no longer add path segments or query parameters to the URL.

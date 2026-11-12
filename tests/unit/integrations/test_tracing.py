@@ -8,6 +8,7 @@ test_langfuse_removed.py.
 
 import os
 from unittest.mock import MagicMock, patch
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -58,9 +59,70 @@ class TestMLflowIntegration:
             mlflow_trace = MLflowTrace(mock_trace)
             url = mlflow_trace.get_url()
 
-            assert "https://mlflow.example.com" in url
-            assert "test-request-id" in url
-            assert "test-experiment-id" in url
+        assert url == (
+            "https://mlflow.example.com/#/experiments/test-experiment-id"
+            "?compareRunsMode=TRACES&selectedTraceId=test-request-id"
+        )
+        parsed = urlparse(url)
+        assert (parsed.scheme, parsed.netloc, parsed.path) == (
+            "https",
+            "mlflow.example.com",
+            "/",
+        )
+
+    @pytest.mark.parametrize(
+        "host, base",
+        [
+            ("http://localhost:5000", "http://localhost:5000"),
+            ("https://example.com/mlflow/", "https://example.com/mlflow"),
+        ],
+    )
+    def test_mlflow_trace_get_url_keeps_port_and_path_prefix(self, host, base):
+        from ragas.integrations.tracing.mlflow import MLflowTrace
+
+        mock_trace = MagicMock()
+        mock_trace.info.request_id = "tr-1"
+        mock_trace.info.experiment_id = "7"
+        with patch.dict(os.environ, {"MLFLOW_HOST": host}):
+            url = MLflowTrace(mock_trace).get_url()
+        assert url == (
+            f"{base}/#/experiments/7?compareRunsMode=TRACES&selectedTraceId=tr-1"
+        )
+
+    def test_mlflow_trace_get_url_encodes_ids(self):
+        """IDs can't add query parameters or path segments (#243)."""
+        from ragas.integrations.tracing.mlflow import MLflowTrace
+
+        mock_trace = MagicMock()
+        mock_trace.info.request_id = "tr-1&next=https://evil.example"
+        mock_trace.info.experiment_id = "1/../2?x=y#z"
+        with patch.dict(os.environ, {"MLFLOW_HOST": "https://mlflow.example.com"}):
+            url = MLflowTrace(mock_trace).get_url()
+        fragment = urlparse(url).fragment
+        path, _, query = fragment.partition("?")
+        assert path == "/experiments/1%2F..%2F2%3Fx%3Dy%23z"
+        assert parse_qs(query) == {
+            "compareRunsMode": ["TRACES"],
+            "selectedTraceId": ["tr-1&next=https://evil.example"],
+        }
+
+    @pytest.mark.parametrize(
+        "host",
+        [
+            "mlflow.example.com",
+            "ftp://mlflow.example.com",
+            "javascript:alert(1)",
+            "https://",
+            "https://mlflow.example.com/?a=b",
+            "https://mlflow.example.com/#x",
+        ],
+    )
+    def test_mlflow_trace_get_url_rejects_bad_hosts(self, host):
+        from ragas.integrations.tracing.mlflow import MLflowTrace
+
+        with patch.dict(os.environ, {"MLFLOW_HOST": host}):
+            with pytest.raises(ValueError, match="MLFLOW_HOST must"):
+                MLflowTrace(MagicMock()).get_url()
 
     def test_mlflow_trace_get_url_no_env(self):
         """Test MLflowTrace URL generation without MLFLOW_HOST."""
