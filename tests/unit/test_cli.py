@@ -1,5 +1,6 @@
 """Tests for the Ragas CLI module."""
 
+import runpy
 import sys
 import zipfile
 
@@ -24,12 +25,23 @@ def test_hello_world_help():
     assert "Directory to run the hello world example in" in result.stdout
 
 
-def test_evals_help():
-    """Test that the evals help command works."""
-    runner = CliRunner()
-    result = runner.invoke(app, ["evals", "--help"])
-    assert result.exit_code == 0
-    assert "Run evaluations on a dataset" in result.stdout
+def test_evals_command_is_gone():
+    """`ragas evals` was removed (#215): it called APIs that no longer exist."""
+    result = CliRunner().invoke(app, ["evals", "--help"])
+    assert result.exit_code != 0
+
+
+def test_hello_world_script_runs(tmp_path, capsys):
+    """The generated hello_world/evals.py runs on its own (#215)."""
+    result = CliRunner().invoke(app, ["hello-world", str(tmp_path)])
+    assert result.exit_code == 0, result.stdout
+    script = tmp_path / "hello_world" / "evals.py"
+    assert script.exists()
+
+    runpy.run_path(str(script), run_name="__main__")
+
+    assert "Accuracy:" in capsys.readouterr().out
+    assert list((tmp_path / "hello_world" / "experiments").glob("*.csv"))
 
 
 def test_quickstart_help():
@@ -150,8 +162,6 @@ if __name__ == "__main__":
     print("✓ CLI help test passed")
     test_hello_world_help()
     print("✓ Hello world help test passed")
-    test_evals_help()
-    print("✓ Evals help test passed")
     test_quickstart_help()
     print("✓ Quickstart help test passed")
     test_quickstart_list_templates()

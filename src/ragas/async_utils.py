@@ -161,51 +161,6 @@ def apply_nest_asyncio() -> bool:
     return False
 
 
-def as_completed(
-    coroutines: t.Sequence[t.Coroutine],
-    max_workers: int = -1,
-    *,
-    cancel_check: t.Optional[t.Callable[[], bool]] = None,
-    cancel_pending: bool = True,
-) -> t.Iterator[asyncio.Future]:
-    """
-    Wrap coroutines with a semaphore if max_workers is specified.
-
-    Returns an iterator of futures that completes as tasks finish.
-    """
-    if max_workers == -1:
-        tasks = [asyncio.create_task(coro) for coro in coroutines]
-    else:
-        semaphore = asyncio.Semaphore(max_workers)
-
-        async def sema_coro(coro):
-            async with semaphore:
-                return await coro
-
-        tasks = [asyncio.create_task(sema_coro(coro)) for coro in coroutines]
-
-    ac_iter = asyncio.as_completed(tasks)
-
-    if cancel_check is None:
-        return ac_iter
-
-    def _iter_with_cancel():
-        for future in ac_iter:
-            if cancel_check():
-                # the waiter we pulled but won't hand out: close it, or it
-                # warns "never awaited" (#207)
-                if inspect.iscoroutine(future):
-                    future.close()
-                if cancel_pending:
-                    for t in tasks:
-                        if not t.done():
-                            t.cancel()
-                break
-            yield future
-
-    return _iter_with_cancel()
-
-
 _SKIPPED: t.Any = object()
 
 # How often concurrent_results() checks cancel_check while every running task
@@ -308,29 +263,6 @@ async def concurrent_results(
         for coro in coros:
             if inspect.getcoroutinestate(coro) == inspect.CORO_CREATED:
                 coro.close()
-
-
-async def process_futures(
-    futures: t.Iterator[asyncio.Future],
-) -> t.AsyncGenerator[t.Any, None]:
-    """
-    Process futures with optional progress tracking.
-
-    Args:
-        futures: Iterator of asyncio futures to process (e.g., from asyncio.as_completed)
-
-    Yields:
-        Results from completed futures as they finish
-    """
-    # Process completed futures as they finish
-    for future in futures:
-        try:
-            result = await future
-        except asyncio.CancelledError:
-            raise  # Re-raise CancelledError to ensure proper cancellation
-        except Exception as e:
-            result = e
-        yield result
 
 
 def run(
