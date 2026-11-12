@@ -96,7 +96,7 @@ Rows may also be plain dicts with the same field names (`user_input`, `response`
 To start from an existing dataset, such as one on the Hugging Face Hub, go through pandas. `Dataset.from_pandas` builds each sample from a DataFrame row, so turn missing values (NaN) into `None` first:
 
 ```python
-from datasets import load_dataset
+from datasets import load_dataset  # pip install datasets
 
 from ragas import Dataset, SingleTurnSample
 

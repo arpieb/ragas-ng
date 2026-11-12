@@ -1,8 +1,12 @@
-"""Utilities for creating test datasets in e2e tests."""
+"""Utilities for creating test datasets in e2e tests.
+
+The loaders return row dicts. They download from the Hugging Face Hub when
+``datasets`` is installed (it isn't a ragas dependency, #258) and fall back
+to the local samples below otherwise, or when the download fails.
+"""
 
 import logging
-
-from datasets import Dataset, load_dataset
+import typing as t
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +68,7 @@ SAMPLE_FIQA_DATA = [
 ]
 
 
-def load_amnesty_dataset_safe(config: str = "english_v3"):
+def load_amnesty_dataset_safe(config: str = "english_v3") -> t.List[t.Dict[str, t.Any]]:
     """
     Safely load the amnesty_qa dataset, falling back to local data if remote fails.
 
@@ -72,24 +76,25 @@ def load_amnesty_dataset_safe(config: str = "english_v3"):
         config: Dataset configuration name (e.g., "english_v3", "english_v2")
 
     Returns:
-        Dataset: The loaded dataset
+        The dataset's rows, as dicts
     """
     try:
         logger.info(f"Attempting to load amnesty_qa dataset with config '{config}'")
-        dataset = load_dataset("vibrantlabsai/amnesty_qa", config)["eval"]
-        logger.info(f"Successfully loaded dataset with {len(dataset)} samples")
-        return dataset
+        from datasets import load_dataset
+
+        rows = load_dataset("vibrantlabsai/amnesty_qa", config)["eval"].to_list()
+        logger.info(f"Successfully loaded dataset with {len(rows)} samples")
+        return rows
     except Exception as e:
         logger.warning(f"Failed to load remote dataset: {e}")
         logger.info("Using local sample data as fallback")
 
         # Create a local dataset from sample data
-        local_dataset = Dataset.from_list(SAMPLE_AMNESTY_DATA)
-        logger.info(f"Created local dataset with {len(local_dataset)} samples")
-        return local_dataset
+        logger.info(f"Using {len(SAMPLE_AMNESTY_DATA)} local samples")
+        return [dict(row) for row in SAMPLE_AMNESTY_DATA]
 
 
-def load_fiqa_dataset_safe(config: str = "ragas_eval_v3"):
+def load_fiqa_dataset_safe(config: str = "ragas_eval_v3") -> t.List[t.Dict[str, t.Any]]:
     """
     Safely load the fiqa dataset, falling back to local data if remote fails.
 
@@ -97,18 +102,19 @@ def load_fiqa_dataset_safe(config: str = "ragas_eval_v3"):
         config: Dataset configuration name (default: "ragas_eval_v3" - recommended)
 
     Returns:
-        Dataset: The loaded dataset
+        The dataset's rows, as dicts
     """
     try:
         logger.info(f"Attempting to load fiqa dataset with config '{config}'")
-        dataset = load_dataset("vibrantlabsai/fiqa", config)["baseline"]
-        logger.info(f"Successfully loaded dataset with {len(dataset)} samples")
-        return dataset
+        from datasets import load_dataset
+
+        rows = load_dataset("vibrantlabsai/fiqa", config)["baseline"].to_list()
+        logger.info(f"Successfully loaded dataset with {len(rows)} samples")
+        return rows
     except Exception as e:
         logger.warning(f"Failed to load remote dataset: {e}")
         logger.info("Using local sample data as fallback")
 
         # Create a local dataset from sample data
-        local_dataset = Dataset.from_list(SAMPLE_FIQA_DATA)
-        logger.info(f"Created local dataset with {len(local_dataset)} samples")
-        return local_dataset
+        logger.info(f"Using {len(SAMPLE_FIQA_DATA)} local samples")
+        return [dict(row) for row in SAMPLE_FIQA_DATA]

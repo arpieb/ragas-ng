@@ -24,8 +24,8 @@ V1_COLUMNS = {
 
 
 def to_dataset(hf_dataset, name: str, limit: t.Optional[int] = None) -> Dataset:
-    """A Hugging Face dataset's rows as a ragas ``Dataset`` of samples."""
-    rows = hf_dataset.to_list()[:limit]
+    """Row dicts (v1 column names allowed) as a ragas ``Dataset`` of samples."""
+    rows = list(hf_dataset)[:limit]
     samples = [
         SingleTurnSample(**{V1_COLUMNS.get(k, k): v for k, v in row.items()})
         for row in rows

@@ -3,7 +3,6 @@ import typing as t
 import pytest
 
 from ragas.dataset_schema import (
-    EvaluationDataset,
     HumanMessage,
     MultiTurnSample,
     SingleTurnSample,
@@ -73,98 +72,6 @@ def test_loader_batch():
     assert all(sum([item["metric_output"] for item in batch]) == 1 for batch in batches)
 
 
-@pytest.mark.parametrize("eval_sample", samples)
-def test_evaluation_dataset(eval_sample):
-    dataset = EvaluationDataset(samples=[eval_sample, eval_sample])
-
-    hf_dataset = dataset.to_hf_dataset()
-
-    assert dataset.get_sample_type() is type(eval_sample)
-    assert len(hf_dataset) == 2
-    assert len(dataset) == 2
-    assert dataset[0] == eval_sample
-
-    dataset_from_hf = EvaluationDataset.from_hf_dataset(hf_dataset)
-    assert dataset_from_hf == dataset
-
-
-@pytest.mark.parametrize("eval_sample", samples)
-def test_evaluation_dataset_save_load_csv(tmpdir, eval_sample):
-    dataset = EvaluationDataset(samples=[eval_sample, eval_sample])
-
-    # save and load to csv
-    csv_path = tmpdir / "csvfile.csv"
-    dataset.to_csv(csv_path)
-
-
-@pytest.mark.parametrize("eval_sample", samples)
-def test_evaluation_dataset_save_load_jsonl(tmpdir, eval_sample):
-    dataset = EvaluationDataset(samples=[eval_sample, eval_sample])
-
-    # save and load to jsonl
-    jsonl_path = tmpdir / "jsonlfile.jsonl"
-    dataset.to_jsonl(jsonl_path)
-    loaded_dataset = EvaluationDataset.from_jsonl(jsonl_path)
-    assert loaded_dataset == dataset
-
-
-@pytest.mark.parametrize("eval_sample", samples)
-def test_evaluation_dataset_load_from_hf(eval_sample):
-    dataset = EvaluationDataset(samples=[eval_sample, eval_sample])
-
-    # convert to and load from hf dataset
-    hf_dataset = dataset.to_hf_dataset()
-    loaded_dataset = EvaluationDataset.from_hf_dataset(hf_dataset)
-    assert loaded_dataset == dataset
-
-
-def test_single_turn_sample_metadata_roundtrip_hf_and_jsonl(tmpdir):
-    sample = SingleTurnSample(
-        user_input="Q",
-        response="A",
-        reference_contexts=["ctx"],
-        persona_name="Researcher",
-        query_style="FORMAL",
-        query_length="SHORT",
-    )
-    dataset = EvaluationDataset(samples=[sample])
-
-    # HF round-trip
-    hf = dataset.to_hf_dataset()
-    loaded_hf = EvaluationDataset.from_hf_dataset(hf)
-    assert loaded_hf.samples[0].persona_name == "Researcher"
-    assert loaded_hf.samples[0].query_style == "FORMAL"
-    assert loaded_hf.samples[0].query_length == "SHORT"
-
-    # JSONL round-trip
-    jsonl_path = tmpdir / "ds.jsonl"
-    dataset.to_jsonl(jsonl_path)
-    loaded_jsonl = EvaluationDataset.from_jsonl(jsonl_path)
-    assert loaded_jsonl.samples[0].persona_name == "Researcher"
-    assert loaded_jsonl.samples[0].query_style == "FORMAL"
-    assert loaded_jsonl.samples[0].query_length == "SHORT"
-
-
-@pytest.mark.parametrize("eval_sample", samples)
-def test_single_type_evaluation_dataset(eval_sample):
-    single_turn_sample = SingleTurnSample(user_input="What is X", response="Y")
-    multi_turn_sample = MultiTurnSample(
-        user_input=[{"content": "What is X"}],
-        response="Y",  # type: ignore (this type error is what we want to test)
-    )
-
-    with pytest.raises(ValueError) as exc_info:
-        EvaluationDataset(samples=[single_turn_sample, multi_turn_sample])
-
-    error_message = str(exc_info.value)
-
-    assert (
-        "Sample at index 1 is of type <class 'ragas.dataset_schema.MultiTurnSample'>"
-        in error_message
-    )
-    assert "expected <class 'ragas.dataset_schema.SingleTurnSample'>" in error_message
-
-
 def test_base_eval_sample():
     from ragas.dataset_schema import BaseSample
 
@@ -176,29 +83,6 @@ def test_base_eval_sample():
     fake_sample = FakeSample(user_input="What is X", response="Y")
     assert fake_sample.to_dict() == {"user_input": "What is X", "response": "Y"}
     assert fake_sample.get_features() == ["user_input", "response"]
-
-
-def test_evaluation_dataset_iter():
-    single_turn_sample = SingleTurnSample(user_input="What is X", response="Y")
-
-    dataset = EvaluationDataset(samples=[single_turn_sample, single_turn_sample])
-
-    for sample in dataset:
-        assert sample == single_turn_sample
-
-
-def test_evaluation_dataset_type():
-    single_turn_sample = SingleTurnSample(user_input="What is X", response="Y")
-    multi_turn_sample = MultiTurnSample(
-        user_input=[{"content": "What is X"}],
-        response="Y",  # type: ignore (this type error is what we want to test)
-    )
-
-    dataset = EvaluationDataset(samples=[single_turn_sample])
-    assert dataset.get_sample_type() == SingleTurnSample
-
-    dataset = EvaluationDataset(samples=[multi_turn_sample])
-    assert dataset.get_sample_type() == MultiTurnSample
 
 
 def test_multiturn_sample_validate_user_input_invalid_type():
@@ -236,33 +120,46 @@ def test_sample_type_for_dispatches_on_user_input():
     assert sample_type_for({"user_input": messages}) is MultiTurnSample
 
 
-def test_from_list_rejects_mixed_single_and_multi_turn_rows():
-    rows = [
-        {"user_input": [{"content": "hi", "type": "human"}]},
-        {"user_input": "q", "response": "a"},
-    ]
-    with pytest.raises(ValueError, match="Sample at index 1"):
-        EvaluationDataset.from_list(rows)
+@pytest.mark.parametrize("backend", ["local/jsonl", "local/csv"])
+@pytest.mark.parametrize("eval_sample", samples)
+def test_samples_round_trip_through_a_dataset_backend(tmp_path, backend, eval_sample):
+    """What EvaluationDataset.to_jsonl/to_csv covered, through Dataset (#258)."""
+    from ragas.dataset import Dataset
 
-
-def test_from_dict_takes_columns():
-    ds = EvaluationDataset.from_dict(
-        {"user_input": ["q1", "q2"], "response": ["a1", "a2"]}
+    saved = Dataset(
+        "ds",
+        backend,
+        data_model=type(eval_sample),
+        data=[eval_sample, eval_sample],
+        root_dir=str(tmp_path),
     )
-    assert ds.to_list() == [
-        {"user_input": "q1", "response": "a1"},
-        {"user_input": "q2", "response": "a2"},
-    ]
+    saved.save()
+    loaded = Dataset.load(
+        "ds", backend, data_model=type(eval_sample), root_dir=str(tmp_path)
+    )
+    assert len(loaded) == 2
+    assert loaded[0].user_input == eval_sample.user_input
 
 
-def test_from_dict_rejects_rows_and_ragged_columns():
-    with pytest.raises(TypeError, match="from_list"):
-        EvaluationDataset.from_dict([{"user_input": "q"}])  # type: ignore[arg-type]
-    with pytest.raises(ValueError, match="same length"):
-        EvaluationDataset.from_dict({"user_input": ["q1", "q2"], "response": ["a"]})
+def test_single_turn_sample_metadata_round_trips_through_jsonl(tmp_path):
+    from ragas.dataset import Dataset
 
-
-def test_evaluation_dataset_has_no_backend_or_name():
-    ds = EvaluationDataset.from_list([{"user_input": "q"}])
-    assert not hasattr(ds, "backend")
-    assert not hasattr(ds, "name")
+    sample = SingleTurnSample(
+        user_input="Q",
+        response="A",
+        reference_contexts=["ctx"],
+        persona_name="Researcher",
+        query_style="FORMAL",
+        query_length="SHORT",
+    )
+    Dataset(
+        "ds",
+        "local/jsonl",
+        data_model=SingleTurnSample,
+        data=[sample],
+        root_dir=str(tmp_path),
+    ).save()
+    (loaded,) = Dataset.load(
+        "ds", "local/jsonl", data_model=SingleTurnSample, root_dir=str(tmp_path)
+    )
+    assert loaded == sample

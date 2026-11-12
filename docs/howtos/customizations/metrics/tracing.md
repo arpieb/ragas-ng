@@ -26,7 +26,7 @@ trace.set_tracer_provider(provider)
 Then score as usual. The trace appears in your backend:
 
 ```python
-from datasets import load_dataset
+from datasets import load_dataset  # pip install datasets
 from openai import OpenAI
 
 from ragas import Dataset, metrics_experiment

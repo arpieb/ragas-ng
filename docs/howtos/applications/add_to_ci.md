@@ -14,7 +14,7 @@ A Ragas CI test is an ordinary Pytest test that scores a dataset with [`metrics_
 
 ```python
 import pytest
-from datasets import load_dataset
+from datasets import load_dataset  # pip install datasets
 from openai import AsyncOpenAI
 
 from ragas import Dataset, check, metrics_experiment

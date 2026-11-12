@@ -6,7 +6,10 @@ license = {file = "LICENSE"}
 dependencies = [
     # Core dependencies
     "numpy>=1.21.0,<3.0.0",
-    "datasets>=4.0.0",
+    # Dataset/Experiment/Testset.to_pandas() and `ragas hello-world`. It used
+    # to arrive only through Hugging Face `datasets`, which is no longer a
+    # dependency (#258). pyarrow is not needed.
+    "pandas>=2.0.0",
     "tiktoken",
     "pydantic>=2.0.0",
     "diskcache>=5.6.3",
@@ -20,8 +23,7 @@ dependencies = [
     # route client-less calls here.
     "litellm",
     # Tracing. The API package only -- spans are a no-op unless the user
-    # configures an SDK, which is how a library should behave. EvaluationResult
-    # .traces comes from the native run tree, so it works without one.
+    # configures an SDK, which is how a library should behave.
     "opentelemetry-api",
     # Requests/tokens-per-minute limits for LLM calls (RateLimit, #171). Pure
     # Python, no required dependencies.

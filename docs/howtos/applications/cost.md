@@ -43,7 +43,7 @@ Let's use the `get_token_usage_for_openai` parser to calculate the token usage f
 
 
 ```python
-from datasets import load_dataset
+from datasets import load_dataset  # pip install datasets
 
 from ragas import Dataset
 from ragas.dataset_schema import SingleTurnSample

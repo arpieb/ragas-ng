@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from ragas import Dataset, experiment
 from ragas.backends.flat import decode_flat_row, encode_flat_rows
 from ragas.backends.local_csv import LocalCSVBackend
-from ragas.dataset_schema import EvaluationDataset, SingleTurnSample
+from ragas.dataset_schema import SingleTurnSample
 
 
 @pytest.fixture
@@ -70,15 +70,20 @@ async def test_experiment_rows_that_differ_are_saved(tmp_path):
     assert notes == {"one": "", "two": "only on some rows"}
 
 
-def test_evaluation_dataset_to_csv_with_mixed_sample_fields(tmp_path):
-    ds = EvaluationDataset(
+def test_testset_to_csv_with_mixed_sample_fields(tmp_path):
+    from ragas.testset import Testset, TestsetSample
+
+    ds = Testset(
         samples=[
-            SingleTurnSample(user_input="q1", retrieved_contexts=["a", "b"]),
-            SingleTurnSample(
-                user_input="q2",
-                reference_contexts=["c"],
-                reference_contexts_metadata=[{"source": "x.md"}],
-            ),
+            TestsetSample(eval_sample=s, synthesizer_name="t")
+            for s in (
+                SingleTurnSample(user_input="q1", retrieved_contexts=["a", "b"]),
+                SingleTurnSample(
+                    user_input="q2",
+                    reference_contexts=["c"],
+                    reference_contexts_metadata=[{"source": "x.md"}],
+                ),
+            )
         ]
     )
     path = tmp_path / "ds.csv"

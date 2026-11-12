@@ -40,6 +40,10 @@ REMOVED_MODULES = [
 
 # (module, name) pairs that must not resolve.
 REMOVED_NAMES = [
+    # #258: a Dataset of SingleTurnSample / MultiTurnSample replaces them
+    ("ragas", "EvaluationDataset"),
+    ("ragas.dataset_schema", "EvaluationDataset"),
+    ("ragas.dataset_schema", "RagasDataset"),
     # #257: metrics_experiment / summarize / check replace them
     ("ragas", "evaluate"),
     ("ragas", "aevaluate"),

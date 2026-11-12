@@ -6513,13 +6513,13 @@ wheels = [
 name = "ragas-ng"
 source = { editable = "." }
 dependencies = [
-    { name = "datasets" },
     { name = "diskcache" },
     { name = "instructor" },
     { name = "litellm" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "opentelemetry-api" },
+    { name = "pandas" },
     { name = "pillow" },
     { name = "pydantic" },
     { name = "pyrate-limiter" },
@@ -6638,7 +6638,6 @@ workflow-lint = [
 requires-dist = [
     { name = "ag-ui-protocol", marker = "extra == 'ag-ui'", specifier = ">=0.1.9" },
     { name = "datacompy", marker = "extra == 'all'" },
-    { name = "datasets", specifier = ">=4.0.0" },
     { name = "diskcache", specifier = ">=5.6.3" },
     { name = "dspy", extras = ["optuna"], marker = "extra == 'dspy'", specifier = ">=3" },
     { name = "gitpython", marker = "extra == 'all'" },
@@ -6654,6 +6653,7 @@ requires-dist = [
     { name = "nltk", marker = "extra == 'all'" },
     { name = "numpy", specifier = ">=1.21.0,<3.0.0" },
     { name = "opentelemetry-api" },
+    { name = "pandas", specifier = ">=2.0.0" },
     { name = "pandas", marker = "extra == 'all'" },
     { name = "pillow", specifier = ">=10.4.0" },
     { name = "pydantic", specifier = ">=2.0.0" },

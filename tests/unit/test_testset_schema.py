@@ -66,10 +66,7 @@ def test_testset_to_dataset_rejects_mixed_sample_types():
         testset.to_dataset("ts")
 
 
-def test_testset_is_no_longer_a_ragas_dataset():
-    from ragas.dataset_schema import RagasDataset
-
-    assert not issubclass(RagasTestset, RagasDataset)
+def test_testset_has_no_evaluation_dataset_converters():
     for name in ("to_evaluation_dataset", "to_hf_dataset", "from_hf_dataset"):
         assert not hasattr(RagasTestset, name)
 
