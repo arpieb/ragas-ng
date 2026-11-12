@@ -1,0 +1,17 @@
+# Keeps the SHA-pinned GitHub Actions current (#247). Dependabot updates the
+# SHA and its `# vX.Y.Z` comment together.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    # Wait two weeks after a release before proposing it, so a compromised
+    # or broken release has time to be noticed and pulled.
+    cooldown:
+      default-days: 14
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
