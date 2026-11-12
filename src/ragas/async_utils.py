@@ -168,6 +168,10 @@ _SKIPPED: t.Any = object()
 _CANCEL_POLL_SECONDS = 0.05
 
 
+def _errors_last(task: asyncio.Task) -> bool:
+    return not task.cancelled() and task.exception() is not None
+
+
 @contextlib.asynccontextmanager
 async def concurrent_results(
     coroutines: t.Sequence[t.Coroutine],
@@ -235,7 +239,10 @@ async def concurrent_results(
             done, pending = await asyncio.wait(
                 pending, timeout=timeout, return_when=asyncio.FIRST_COMPLETED
             )
-            for task in done:
+            # Tasks that finished together: results before errors, so a
+            # fail-fast stop never drops a result that was already there
+            # (``done`` is a set; its order is arbitrary).
+            for task in sorted(done, key=_errors_last):
                 if task.cancelled():
                     continue
                 error = task.exception()
