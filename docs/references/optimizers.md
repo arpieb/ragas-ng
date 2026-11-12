@@ -203,7 +203,7 @@ metric.train(
 Optimizers require annotated datasets with ground truth scores. The keys of `prompts` are the metric's `get_prompts()` names:
 
 ```python
-from ragas.dataset_schema import (
+from ragas.optimizers.annotations import (
     PromptAnnotation,
     SampleAnnotation,
     SingleMetricAnnotation,
@@ -229,6 +229,10 @@ dataset = SingleMetricAnnotation(
     samples=[sample, ...],  # 20-50+ samples recommended
 )
 ```
+
+::: ragas.optimizers.annotations
+    options:
+        members_order: "source"
 
 ## Loss Functions
 

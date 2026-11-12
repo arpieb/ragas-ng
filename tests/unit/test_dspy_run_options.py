@@ -15,10 +15,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from ragas.dataset_schema import SingleMetricAnnotation
 from ragas.llms import llm_factory
 from ragas.losses import MSELoss
 from ragas.metrics.collections.aspect_critic.util import AspectCriticPrompt
+from ragas.optimizers.annotations import SingleMetricAnnotation
 from ragas.run_config import RunConfig
 
 

@@ -5,7 +5,6 @@ import logging
 import random
 import re
 import typing as t
-from uuid import UUID
 
 import numpy as np
 from pydantic import BaseModel
@@ -13,14 +12,10 @@ from tqdm.auto import tqdm
 
 from ragas.async_utils import run_sync
 from ragas.callbacks import new_group
-from ragas.dataset_schema import (
-    EvaluationDataset,
-    EvaluationResult,
-    SampleAnnotation,
-    SingleMetricAnnotation,
-)
 from ragas.executor import Executor
 from ragas.losses import Loss
+from ragas.optimizers._scoring import RowScores, ascore_rows
+from ragas.optimizers.annotations import SampleAnnotation, SingleMetricAnnotation
 from ragas.optimizers.base import Optimizer
 from ragas.optimizers.utils import hamming_distance
 from ragas.prompt.metrics.base_prompt import BasePrompt
@@ -185,7 +180,7 @@ class GeneticOptimizer(Optimizer):
     A genetic algorithm optimizer that balances exploration and exploitation.
 
     Tunes the instructions of a collections metric's prompts. Each candidate
-    is scored on a copy of the metric through ``evaluate()``, so the metric
+    is scored by running a copy of the metric over the annotations, so the metric
     being optimized is never modified. ``config`` (``optimizer_config``)
     takes ``population_size`` (default 3), ``num_demonstrations`` (examples
     per reverse-engineered instruction, default 3) and ``sample_size``
@@ -487,15 +482,14 @@ class GeneticOptimizer(Optimizer):
             inputs={"candidate": candidate},
             callbacks=callbacks,
         )
-        batch, target = self._get_evaluation_dataset(dataset)
-        results = await self.aevaluate_candidate(
+        rows, target = self._scoring_rows(dataset)
+        results = await self.ascore_candidate(
             candidate=candidate,
-            eval_dataset=batch,
+            rows=rows,
             run_config=run_config,
             batch_size=batch_size,
             callbacks=candidate_grp,
             raise_exceptions=raise_exceptions,
-            run_id=candidate_rm.run_id,
             parent_pbar=parent_pbar,
         )
 
@@ -538,11 +532,11 @@ class GeneticOptimizer(Optimizer):
         self,
         candidate: t.Dict[str, str],
         dataset: SingleMetricAnnotation,
-        results: EvaluationResult,
+        results: RowScores,
         target: t.List[float],
         callbacks: Callbacks = None,
     ) -> t.Dict[str, t.List[str]]:
-        prediction = self._predictions(results)
+        prediction = results.scores
         indices = [idx for idx in range(len(target)) if target[idx] != prediction[idx]]
         traces = [trace.get(self._metric.name, {}) for trace in results.traces]
         prompts = self._with_instructions(candidate)
@@ -586,120 +580,100 @@ class GeneticOptimizer(Optimizer):
 
         return feedback_candidates
 
-    def _get_evaluation_dataset(
+    def _scoring_rows(
         self, dataset: SingleMetricAnnotation
-    ) -> t.Tuple[EvaluationDataset, t.List[float]]:
+    ) -> t.Tuple[t.List[t.Dict[str, t.Any]], t.List[float]]:
+        """The rows to score candidates on (``metric_input``s) and their targets.
+
+        Accepted annotations target their metric output; a rejected binary
+        annotation targets the opposite verdict. Other rejected ones are left out.
+        """
         output_type = getattr(self._metric, "output_type", None)
         if output_type is None:
             raise ValueError("No output type provided for the metric.")
 
-        training_ids = []
+        rows = []
         y_true = []
-        for idx, sample in enumerate(dataset):
+        for sample in dataset:
             if sample["is_accepted"]:
-                training_ids.append(idx)
+                rows.append(sample.metric_input)
                 y_true.append(sample.metric_output)
-            elif not sample["is_accepted"] and output_type.name == "BINARY":
-                training_ids.append(idx)
+            elif output_type.name == "BINARY":
+                rows.append(sample.metric_input)
                 y_true.append(int(not sample.metric_output))
+        return rows, y_true
 
-        dataset = dataset.select(training_ids)
-        eval_dataset = dataset.to_evaluation_dataset()
-        return eval_dataset, y_true
-
-    async def aevaluate_candidate(
+    async def ascore_candidate(
         self,
         *,
         candidate: t.Dict[str, str],
-        eval_dataset: EvaluationDataset,
+        rows: t.Sequence[t.Mapping[str, t.Any]],
         run_config: t.Optional[RunConfig] = None,
         batch_size: t.Optional[int] = None,
         callbacks: t.Optional[Callbacks] = None,
         raise_exceptions: bool = True,
-        run_id: t.Optional[UUID] = None,
         parent_pbar: t.Optional[tqdm] = None,
-    ) -> EvaluationResult:
-        """Score ``candidate`` on ``eval_dataset`` (a copy of the metric)."""
-        # evaluate() without its deprecation warning, which would fire once
-        # per candidate.
-        from ragas.evaluation import _aevaluate_in_run_scope
+    ) -> RowScores:
+        """Score ``candidate`` (a copy of the metric) on each of ``rows``.
 
-        results = await _aevaluate_in_run_scope(
-            dataset=eval_dataset,
-            # typed for legacy metrics; runs collections metrics natively (#221)
-            metrics=[t.cast(t.Any, self.candidate_metric(candidate))],
-            llm=None,
-            embeddings=None,
-            experiment_name=None,
+        The scoring run nests under ``callbacks``, and the result carries each
+        row's traced prompt calls for feedback mutation.
+        """
+        return await ascore_rows(
+            self.candidate_metric(candidate),
+            rows,
             run_config=run_config,
-            token_usage_parser=None,
-            raise_exceptions=raise_exceptions,
-            column_map=None,
-            show_progress=True,
             batch_size=batch_size,
-            _run_id=run_id,
-            _pbar=parent_pbar,
-            _callbacks=callbacks,
-            return_executor=False,
+            callbacks=callbacks,
+            raise_exceptions=raise_exceptions,
+            pbar=parent_pbar,
         )
-        return t.cast(EvaluationResult, results)
 
-    def evaluate_candidate(
+    def score_candidate(
         self,
         *,
         candidate: t.Dict[str, str],
-        eval_dataset: EvaluationDataset,
+        rows: t.Sequence[t.Mapping[str, t.Any]],
         run_config: t.Optional[RunConfig] = None,
         batch_size: t.Optional[int] = None,
         callbacks: t.Optional[Callbacks] = None,
         raise_exceptions: bool = True,
-        run_id: t.Optional[UUID] = None,
         parent_pbar: t.Optional[tqdm] = None,
-    ) -> EvaluationResult:
-        """Sync ``aevaluate_candidate``."""
+    ) -> RowScores:
+        """Sync ``ascore_candidate``."""
         return run_sync(
-            self.aevaluate_candidate(
+            self.ascore_candidate(
                 candidate=candidate,
-                eval_dataset=eval_dataset,
+                rows=rows,
                 run_config=run_config,
                 batch_size=batch_size,
                 callbacks=callbacks,
                 raise_exceptions=raise_exceptions,
-                run_id=run_id,
                 parent_pbar=parent_pbar,
             )
         )
 
-    def _predictions(self, results: EvaluationResult) -> t.List[float]:
-        """The metric's score for each sample in ``results``."""
-        values = results.to_pandas()[self._metric.name].values
-        y_pred = values.tolist() if isinstance(values, np.ndarray) else [values]
-        return t.cast(t.List[float], y_pred)
-
     def _predict(
         self,
         candidate: t.Dict[str, str],
-        eval_dataset: EvaluationDataset,
+        rows: t.Sequence[t.Mapping[str, t.Any]],
         *,
         run_config: t.Optional[RunConfig],
         batch_size: t.Optional[int],
         callbacks: t.Optional[Callbacks],
         raise_exceptions: bool,
-        run_id: t.Optional[UUID],
         parent_pbar: t.Optional[tqdm],
     ) -> t.List[float]:
-        """``candidate``'s score for each sample of ``eval_dataset``."""
-        results = self.evaluate_candidate(
+        """``candidate``'s score for each of ``rows``."""
+        return self.score_candidate(
             candidate=candidate,
-            eval_dataset=eval_dataset,
+            rows=rows,
             run_config=run_config,
             batch_size=batch_size,
             callbacks=callbacks,
             raise_exceptions=raise_exceptions,
-            run_id=run_id,
             parent_pbar=parent_pbar,
-        )
-        return self._predictions(results)
+        ).scores
 
     def evaluate_fitness(
         self,
@@ -715,23 +689,21 @@ class GeneticOptimizer(Optimizer):
     ) -> t.List[float]:
         fitness_scores = []
 
-        eval_dataset, y_true = self._get_evaluation_dataset(dataset)
+        rows, y_true = self._scoring_rows(dataset)
 
         initialize_population_rm, initialize_population_grp = new_group(
             name="Evaluating candidate fitness",
             inputs={"candidates": candidates},
             callbacks=callbacks,
         )
-        run_id = initialize_population_rm.run_id
         for candidate in candidates:
             y_pred = self._predict(
                 candidate,
-                eval_dataset,
+                rows,
                 run_config=run_config,
                 batch_size=batch_size,
                 callbacks=initialize_population_grp,
                 raise_exceptions=raise_exceptions,
-                run_id=run_id,
                 parent_pbar=parent_pbar,
             )
             # Loss takes (predicted, actual). fitness() negates lower-is-better
@@ -773,24 +745,22 @@ class GeneticOptimizer(Optimizer):
         raise_exceptions: bool = True,
         parent_pbar: t.Optional[tqdm] = None,
     ):
-        eval_dataset, y_true = self._get_evaluation_dataset(dataset)
+        rows, y_true = self._scoring_rows(dataset)
 
         cross_over_rm, cross_over_grp = new_group(
             name="Cross-over mutation",
             inputs={"candidates": candidates},
             callbacks=callbacks,
         )
-        run_id = cross_over_rm.run_id
         prediction_vectors = []
         for candidate in candidates:
             y_pred = self._predict(
                 candidate,
-                eval_dataset,
+                rows,
                 run_config=run_config,
                 batch_size=batch_size,
                 callbacks=cross_over_grp,
                 raise_exceptions=raise_exceptions,
-                run_id=run_id,
                 parent_pbar=parent_pbar,
             )
             prediction = [int(pred == true) for pred, true in zip(y_pred, y_true)]

@@ -6,7 +6,7 @@ import random
 
 import pytest
 
-from ragas.dataset_schema import SampleAnnotation, SingleMetricAnnotation
+from ragas.optimizers.annotations import SampleAnnotation, SingleMetricAnnotation
 
 
 def _annotations(n: int = 20) -> SingleMetricAnnotation:

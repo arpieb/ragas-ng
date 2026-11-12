@@ -17,7 +17,7 @@ from ragas.prompt.metrics.base_prompt import BasePrompt
 
 if t.TYPE_CHECKING:
     from ragas.config import DemonstrationConfig, InstructionConfig
-    from ragas.dataset_schema import MetricAnnotation, SingleMetricAnnotation
+    from ragas.optimizers.annotations import MetricAnnotation, SingleMetricAnnotation
     from ragas.run_config import RunConfig
 
 _LIST_ANNOTATION = re.compile(
