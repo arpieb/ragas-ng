@@ -131,10 +131,6 @@ def create_metric_decorator():
                 )
                 # Note: allowed_values is inherited from SimpleBaseMetric
 
-                def _validate_result_value(self, result_value):
-                    """Validate result value using the appropriate validator mixin."""
-                    return self.validate_result_value(result_value)
-
                 def _create_positional_error(self, args: tuple, kwargs: dict) -> str:
                     """Create error message for positional arguments."""
                     func_param_names = list(sig.parameters.keys())
@@ -296,31 +292,22 @@ def create_metric_decorator():
                     # Validate inputs before execution
                     func_kwargs = self._validate_inputs(args, kwargs)
 
-                    try:
-                        # Execute the function based on its type
-                        if is_async:
-                            # For async functions, await the result
-                            result = await func(**func_kwargs)
-                        else:
-                            # For sync functions, run directly
-                            result = func(**func_kwargs)
+                    # Errors from the function propagate, and an invalid value
+                    # raises ValueError, the same as SimpleLLMMetric (#239), so
+                    # callers' raise_exceptions settings apply.
+                    if is_async:
+                        result = await func(**func_kwargs)
+                    else:
+                        result = func(**func_kwargs)
 
-                        # Ensure result is a MetricResult
-                        if not isinstance(result, MetricResult):
-                            # Wrap plain values in MetricResult
-                            result = MetricResult(value=result, reason=None)
+                    if not isinstance(result, MetricResult):
+                        result = MetricResult(value=result, reason=None)
 
-                        # Validate the result based on metric type
-                        validation_error = self._validate_result_value(result.value)
-                        if validation_error:
-                            return MetricResult(value=None, reason=validation_error)
+                    error = self.validate_result_value(result.value)
+                    if error:
+                        raise ValueError(error)
 
-                        return result
-
-                    except Exception as e:
-                        # Handle errors gracefully
-                        error_msg = f"Error executing metric {self.name}: {str(e)}"
-                        return MetricResult(value=None, reason=error_msg)
+                    return result
 
                 def __call__(self, *args, **kwargs):
                     """Make the metric instance directly callable using the original function."""

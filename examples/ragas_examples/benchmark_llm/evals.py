@@ -22,9 +22,13 @@ from .prompt import DEFAULT_MODEL, run_prompt
 @discrete_metric(name="discount_accuracy", allowed_values=["correct", "incorrect"])
 def discount_accuracy(prediction: str, expected_discount):
     """Check if the discount prediction is correct."""
-    parsed_json = json.loads(prediction)
-    predicted_discount = parsed_json.get("discount_percentage")
     expected_discount_int = int(expected_discount)
+    try:
+        predicted_discount = json.loads(prediction).get("discount_percentage")
+    except (json.JSONDecodeError, AttributeError) as e:
+        # Malformed output is a wrong answer, not a failed row: metric
+        # errors propagate, and the experiment would drop the row.
+        return MetricResult(value="incorrect", reason=f"Unparseable response: {e}")
 
     if predicted_discount == expected_discount_int:
         return MetricResult(
