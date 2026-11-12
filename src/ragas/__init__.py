@@ -5,6 +5,7 @@ from ragas.dataset_schema import EvaluationDataset, MultiTurnSample, SingleTurnS
 from ragas.evaluation import aevaluate, evaluate
 from ragas.experiment import Experiment, experiment, version_experiment
 from ragas.run_config import RunConfig
+from ragas.scoring import check, metrics_experiment, summarize
 from ragas.tokenizers import (
     BaseTokenizer,
     HuggingFaceTokenizer,
@@ -35,6 +36,9 @@ __all__ = [
     "Experiment",
     "experiment",
     "version_experiment",
+    "metrics_experiment",
+    "summarize",
+    "check",
     "BaseTokenizer",
     "TiktokenWrapper",
     "HuggingFaceTokenizer",

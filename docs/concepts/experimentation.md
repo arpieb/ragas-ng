@@ -282,3 +282,35 @@ async def evaluated_experiment(row):
 ```
 
 This integration allows you to automatically calculate and store metric scores alongside your experiment results, making it easy to track performance improvements over time.
+
+### Scoring a dataset in one call: `metrics_experiment`
+
+When the rows already hold everything the metrics need, such as the outputs of a run you've recorded, `metrics_experiment()` builds the experiment for you. Each row's fields go to each metric's `ascore()` by name: `user_input`, `response`, `retrieved_contexts`, `reference` and so on. Each saved row is the dataset row plus a `<metric>` score column and a `<metric>_reason` column per metric.
+
+```python
+from ragas import Dataset, check, metrics_experiment, summarize
+from ragas.dataset_schema import SingleTurnSample
+from ragas.llms import llm_factory
+from ragas.metrics.collections import Faithfulness, FactualCorrectness
+
+llm = llm_factory("gpt-6-luna")
+dataset = Dataset(
+    "rag_runs", "local/csv", root_dir="./data", data_model=SingleTurnSample
+)
+
+run = metrics_experiment([Faithfulness(llm=llm), FactualCorrectness(llm=llm)])
+exp = await run.arun(dataset, name="nightly")  # or run.run(...) from sync code
+
+summarize(exp)
+# {'faithfulness': {'mean': 0.86, 'count': 48, 'missing': 2}, ...}
+check(exp, min_mean={"faithfulness": 0.8})  # raises ThresholdError for CI
+```
+
+- **Rows:** `SingleTurnSample` / `MultiTurnSample` objects, or dicts with the same field names. A dict is multi-turn when its `user_input` is a list of messages. Use `column_map={"user_input": "question"}` when your columns are named differently. All rows must be the same sample type.
+- **Up-front checks:** a required input that no row has, or a metric that can't score the sample type, raises `ValueError` before any row runs.
+- **Errors:** a metric that raises on a row scores NaN there, the error is logged, and the row is kept. `summarize()` counts it as missing, and `check()` fails on it unless `allow_missing` allows it. With `raise_exceptions=True` the run stops on the first error.
+- **Models:** collections metrics take their LLM and embeddings at construction. A metric whose `ascore()` takes `llm` per call, such as `DiscreteMetric`, gets `metrics_experiment(..., llm=llm)`. There are no default models.
+- **Token usage:** pass `usage=TokenUsageCollector()` and read `usage.total_tokens()` / `usage.total_cost(...)` after the run.
+- **Other options:** `backend`, `max_workers`, `raise_exceptions` and `save_partial` work as they do for `@experiment`. `run_config` sets the LLM calls' timeouts and retries, and its `timeout` also bounds each metric call.
+
+`summarize()` and `check()` work on any experiment with these columns, including one reloaded from its backend. Pass `metrics=[...]` to name the columns yourself.

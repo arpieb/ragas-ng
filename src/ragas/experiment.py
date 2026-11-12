@@ -1,6 +1,13 @@
 """Experiments hold the results of an experiment against a dataset."""
 
-__all__ = ["Experiment", "experiment", "version_experiment"]
+__all__ = [
+    "Experiment",
+    "experiment",
+    "version_experiment",
+    "metrics_experiment",
+    "summarize",
+    "check",
+]
 
 import asyncio
 import logging
@@ -16,6 +23,14 @@ from ragas.callbacks import ChainType, traced
 from ragas.dataset import Dataset, DataTable
 from ragas.names import memorable_names
 from ragas.utils import find_git_root
+
+if t.TYPE_CHECKING:
+    from ragas.scoring import (  # noqa: F401  (resolved lazily, below)
+        MetricsExperiment,
+        check,
+        metrics_experiment,
+        summarize,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -522,3 +537,16 @@ def experiment(
         return t.cast(ExperimentProtocol, wrapper)
 
     return decorator
+
+
+# Defined in ragas.scoring, which builds on ExperimentWrapper; resolved lazily
+# so that importing either module first works.
+_SCORING_NAMES = ("metrics_experiment", "summarize", "check", "MetricsExperiment")
+
+
+def __getattr__(name: str) -> t.Any:
+    if name in _SCORING_NAMES:
+        import ragas.scoring
+
+        return getattr(ragas.scoring, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
