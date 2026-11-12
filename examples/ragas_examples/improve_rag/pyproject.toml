@@ -8,15 +8,13 @@ version = "0.1.0"
 description = "Improve RAG evaluation example using Ragas - compare naive vs agentic RAG"
 requires-python = ">=3.11"
 dependencies = [
-    "ragas-ng[all]",
+    "ragas-ng",
     "openai>=1.0.0",
     "python-dotenv>=1.0.0",
     "mlflow>=2.0.0",
-    "langchain>=0.1.0",
-    "langchain-community>=0.0.10",
-    "langchain-text-splitters>=0.0.1",
     "datasets>=2.0.0",
     "rank-bm25>=0.2.2",
+    "openai-agents>=0.2.9",  # agentic mode
 ]
 
 [project.optional-dependencies]

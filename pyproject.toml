@@ -50,7 +50,10 @@ all = [
     "datacompy",
     "sacrebleu",
     "llama_index",
-    "r2r",
+    # r2r's releases support only Python <3.13 and pin tiktoken<0.9, which
+    # has no wheel for 3.14; uv ignores the upper bound, so without the marker
+    # `ragas-ng[all]` fails to install on 3.13+ (#270).
+    "r2r; python_version < '3.13'",
     "GitPython"
 ]
 

@@ -965,3 +965,9 @@ The last step of replacing `evaluate()` (#241). See [From `evaluate()` to experi
 - **Hugging Face `datasets` is no longer installed with ragas,** and neither is `pyarrow`, which only `datasets` needed. To load data from the Hub, `pip install datasets`.
 - **`pandas` is now a direct dependency.** It used to arrive only through `datasets`, and `to_pandas()` and `ragas hello-world` need it.
 - **`huggingface_hub` is no longer guaranteed.** `HuggingFaceEmbeddings(use_api=True)` needs `pip install huggingface-hub`, and says so if it's missing. The local `sentence-transformers` path brings its own copy.
+
+## Quickstart projects install on Python 3.13+; `[all]` skips r2r there ([#270](https://github.com/arpieb/ragas-ng/issues/270))
+
+- **`ragas-ng[all]` no longer installs `r2r` on Python 3.13 or newer.** r2r's releases support only Python <3.13 and pin `tiktoken<0.9`, which has no wheel for 3.14. Because uv ignores upper bounds on `requires-python`, `ragas-ng[all]` failed to install there. The r2r integration (`ragas.integrations.r2r`) doesn't import r2r, so it still works. If you need the r2r client itself, use Python 3.12 or older.
+- **The `rag_eval` and `improve_rag` quickstart templates depend on what they import instead of `ragas-ng[all]`.** `improve_rag` no longer lists LangChain packages, which it never imported, and now lists `openai-agents`, which its agentic mode needs. A project generated before this change can replace `ragas-ng[all]` in its `pyproject.toml` with the new list.
+- **The `ragas-ng-examples` package ships each template's `pyproject.toml`.** In 2026.11.0 it didn't, so `ragas quickstart` with `ragas-ng-examples` installed created a project with nothing for `uv sync` to install. Without `ragas-ng-examples`, the CLI downloads templates from GitHub and wasn't affected.
