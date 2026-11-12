@@ -7,13 +7,19 @@ import tempfile
 import pytest
 from PIL import Image
 
+from ragas.metrics.collections.image_sources import (
+    ImageSourcePolicy,
+    is_image_path_or_url,
+    process_image_to_base64,
+)
 from ragas.metrics.collections.multi_modal_faithfulness.util import (
     MULTIMODAL_FAITHFULNESS_INSTRUCTION,
     MultiModalFaithfulnessOutput,
     build_multimodal_message_content,
-    is_image_path_or_url,
-    process_image_to_base64,
 )
+
+# Local image files are read only from a directory the caller names (#229).
+TMP_POLICY = ImageSourcePolicy(local_dir=tempfile.gettempdir())
 
 
 class TestImageProcessingUtilities:
@@ -61,7 +67,7 @@ class TestImageProcessingUtilities:
             temp_path = f.name
 
         try:
-            result = process_image_to_base64(temp_path)
+            result = process_image_to_base64(temp_path, TMP_POLICY)
             assert result is not None
             assert "mime_type" in result
             assert "encoded_data" in result
@@ -126,6 +132,7 @@ class TestBuildMultimodalMessageContent:
                 instruction=MULTIMODAL_FAITHFULNESS_INSTRUCTION,
                 response="The image shows green color.",
                 retrieved_contexts=[temp_path, "Green is a color."],
+                image_policy=TMP_POLICY,
             )
 
             # Should have both text and image blocks
