@@ -56,17 +56,17 @@ ragas quickstart rag_eval -o ./my-project # copy one
 | `ragas_examples.prompt_evals` | `prompt_evals` | Prompt variants |
 | `ragas_examples.judge_alignment` | `judge_alignment` | How well an LLM judge agrees with human labels |
 | `ragas_examples.benchmark_llm` | `benchmark_llm` | Several LLMs on the same task |
-| `ragas_examples.ag_ui_agent_experiments` | | An AG-UI agent server (see the [AG-UI guide](../docs/howtos/integrations/ag_ui.md)) |
+| `ragas_examples.ag_ui_agent_experiments` | | An AG-UI agent server (see the [AG-UI guide](https://arpieb.github.io/ragas-ng/howtos/integrations/ag_ui/)) |
 
 Standalone scripts in this folder:
 
-- `iterate_prompt/`: the [prompt iteration guide](../docs/howtos/applications/iterate_prompt.md) example.
-- `gdrive_backend_example.py`, `gdrive_append_example.py`: datasets stored in Google Sheets. See [Storage backends](../docs/howtos/customizations/storage_backends.md#google-drive).
-- `oci_genai_example.py`: Oracle Cloud Infrastructure Generative AI models through LiteLLM (`llm_factory("oci/...")`) scored with `metrics_experiment()`. See the [OCI guide](../docs/howtos/integrations/oci_genai.md).
+- `iterate_prompt/`: the [prompt iteration guide](https://arpieb.github.io/ragas-ng/howtos/applications/iterate_prompt/) example.
+- `gdrive_backend_example.py`, `gdrive_append_example.py`: datasets stored in Google Sheets. See [Storage backends](https://arpieb.github.io/ragas-ng/howtos/customizations/storage_backends/#google-drive).
+- `oci_genai_example.py`: Oracle Cloud Infrastructure Generative AI models through LiteLLM (`llm_factory("oci/...")`) scored with `metrics_experiment()`. See the [OCI guide](https://arpieb.github.io/ragas-ng/howtos/integrations/oci_genai/).
 
 ## Running an example
 
-Most examples call OpenAI, so set your key first. The `llamaIndex_agent_evals` example uses Gemini (`GOOGLE_API_KEY`). The [quickstart guide](../docs/getstarted/quickstart.md) shows how to point the `rag_eval` template at other providers.
+Most examples call OpenAI, so set your key first. The `llamaIndex_agent_evals` example uses Gemini (`GOOGLE_API_KEY`). The [quickstart guide](https://arpieb.github.io/ragas-ng/getstarted/quickstart/) shows how to point the `rag_eval` template at other providers.
 
 ```bash
 export OPENAI_API_KEY=your_key_here
@@ -83,7 +83,7 @@ Each template names its models once, near the top of the module that uses them. 
 RAGAS_EXAMPLE_APP_MODEL=gpt-5.6-terra RAGAS_EXAMPLE_JUDGE_MODEL=gpt-6.1-sol python -m ragas_examples.rag_eval.evals
 ```
 
-The app's client must reach the model you name. Most templates use an OpenAI client, so a non-OpenAI model also needs that provider's OpenAI-compatible endpoint (see the [quickstart guide](../docs/getstarted/quickstart.md)).
+The app's client must reach the model you name. Most templates use an OpenAI client, so a non-OpenAI model also needs that provider's OpenAI-compatible endpoint (see the [quickstart guide](https://arpieb.github.io/ragas-ng/getstarted/quickstart/)).
 
 Run an example as a module, or with its console script:
 

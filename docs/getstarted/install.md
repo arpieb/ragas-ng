@@ -10,6 +10,8 @@ uv add ragas-ng
 
 Optional features ship as extras, for example `ragas-ng[all]`, `ragas-ng[tracing]` or `ragas-ng[dspy]`.
 
+ragas-ng uses calendar versioning, `YYYY.M.PATCH` (for example `2026.11.0`). Its version numbers don't correspond to upstream ragas's `0.x` releases.
+
 !!! warning "Don't install alongside upstream `ragas`"
     `ragas-ng` and upstream's `ragas` both provide the `ragas` import package,
     so installing both in one environment makes one overwrite the other.

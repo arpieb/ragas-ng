@@ -837,6 +837,7 @@ The private methods `_calculate_average_precision` (ContextPrecision), `_format_
 ## Published to PyPI as `ragas-ng` ([#242](https://github.com/arpieb/ragas-ng/issues/242))
 
 - The distributions are renamed: `ragas` → **`ragas-ng`**, and `ragas-examples` → **`ragas-ng-examples`**. The import names are unchanged: `import ragas` and `import ragas_examples`. Extras keep their names: `pip install "ragas-ng[all]"`.
+- Versions use calendar versioning, `YYYY.M.PATCH` (for example `2026.11.0`), so they can't be confused with upstream's `0.x` releases. A ragas-ng version says nothing about which upstream release it matches. Pin it like any other version: `ragas-ng>=2026.11`.
 - `pip install ragas` still installs **upstream** ragas. Both distributions provide the `ragas` import package, so don't install both in one environment.
 - The quickstart templates' `pyproject.toml` files depend on `ragas-ng[all]` (they had `ragas[all]>=0.3.0`, which resolved to upstream).
 - Install hints in error messages and the docs say `ragas-ng[...]`. The `ragas[examples]` hint, an extra that never existed here, is now the `ragas-ng-examples` package.

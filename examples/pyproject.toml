@@ -2,12 +2,12 @@
 name = "ragas-ng-examples"
 description = "Examples and quickstart templates for ragas-ng"
 requires-python = ">=3.11"
-license = {text = "Apache-2.0"}
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 authors = [{name = "Ragas Team"}]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -57,7 +57,7 @@ ragas-judge-alignment = "ragas_examples.judge_alignment.evals:main"
 
 [project.urls]
 Homepage = "https://github.com/arpieb/ragas-ng"
-Documentation = "https://github.com/arpieb/ragas-ng/tree/main/docs"
+Documentation = "https://arpieb.github.io/ragas-ng/"
 Code = "https://github.com/arpieb/ragas-ng"
 Issues = "https://github.com/arpieb/ragas-ng/issues"
 
@@ -79,7 +79,7 @@ ragas_examples = [
 readme = {file = ["README.md"], content-type = "text/markdown"}
 
 [build-system]
-requires = ["setuptools>=64", "setuptools_scm>=8"]
+requires = ["setuptools>=77", "setuptools_scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]

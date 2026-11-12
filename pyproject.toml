@@ -2,7 +2,8 @@
 name = "ragas-ng"
 description = "Evaluation framework for RAG and LLM applications"
 requires-python = ">=3.11"
-license = {file = "LICENSE"}
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 dependencies = [
     # Core dependencies
     "numpy>=1.21.0,<3.0.0",
@@ -33,7 +34,7 @@ dynamic = ["version", "readme"]
 
 [project.urls]
 Homepage = "https://github.com/arpieb/ragas-ng"
-Documentation = "https://github.com/arpieb/ragas-ng/tree/main/docs"
+Documentation = "https://arpieb.github.io/ragas-ng/"
 Code = "https://github.com/arpieb/ragas-ng"
 Issues = "https://github.com/arpieb/ragas-ng/issues"
 
@@ -140,10 +141,12 @@ reportGeneralTypeIssues = "warning"
 reportReturnType = "warning"
 
 [build-system]
-requires = ["setuptools>=64", "setuptools_scm>=8"]
+requires = ["setuptools>=77", "setuptools_scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
+# Releases are CalVer tags, vYYYY.M.PATCH (see CONTRIBUTING.md#releasing); the
+# default guess-next-dev scheme gives dev versions like 2026.11.1.dev3.
 # Path to version file relative to this pyproject.toml
 version_file = "src/ragas/_version.py"
 
