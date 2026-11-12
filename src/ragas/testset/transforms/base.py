@@ -211,7 +211,6 @@ class Extractor(BaseGraphTransformation):
 @dataclass
 class LLMBasedExtractor(Extractor, PromptMixin):
     llm: InstructorBaseRagasLLM = field(default_factory=_default_llm_factory)
-    merge_if_possible: bool = True
     max_token_limit: int = 32000
     tokenizer: BaseTokenizer = field(default_factory=lambda: DEFAULT_TOKENIZER)
 

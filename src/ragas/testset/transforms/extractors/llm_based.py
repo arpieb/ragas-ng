@@ -14,6 +14,63 @@ class TextWithExtractionLimit(BaseModel):
     max_num: int = 10
 
 
+@dataclass
+class _FirstChunkExtractor(LLMBasedExtractor):
+    """Prompts once with the first ``max_token_limit`` tokens of the text.
+
+    The property is the ``result_field`` of the prompt's output, or None
+    for a node with no ``page_content``.
+    """
+
+    result_field: t.ClassVar[str] = "text"
+
+    if t.TYPE_CHECKING:  # each subclass declares these as fields
+        property_name: str = ""
+        prompt: BasePrompt = t.cast(BasePrompt, None)
+
+    async def extract(self, node: Node) -> t.Tuple[str, t.Any]:
+        node_text = node.get_property("page_content")
+        if node_text is None:
+            return self.property_name, None
+        chunks = self.split_text_by_token_limit(node_text, self.max_token_limit)
+        result = await self.prompt.generate(self.llm, data=StringIO(text=chunks[0]))
+        return self.property_name, getattr(result, self.result_field)
+
+
+@dataclass
+class _PerChunkListExtractor(LLMBasedExtractor):
+    """Prompts once per ``max_token_limit`` tokens and joins the lists.
+
+    Each call asks for at most ``getattr(self, limit_field)`` items, and the
+    property is the ``result_field`` lists of every call, concatenated.
+    """
+
+    result_field: t.ClassVar[str]
+    limit_field: t.ClassVar[str] = "max_num"
+
+    if t.TYPE_CHECKING:  # each subclass declares these as fields
+        property_name: str = ""
+        prompt: BasePrompt = t.cast(BasePrompt, None)
+
+    def _missing(self) -> t.Optional[t.List[str]]:
+        """The property for a node with no ``page_content``."""
+        return None
+
+    async def extract(self, node: Node) -> t.Tuple[str, t.Any]:
+        node_text = node.get_property("page_content")
+        if node_text is None:
+            return self.property_name, self._missing()
+        chunks = self.split_text_by_token_limit(node_text, self.max_token_limit)
+        max_num = getattr(self, self.limit_field)
+        items: t.List[str] = []
+        for chunk in chunks:
+            result = await self.prompt.generate(
+                self.llm, data=TextWithExtractionLimit(text=chunk, max_num=max_num)
+            )
+            items.extend(getattr(result, self.result_field))
+        return self.property_name, items
+
+
 class SummaryExtractorPrompt(BasePrompt[StringIO, StringIO]):
     instruction: str = "Summarize the given text in less than 10 sentences."
     input_model: t.Type[StringIO] = StringIO
@@ -158,7 +215,7 @@ class NERPrompt(BasePrompt[TextWithExtractionLimit, NEROutput]):
 
 
 @dataclass
-class SummaryExtractor(LLMBasedExtractor):
+class SummaryExtractor(_FirstChunkExtractor):
     """
     Extracts a summary from the given text.
 
@@ -173,17 +230,9 @@ class SummaryExtractor(LLMBasedExtractor):
     property_name: str = "summary"
     prompt: SummaryExtractorPrompt = SummaryExtractorPrompt()
 
-    async def extract(self, node: Node) -> t.Tuple[str, t.Any]:
-        node_text = node.get_property("page_content")
-        if node_text is None:
-            return self.property_name, None
-        chunks = self.split_text_by_token_limit(node_text, self.max_token_limit)
-        result = await self.prompt.generate(self.llm, data=StringIO(text=chunks[0]))
-        return self.property_name, result.text
-
 
 @dataclass
-class KeyphrasesExtractor(LLMBasedExtractor):
+class KeyphrasesExtractor(_PerChunkListExtractor):
     """
     Extracts top keyphrases from the given text.
 
@@ -199,22 +248,11 @@ class KeyphrasesExtractor(LLMBasedExtractor):
     prompt: KeyphrasesExtractorPrompt = KeyphrasesExtractorPrompt()
     max_num: int = 5
 
-    async def extract(self, node: Node) -> t.Tuple[str, t.Any]:
-        node_text = node.get_property("page_content")
-        if node_text is None:
-            return self.property_name, None
-        chunks = self.split_text_by_token_limit(node_text, self.max_token_limit)
-        keyphrases = []
-        for chunk in chunks:
-            result = await self.prompt.generate(
-                self.llm, data=TextWithExtractionLimit(text=chunk, max_num=self.max_num)
-            )
-            keyphrases.extend(result.keyphrases)
-        return self.property_name, keyphrases
+    result_field: t.ClassVar[str] = "keyphrases"
 
 
 @dataclass
-class TitleExtractor(LLMBasedExtractor):
+class TitleExtractor(_FirstChunkExtractor):
     """
     Extracts the title from the given text.
 
@@ -229,17 +267,9 @@ class TitleExtractor(LLMBasedExtractor):
     property_name: str = "title"
     prompt: TitleExtractorPrompt = TitleExtractorPrompt()
 
-    async def extract(self, node: Node) -> t.Tuple[str, t.Any]:
-        node_text = node.get_property("page_content")
-        if node_text is None:
-            return self.property_name, None
-        chunks = self.split_text_by_token_limit(node_text, self.max_token_limit)
-        result = await self.prompt.generate(self.llm, data=StringIO(text=chunks[0]))
-        return self.property_name, result.text
-
 
 @dataclass
-class HeadlinesExtractor(LLMBasedExtractor):
+class HeadlinesExtractor(_PerChunkListExtractor):
     """
     Extracts the headlines from the given text.
 
@@ -255,23 +285,11 @@ class HeadlinesExtractor(LLMBasedExtractor):
     prompt: HeadlinesExtractorPrompt = HeadlinesExtractorPrompt()
     max_num: int = 5
 
-    async def extract(self, node: Node) -> t.Tuple[str, t.Any]:
-        node_text = node.get_property("page_content")
-        if node_text is None:
-            return self.property_name, None
-        chunks = self.split_text_by_token_limit(node_text, self.max_token_limit)
-        headlines = []
-        for chunk in chunks:
-            result = await self.prompt.generate(
-                self.llm, data=TextWithExtractionLimit(text=chunk, max_num=self.max_num)
-            )
-            if result:
-                headlines.extend(result.headlines)
-        return self.property_name, headlines
+    result_field: t.ClassVar[str] = "headlines"
 
 
 @dataclass
-class NERExtractor(LLMBasedExtractor):
+class NERExtractor(_PerChunkListExtractor):
     """
     Extracts named entities from the given text.
 
@@ -287,19 +305,11 @@ class NERExtractor(LLMBasedExtractor):
     prompt: BasePrompt[TextWithExtractionLimit, NEROutput] = NERPrompt()
     max_num_entities: int = 10
 
-    async def extract(self, node: Node) -> t.Tuple[str, t.List[str]]:
-        node_text = node.get_property("page_content")
-        if node_text is None:
-            return self.property_name, []
-        chunks = self.split_text_by_token_limit(node_text, self.max_token_limit)
-        entities = []
-        for chunk in chunks:
-            result = await self.prompt.generate(
-                self.llm,
-                data=TextWithExtractionLimit(text=chunk, max_num=self.max_num_entities),
-            )
-            entities.extend(result.entities)
-        return self.property_name, entities
+    result_field: t.ClassVar[str] = "entities"
+    limit_field: t.ClassVar[str] = "max_num_entities"
+
+    def _missing(self) -> t.List[str]:
+        return []
 
 
 class TopicDescription(BaseModel):
@@ -323,7 +333,7 @@ class TopicDescriptionPrompt(BasePrompt[StringIO, TopicDescription]):
 
 
 @dataclass
-class TopicDescriptionExtractor(LLMBasedExtractor):
+class TopicDescriptionExtractor(_FirstChunkExtractor):
     """
     Extracts a concise description of the main topic(s) discussed in the given text.
 
@@ -338,13 +348,7 @@ class TopicDescriptionExtractor(LLMBasedExtractor):
     property_name: str = "topic_description"
     prompt: BasePrompt = TopicDescriptionPrompt()
 
-    async def extract(self, node: Node) -> t.Tuple[str, t.Any]:
-        node_text = node.get_property("page_content")
-        if node_text is None:
-            return self.property_name, None
-        chunks = self.split_text_by_token_limit(node_text, self.max_token_limit)
-        result = await self.prompt.generate(self.llm, data=StringIO(text=chunks[0]))
-        return self.property_name, result.description
+    result_field: t.ClassVar[str] = "description"
 
 
 class ThemesAndConcepts(BaseModel):
@@ -378,7 +382,7 @@ class ThemesAndConceptsExtractorPrompt(
 
 
 @dataclass
-class ThemesExtractor(LLMBasedExtractor):
+class ThemesExtractor(_PerChunkListExtractor):
     """
     Extracts themes from the given text.
 
@@ -394,17 +398,8 @@ class ThemesExtractor(LLMBasedExtractor):
     prompt: ThemesAndConceptsExtractorPrompt = ThemesAndConceptsExtractorPrompt()
     max_num_themes: int = 10
 
-    async def extract(self, node: Node) -> t.Tuple[str, t.List[str]]:
-        node_text = node.get_property("page_content")
-        if node_text is None:
-            return self.property_name, []
-        chunks = self.split_text_by_token_limit(node_text, self.max_token_limit)
-        themes = []
-        for chunk in chunks:
-            result = await self.prompt.generate(
-                self.llm,
-                data=TextWithExtractionLimit(text=chunk, max_num=self.max_num_themes),
-            )
-            themes.extend(result.output)
+    result_field: t.ClassVar[str] = "output"
+    limit_field: t.ClassVar[str] = "max_num_themes"
 
-        return self.property_name, themes
+    def _missing(self) -> t.List[str]:
+        return []
