@@ -7,6 +7,7 @@ import numpy as np
 
 from ragas.messages import AIMessage, HumanMessage, ToolMessage
 from ragas.metrics.collections._concurrency import gather_bounded
+from ragas.metrics.collections._conversation import format_conversation
 from ragas.metrics.collections._verdicts import judge_each
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
@@ -112,7 +113,7 @@ class TopicAdherence(BaseMetric):
             raise ValueError("reference_topics must be a non-empty list of topics")
 
         # Format conversation as pretty string
-        conversation = self._format_conversation(user_input)
+        conversation = format_conversation(user_input)
 
         # Step 1: Extract topics from the conversation
         topics = await self._extract_topics(conversation)
@@ -142,15 +143,6 @@ class TopicAdherence(BaseMetric):
                 f"{'in scope' if in_scope else 'out of scope'}"
             )
         return MetricResult(value=float(score), reason="\n".join(lines))
-
-    def _format_conversation(
-        self, messages: List[Union[HumanMessage, AIMessage, ToolMessage]]
-    ) -> str:
-        """Format messages into a readable conversation string."""
-        lines = []
-        for msg in messages:
-            lines.append(msg.pretty_repr())
-        return "\n".join(lines)
 
     async def _extract_topics(self, conversation: str) -> List[str]:
         """Extract topics from the conversation."""

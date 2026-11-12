@@ -5,6 +5,8 @@ from typing import List, Union
 
 from ragas.messages import AIMessage, HumanMessage, ToolMessage
 from ragas.metrics.base import MetricOutputType
+from ragas.metrics.collections._conversation import format_conversation
+from ragas.metrics.collections._inputs import require
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
 
@@ -21,7 +23,56 @@ if t.TYPE_CHECKING:
     from ragas.llms.base import InstructorBaseRagasLLM
 
 
-class AgentGoalAccuracyWithReference(BaseMetric):
+class _AgentGoalAccuracyBase(BaseMetric):
+    """Infer the workflow's outcome, then judge it against a desired outcome.
+
+    The variants differ only in the desired outcome: the given reference, or
+    the user goal inferred from the conversation.
+    """
+
+    required_components = ("llm",)
+
+    llm: "InstructorBaseRagasLLM"
+    output_type = MetricOutputType.BINARY
+
+    def __init__(self, llm: "InstructorBaseRagasLLM", name: str, **kwargs):
+        self.workflow_prompt = InferGoalOutcomePrompt()
+        self.compare_outcome_prompt = CompareOutcomePrompt()
+        super().__init__(llm=llm, name=name, **kwargs)
+
+    async def _score(
+        self,
+        user_input: List[Union[HumanMessage, AIMessage, ToolMessage]],
+        reference: t.Optional[str],
+    ) -> MetricResult:
+        """Score against ``reference``, or against the inferred goal if None."""
+        if not isinstance(user_input, list):
+            raise ValueError("user_input must be a list of messages")
+
+        workflow = await self._infer_goal_outcome(format_conversation(user_input))
+        desired = workflow.user_goal if reference is None else reference
+        judged = await self._judge_outcome(desired, workflow.end_state)
+        return MetricResult(
+            value=float(int(judged.verdict)),
+            reason=_outcome_reason(desired, workflow.end_state, judged),
+        )
+
+    async def _infer_goal_outcome(self, conversation: str) -> WorkflowOutput:
+        """Infer the user goal and end state from the conversation."""
+        input_data = WorkflowInput(workflow=conversation)
+        prompt_str = self.workflow_prompt.to_string(input_data)
+        return await self.llm.agenerate(prompt_str, WorkflowOutput)
+
+    async def _judge_outcome(self, desired: str, arrived: str) -> CompareOutcomeOutput:
+        """The judge's verdict and reason comparing desired and achieved outcomes."""
+        input_data = CompareOutcomeInput(
+            desired_outcome=desired, arrived_outcome=arrived
+        )
+        prompt_str = self.compare_outcome_prompt.to_string(input_data)
+        return await self.llm.agenerate(prompt_str, CompareOutcomeOutput)
+
+
+class AgentGoalAccuracyWithReference(_AgentGoalAccuracyBase):
     """
     Measures if an agent achieved the user's goal compared to a reference outcome.
 
@@ -59,20 +110,12 @@ class AgentGoalAccuracyWithReference(BaseMetric):
         name: The metric name
     """
 
-    required_components = ("llm",)
-
-    llm: "InstructorBaseRagasLLM"
-    output_type = MetricOutputType.BINARY
-
     def __init__(
         self,
         llm: "InstructorBaseRagasLLM",
         name: str = "agent_goal_accuracy",
         **kwargs,
     ):
-        self.workflow_prompt = InferGoalOutcomePrompt()
-        self.compare_outcome_prompt = CompareOutcomePrompt()
-
         super().__init__(llm=llm, name=name, **kwargs)
 
     async def ascore(
@@ -90,55 +133,11 @@ class AgentGoalAccuracyWithReference(BaseMetric):
         Returns:
             MetricResult with binary score (1.0 if goal achieved, 0.0 otherwise)
         """
-        if not isinstance(user_input, list):
-            raise ValueError("user_input must be a list of messages")
-        if not reference:
-            raise ValueError(
-                "reference must be provided for AgentGoalAccuracyWithReference"
-            )
-
-        conversation = self._format_conversation(user_input)
-
-        # Step 1: Infer the end state from the workflow
-        workflow_result = await self._infer_goal_outcome(conversation)
-
-        # Step 2: Compare the end state with reference
-        judged = await self._judge_outcome(reference, workflow_result.end_state)
-
-        return MetricResult(
-            value=float(int(judged.verdict)),
-            reason=_outcome_reason(reference, workflow_result.end_state, judged),
-        )
-
-    def _format_conversation(
-        self, messages: List[Union[HumanMessage, AIMessage, ToolMessage]]
-    ) -> str:
-        """Format messages into a readable conversation string."""
-        lines = []
-        for msg in messages:
-            lines.append(msg.pretty_repr())
-        return "\n".join(lines)
-
-    async def _infer_goal_outcome(self, conversation: str) -> WorkflowOutput:
-        """Infer the user goal and end state from the conversation."""
-        input_data = WorkflowInput(workflow=conversation)
-        prompt_str = self.workflow_prompt.to_string(input_data)
-        return await self.llm.agenerate(prompt_str, WorkflowOutput)
-
-    async def _judge_outcome(self, desired: str, arrived: str) -> CompareOutcomeOutput:
-        """The judge's verdict and reason comparing desired and achieved outcomes."""
-        input_data = CompareOutcomeInput(
-            desired_outcome=desired, arrived_outcome=arrived
-        )
-        prompt_str = self.compare_outcome_prompt.to_string(input_data)
-        return await self.llm.agenerate(prompt_str, CompareOutcomeOutput)
-
-    async def _compare_outcomes(self, desired: str, arrived: str) -> int:
-        """Compare desired outcome with achieved outcome."""
-        return int((await self._judge_outcome(desired, arrived)).verdict)
+        require(reference=reference)
+        return await self._score(user_input, reference)
 
 
-class AgentGoalAccuracyWithoutReference(BaseMetric):
+class AgentGoalAccuracyWithoutReference(_AgentGoalAccuracyBase):
     """
     Measures if an agent achieved the user's inferred goal.
 
@@ -176,20 +175,12 @@ class AgentGoalAccuracyWithoutReference(BaseMetric):
         name: The metric name
     """
 
-    required_components = ("llm",)
-
-    llm: "InstructorBaseRagasLLM"
-    output_type = MetricOutputType.BINARY
-
     def __init__(
         self,
         llm: "InstructorBaseRagasLLM",
         name: str = "agent_goal_accuracy",
         **kwargs,
     ):
-        self.workflow_prompt = InferGoalOutcomePrompt()
-        self.compare_outcome_prompt = CompareOutcomePrompt()
-
         super().__init__(llm=llm, name=name, **kwargs)
 
     async def ascore(
@@ -205,52 +196,7 @@ class AgentGoalAccuracyWithoutReference(BaseMetric):
         Returns:
             MetricResult with binary score (1.0 if goal achieved, 0.0 otherwise)
         """
-        if not isinstance(user_input, list):
-            raise ValueError("user_input must be a list of messages")
-
-        conversation = self._format_conversation(user_input)
-
-        # Step 1: Infer the user goal and end state from the workflow
-        workflow_result = await self._infer_goal_outcome(conversation)
-
-        # Step 2: Compare the inferred goal with the end state
-        judged = await self._judge_outcome(
-            workflow_result.user_goal, workflow_result.end_state
-        )
-
-        return MetricResult(
-            value=float(int(judged.verdict)),
-            reason=_outcome_reason(
-                workflow_result.user_goal, workflow_result.end_state, judged
-            ),
-        )
-
-    def _format_conversation(
-        self, messages: List[Union[HumanMessage, AIMessage, ToolMessage]]
-    ) -> str:
-        """Format messages into a readable conversation string."""
-        lines = []
-        for msg in messages:
-            lines.append(msg.pretty_repr())
-        return "\n".join(lines)
-
-    async def _infer_goal_outcome(self, conversation: str) -> WorkflowOutput:
-        """Infer the user goal and end state from the conversation."""
-        input_data = WorkflowInput(workflow=conversation)
-        prompt_str = self.workflow_prompt.to_string(input_data)
-        return await self.llm.agenerate(prompt_str, WorkflowOutput)
-
-    async def _judge_outcome(self, desired: str, arrived: str) -> CompareOutcomeOutput:
-        """The judge's verdict and reason comparing desired and achieved outcomes."""
-        input_data = CompareOutcomeInput(
-            desired_outcome=desired, arrived_outcome=arrived
-        )
-        prompt_str = self.compare_outcome_prompt.to_string(input_data)
-        return await self.llm.agenerate(prompt_str, CompareOutcomeOutput)
-
-    async def _compare_outcomes(self, desired: str, arrived: str) -> int:
-        """Compare desired outcome with achieved outcome."""
-        return int((await self._judge_outcome(desired, arrived)).verdict)
+        return await self._score(user_input, None)
 
 
 def _outcome_reason(desired: str, arrived: str, judged: CompareOutcomeOutput) -> str:

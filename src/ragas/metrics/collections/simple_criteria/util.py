@@ -1,32 +1,15 @@
 """SimpleCriteriaScore prompt classes and models."""
 
-import typing as t
-
 from pydantic import BaseModel, Field
 
+from ragas.metrics.collections._inputs import SampleFieldsInput
 from ragas.prompt.metrics.base_prompt import BasePrompt
 
 BASE_INSTRUCTION = "Evaluate the input based on the criteria defined."
 
 
-class SimpleCriteriaInput(BaseModel):
+class SimpleCriteriaInput(SampleFieldsInput):
     """Input model for criteria-based scoring."""
-
-    user_input: t.Optional[str] = Field(
-        default=None, description="The input to the llm system"
-    )
-    response: t.Optional[str] = Field(
-        default=None, description="The response from the llm system"
-    )
-    retrieved_contexts: t.Optional[t.List[str]] = Field(
-        default=None, description="The retrieved contexts from the llm system"
-    )
-    reference_contexts: t.Optional[t.List[str]] = Field(
-        default=None, description="The reference contexts for the evaluation"
-    )
-    reference: t.Optional[str] = Field(
-        default=None, description="The reference answer for evaluation"
-    )
 
 
 class SimpleCriteriaOutput(BaseModel):
