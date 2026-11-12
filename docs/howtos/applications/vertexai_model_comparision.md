@@ -187,7 +187,6 @@ Select and define the metrics that are most relevant to your application.
 
 
 ```python
-from ragas import evaluate
 from ragas.metrics.collections import (
     ContextPrecision,
     DomainSpecificRubrics,
@@ -214,7 +213,7 @@ faithfulness = Faithfulness(llm=evaluator_llm)
 
 ## **Prepare your dataset**
 
-To perform evaluations using Ragas metrics, you need to convert your data into an `EvaluationDataset`, the core data type in Ragas. For more details on its structure, refer to the [Ragas documentation](../../concepts/components/eval_dataset.md).
+To score your data with Ragas metrics, put it in a `Dataset` of `SingleTurnSample` rows. For more details on its structure, refer to the [Ragas documentation](../../concepts/components/eval_dataset.md).
 
 
 ```python
@@ -299,11 +298,12 @@ for i in range(len(user_inputs)):
     responses_b.append(gemini_1_response.text)
 ```
 
-Convert these into Ragas `EvaluationDataset`:
+Convert these into Ragas `Dataset`s, one per model:
 
 
 ```python
-from ragas.dataset_schema import SingleTurnSample, EvaluationDataset
+from ragas import Dataset
+from ragas.dataset_schema import SingleTurnSample
 
 n = len(user_inputs)
 
@@ -327,8 +327,12 @@ for i in range(n):
     samples_a.append(sample_a)
     samples_b.append(sample_b)
 
-ragas_eval_dataset_a = EvaluationDataset(samples=samples_a)
-ragas_eval_dataset_b = EvaluationDataset(samples=samples_b)
+ragas_eval_dataset_a = Dataset(
+    "model_a", "inmemory", data_model=SingleTurnSample, data=samples_a
+)
+ragas_eval_dataset_b = Dataset(
+    "model_b", "inmemory", data_model=SingleTurnSample, data=samples_b
+)
 ```
 
 
@@ -417,11 +421,11 @@ Output
 
 ## Run evaluation
 
-Evaluate the datasets using Ragas by passing the dataset and a list of desired metrics to the `evaluate` function:
+Score both datasets with the same metrics, using [`metrics_experiment`](../../concepts/experimentation.md#scoring-a-dataset-in-one-call-metrics_experiment):
 
 
 ```python
-from ragas import evaluate
+from ragas import metrics_experiment
 
 ragas_metrics = [
     context_precision,
@@ -430,31 +434,39 @@ ragas_metrics = [
     rubrics_score,
 ]
 
-ragas_result_rag_a = evaluate(dataset=ragas_eval_dataset_a, metrics=ragas_metrics)
+run = metrics_experiment(ragas_metrics)
 
-ragas_result_rag_b = evaluate(dataset=ragas_eval_dataset_b, metrics=ragas_metrics)
+ragas_result_rag_a = run.run(ragas_eval_dataset_a, name="model_a")
+
+ragas_result_rag_b = run.run(ragas_eval_dataset_b, name="model_b")
 ```
 ```
-Evaluating: 100%|██████████| 12/12 [00:00<?, ?it/s]
+Running experiment: 100%|██████████| 3/3 [00:00<?, ?it/s]
 
-Evaluating: 100%|██████████| 12/12 [00:00<?, ?it/s]
+Running experiment: 100%|██████████| 3/3 [00:00<?, ?it/s]
 ```
 
-Wrap the results into Google’s EvalResult structure:
+Wrap the results into Google’s EvalResult structure: the means from `summarize()`, and the per-row scores without the `<metric>_reason` columns:
 
 
 ```python
 from vertexai.evaluation import EvalResult
 
-result_rag_a = EvalResult(
-    summary_metrics=ragas_result_rag_a._repr_dict,
-    metrics_table=ragas_result_rag_a.to_pandas(),
-)
+from ragas import summarize
 
-result_rag_b = EvalResult(
-    summary_metrics=ragas_result_rag_b._repr_dict,
-    metrics_table=ragas_result_rag_b.to_pandas(),
-)
+
+def to_eval_result(exp) -> EvalResult:
+    summary = summarize(exp)
+    table = exp.to_pandas().drop(columns=[f"{m}_reason" for m in summary])
+    return EvalResult(
+        summary_metrics={m: info["mean"] for m, info in summary.items()},
+        metrics_table=table,
+    )
+
+
+result_rag_a = to_eval_result(ragas_result_rag_a)
+
+result_rag_b = to_eval_result(ragas_result_rag_b)
 ```
 
 ## Compare Eval Results

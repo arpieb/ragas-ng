@@ -7,7 +7,7 @@ so a sample maps onto the call by reading the signature. Nothing here is
 metric-specific.
 
 :func:`input_spec` reads how a metric is called; :func:`as_score` turns what it
-returns into the number ``evaluate()`` aggregates.
+returns into the number ``metrics_experiment`` aggregates.
 """
 
 from __future__ import annotations
@@ -23,8 +23,8 @@ from ragas.metrics.result import ScoreWithReason
 SINGLE_TURN_FIELDS = frozenset(SingleTurnSample.model_fields)
 MULTI_TURN_FIELDS = frozenset(MultiTurnSample.model_fields)
 
-# Parameters that take a model, not a sample field. evaluate() supplies them
-# from its own ``llm``/``embeddings`` arguments.
+# Parameters that take a model, not a sample field. metrics_experiment supplies
+# them from its own ``llm``/``embeddings`` arguments.
 COMPONENT_PARAMS = frozenset({"llm", "embeddings"})
 
 
@@ -160,7 +160,7 @@ def input_spec(metric: SimpleBaseMetric) -> InputSpec:
     if not (single or multi):
         unknown = sorted(names - SINGLE_TURN_FIELDS - MULTI_TURN_FIELDS)
         raise ValueError(
-            f"Cannot run '{metric.name}' through evaluate(): its ascore() takes "
+            f"Cannot score '{metric.name}' over a dataset: its ascore() takes "
             f"{unknown}, which are not fields of SingleTurnSample or "
             f"MultiTurnSample. Score it directly with `await metric.ascore(...)`."
         )
@@ -174,7 +174,7 @@ def input_spec(metric: SimpleBaseMetric) -> InputSpec:
 
 
 def _as_score(value: t.Any, name: str) -> float:
-    """A metric's value as the number evaluate() aggregates."""
+    """A metric's value as the number a scoring run aggregates."""
     if isinstance(value, bool):
         return float(value)
     if isinstance(value, (int, float)):
@@ -183,14 +183,14 @@ def _as_score(value: t.Any, name: str) -> float:
         return float(value)
     except (TypeError, ValueError) as e:
         raise ValueError(
-            f"Metric '{name}' returned {value!r}, which is not numeric. evaluate() "
-            f"aggregates scores numerically; score this metric directly with "
+            f"Metric '{name}' returned {value!r}, which is not numeric. Scores "
+            f"over a dataset are aggregated numerically; score this metric directly with "
             f"`await metric.ascore(...)` instead."
         ) from e
 
 
 def as_score(result: t.Any, name: str) -> float:
-    """``ascore`` returns a MetricResult; evaluate() wants a number.
+    """``ascore`` returns a MetricResult; a scoring run wants a number.
 
     The metric's explanation rides along as a ``ScoreWithReason`` (#116).
     """

@@ -162,42 +162,49 @@ for query, reference in zip(sample_queries, expected_responses):
     )
 ```
 
-Now, load the dataset into `EvaluationDataset` object.
+Now, load the rows into a ragas `Dataset` of `SingleTurnSample`s.
 
 ```python
-from ragas import EvaluationDataset
+from ragas import Dataset, SingleTurnSample
 
-evaluation_dataset = EvaluationDataset.from_list(dataset)
+evaluation_dataset = Dataset(
+    "rag_eval",
+    "inmemory",
+    data_model=SingleTurnSample,
+    data=[SingleTurnSample(**row) for row in dataset],
+)
 ```
+
+Use a file backend, such as `"local/jsonl"` with `root_dir="./data"`, and call `evaluation_dataset.save()` to keep it.
 
 ## Evaluate
 
 We have successfully collected the evaluation data. Now, we can evaluate our RAG system on the collected dataset using a set of commonly used RAG evaluation metrics. You may choose any model as [evaluator LLM](./../howtos/customizations/customize_models.md) for evaluation. 
 
 ```python
-from ragas import evaluate
+from ragas import metrics_experiment, summarize
 from ragas.llms import llm_factory
-
-
 from ragas.metrics.collections import ContextRecall, FactualCorrectness, Faithfulness
 
 evaluator_llm = llm_factory("gpt-6-luna", client=openai_client)
 
-result = evaluate(
-    dataset=evaluation_dataset,
-    metrics=[
+run = metrics_experiment(
+    [
         ContextRecall(llm=evaluator_llm),
         Faithfulness(llm=evaluator_llm),
         FactualCorrectness(llm=evaluator_llm),
-    ],
+    ]
 )
-result
+exp = run.run(evaluation_dataset, name="rag_baseline")
+summarize(exp)
 ```
 
 Output
 ```
-{'context_recall': 1.0000, 'faithfulness': 0.8571, 'factual_correctness': 0.7280}
+{'context_recall': {'mean': 1.0, 'count': 5, 'missing': 0}, 'faithfulness': {'mean': 0.8571, 'count': 5, 'missing': 0}, 'factual_correctness': {'mean': 0.728, 'count': 5, 'missing': 0}}
 ```
+
+`exp` is an [experiment](../concepts/experimentation.md): one row per sample, with a score and a `<metric>_reason` column per metric. `exp.to_pandas()` shows them as a table, and `ragas.check(exp, min_mean={...})` fails a CI run when a mean falls below its threshold.
 
 ## Up Next
 

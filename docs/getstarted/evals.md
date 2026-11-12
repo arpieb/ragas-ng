@@ -57,22 +57,23 @@ In your generated project's `evals.py` file, you'll see the main workflow patter
 The template provides modular functions you can customize:
 
 ```python
-from ragas.dataset_schema import SingleTurnSample
-from ragas import EvaluationDataset
+from ragas import Dataset
 
 
 def load_dataset():
     """Load test dataset for evaluation."""
+    dataset = Dataset(name="test_dataset", backend="local/csv", root_dir="evals")
     data_samples = [
-        SingleTurnSample(
-            user_input="What is Ragas?",
-            response="",  # Will be filled by querying RAG
-            reference="Ragas is an evaluation framework for LLM applications",
-            retrieved_contexts=[],
-        ),
+        {
+            "question": "What is Ragas?",
+            "grading_notes": "- an evaluation framework for LLM applications",
+        },
         # Add more test cases...
     ]
-    return EvaluationDataset(samples=data_samples)
+    for sample in data_samples:
+        dataset.append(sample)
+    dataset.save()
+    return dataset
 ```
 
 You can extend this with [metrics](../concepts/metrics/available_metrics/index.md) and more sophisticated evaluation logic. Learn more about [evaluation in Ragas](../concepts/metrics/index.md).

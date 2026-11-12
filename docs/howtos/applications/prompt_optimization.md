@@ -147,7 +147,7 @@ incentive_prompt = diabetes_assistant_prompt + incentive
 
 In this section, we define a function that transforms our raw dataset into the format required for Ragas evaluation.
 
-The function first checks and converts the retrieved contexts into the correct list format if needed, then combines each user’s question with its related contexts using a template. It sends this complete prompt to the language model with a built-in retry mechanism to handle any errors, and finally compiles the responses into a Ragas Evaluation Dataset. You can read more about it [here](../../concepts/components/eval_dataset.md).
+The function first checks and converts the retrieved contexts into the correct list format if needed, then combines each user’s question with its related contexts using a template. It sends this complete prompt to the language model with a built-in retry mechanism to handle any errors, and finally compiles the responses into a ragas `Dataset` of `SingleTurnSample` rows. You can read more about it [here](../../concepts/components/eval_dataset.md).
 
 
 ```python
@@ -155,14 +155,15 @@ import ast
 import time
 from tqdm import tqdm
 from typing import List, Dict, Any
-from ragas.dataset_schema import EvaluationDataset
+from ragas import Dataset
+from ragas.dataset_schema import SingleTurnSample
 from openai import OpenAI
 
 # Initialize OpenAI client
 client = OpenAI()
 
 
-def create_ragas_evaluation_dataset(df: pd.DataFrame, prompt: str) -> EvaluationDataset:
+def create_ragas_dataset(df: pd.DataFrame, prompt: str, name: str) -> Dataset:
     """
     Process a DataFrame into an evaluation dataset by:
     1. Converting retrieved contexts from strings to lists if needed
@@ -173,9 +174,10 @@ def create_ragas_evaluation_dataset(df: pd.DataFrame, prompt: str) -> Evaluation
     Args:
         df: DataFrame with user_input and retrieved_contexts columns
         prompt: Template string with placeholders for contexts and user input
+        name: The dataset's name
 
     Returns:
-        EvaluationDataset for RAGAS evaluation
+        An in-memory Dataset of SingleTurnSample rows
     """
     # Create a copy to avoid modifying the original DataFrame
     df = df.copy()
@@ -226,9 +228,13 @@ def create_ragas_evaluation_dataset(df: pd.DataFrame, prompt: str) -> Evaluation
                     print(f"Failed after {max_attempts} attempts. Skipping sample.")
                     sample["response"] = None
 
-    # Create and return evaluation dataset
-    eval_dataset = EvaluationDataset.from_list(data=samples)
-    return eval_dataset
+    # Create and return the dataset
+    return Dataset(
+        name,
+        "inmemory",
+        data_model=SingleTurnSample,
+        data=[SingleTurnSample(**sample) for sample in samples],
+    )
 ```
 
 ## Generating Responses for Evaluation
@@ -239,13 +245,13 @@ Now we'll use our function to create evaluation datasets for both prompt version
 ```python
 # Create evaluation datasets for both prompt versions
 print("Generating responses for base prompt...")
-eval_dataset_base = create_ragas_evaluation_dataset(
-    eval_df, prompt=diabetes_assistant_prompt
+eval_dataset_base = create_ragas_dataset(
+    eval_df, prompt=diabetes_assistant_prompt, name="base"
 )
 
 print("Generating responses for incentive prompt...")
-eval_dataset_incentive = create_ragas_evaluation_dataset(
-    eval_df, prompt=incentive_prompt
+eval_dataset_incentive = create_ragas_dataset(
+    eval_df, prompt=incentive_prompt, name="incentive"
 )
 ```
 ```
@@ -295,15 +301,18 @@ metrics = [
 
 
 ```python
-from ragas import evaluate
+from ragas import Dataset
 
-# Evaluate both datasets with standard metrics (for answerable questions)
-answerable_df = eval_df.iloc[:10]  # First 10 questions should be answered
-answerable_dataset_base = EvaluationDataset.from_list(
-    [sample for i, sample in enumerate(eval_dataset_base.to_list()) if i < 10]
-)
-answerable_dataset_incentive = EvaluationDataset.from_list(
-    [sample for i, sample in enumerate(eval_dataset_incentive.to_list()) if i < 10]
+
+def subset(dataset: Dataset, rows: slice, name: str) -> Dataset:
+    """A new in-memory Dataset holding some of ``dataset``'s rows."""
+    return Dataset(name, "inmemory", data_model=SingleTurnSample, data=dataset[rows])
+
+
+# The first 10 questions should be answered
+answerable_dataset_base = subset(eval_dataset_base, slice(10), "answerable_base")
+answerable_dataset_incentive = subset(
+    eval_dataset_incentive, slice(10), "answerable_incentive"
 )
 ```
 
@@ -311,33 +320,35 @@ answerable_dataset_incentive = EvaluationDataset.from_list(
 
 
 ```python
+from ragas import metrics_experiment, summarize
+
+answerable_run = metrics_experiment(metrics)
+
 print("Evaluating answerable questions with base prompt...")
-result_answerable_base = evaluate(metrics=metrics, dataset=answerable_dataset_base)
-result_answerable_base
+result_answerable_base = answerable_run.run(answerable_dataset_base)
+summarize(result_answerable_base)
 ```
 Output
 ```
 Evaluating answerable questions with base prompt...
-Evaluating: 100%|██████████| 20/20 [00:02<00:00,  9.79it/s]
+Running experiment: 100%|██████████| 10/10 [00:02<00:00,  4.90it/s]
 
-{'answer_accuracy': 0.6750, 'response_groundedness': 1.0000}
+{'answer_accuracy': {'mean': 0.675, 'count': 10, 'missing': 0}, 'response_groundedness': {'mean': 1.0, 'count': 10, 'missing': 0}}
 ```
 
 
 
 ```python
 print("Evaluating answerable questions with incentive prompt...")
-result_answerable_incentive = evaluate(
-    metrics=metrics, dataset=answerable_dataset_incentive
-)
-result_answerable_incentive
+result_answerable_incentive = answerable_run.run(answerable_dataset_incentive)
+summarize(result_answerable_incentive)
 ```
 Output
 ```
 Evaluating answerable questions with incentive prompt...
-Evaluating: 100%|██████████| 20/20 [00:02<00:00,  9.19it/s]
+Running experiment: 100%|██████████| 10/10 [00:02<00:00,  4.60it/s]
 
-{'answer_accuracy': 0.6750, 'response_groundedness': 1.0000}
+{'answer_accuracy': {'mean': 0.675, 'count': 10, 'missing': 0}, 'response_groundedness': {'mean': 1.0, 'count': 10, 'missing': 0}}
 ```
 
 
@@ -356,12 +367,12 @@ Queries that should NOT be answered (insufficient expertise)
 
 
 ```python
-non_answerable_df = eval_df.iloc[10:]  # Last 5 questions should NOT be answered
-non_answerable_dataset_base = EvaluationDataset.from_list(
-    [sample for i, sample in enumerate(eval_dataset_base.to_list()) if i >= 10]
+# The last 5 questions should NOT be answered
+non_answerable_dataset_base = subset(
+    eval_dataset_base, slice(10, None), "non_answerable_base"
 )
-non_answerable_dataset_incentive = EvaluationDataset.from_list(
-    [sample for i, sample in enumerate(eval_dataset_incentive.to_list()) if i >= 10]
+non_answerable_dataset_incentive = subset(
+    eval_dataset_incentive, slice(10, None), "non_answerable_incentive"
 )
 ```
 
@@ -404,33 +415,33 @@ metrics = [
 
 
 ```python
+non_answerable_run = metrics_experiment(metrics)
+
 print("Evaluating non-answerable questions with base prompt...")
-result_non_answerable_base = evaluate(
-    metrics=metrics, dataset=non_answerable_dataset_base
-)
-result_non_answerable_base
+result_non_answerable_base = non_answerable_run.run(non_answerable_dataset_base)
+summarize(result_non_answerable_base)
 ```
 Output
 ```
 Evaluating non-answerable questions with base prompt...
-Evaluating: 100%|██████████| 10/10 [00:01<00:00,  5.44it/s]
+Running experiment: 100%|██████████| 5/5 [00:01<00:00,  2.72it/s]
 
-{'answer_accuracy': 0.6000, 'Non-Answer Compliance': 0.4000}
+{'answer_accuracy': {'mean': 0.6, 'count': 5, 'missing': 0}, 'Non-Answer Compliance': {'mean': 0.4, 'count': 5, 'missing': 0}}
 ```
 
 ```python
 print("Evaluating non-answerable questions with incentive prompt...")
-result_non_answerable_incentive = evaluate(
-    metrics=metrics, dataset=non_answerable_dataset_incentive
+result_non_answerable_incentive = non_answerable_run.run(
+    non_answerable_dataset_incentive
 )
-result_non_answerable_incentive
+summarize(result_non_answerable_incentive)
 ```
 Output
 ```
 Evaluating non-answerable questions with incentive prompt...
-Evaluating: 100%|██████████| 10/10 [00:01<00:00,  6.28it/s]
+Running experiment: 100%|██████████| 5/5 [00:01<00:00,  3.14it/s]
 
-{'answer_accuracy': 0.7000, 'Non-Answer Compliance': 0.6000}
+{'answer_accuracy': {'mean': 0.7, 'count': 5, 'missing': 0}, 'Non-Answer Compliance': {'mean': 0.6, 'count': 5, 'missing': 0}}
 ```
 
 Impact of Incentivization:

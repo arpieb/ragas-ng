@@ -1,5 +1,8 @@
 # Migration from v0.1 to v0.2
 
+!!! note "`evaluate()` and `EvaluationDataset` are being removed in ragas-ng"
+    This page describes upstream ragas history. In ragas-ng, `evaluate()`, `aevaluate()`, `EvaluationDataset` and `EvaluationResult` are being removed in favour of `Dataset` and `metrics_experiment`. See [From `evaluate()` to experiments](evaluate_to_experiment.md) for the current code.
+
 v0.2 is the start of the transition for Ragas from an evaluation library for RAG pipelines to a more general library that you can use to evaluate any LLM applications you build. The meant we had to make some fundamental changes to the library that will break your workflow. Hopeful this guide will make that transition as easy as possible.
 
 ## Outline
@@ -11,7 +14,7 @@ v0.2 is the start of the transition for Ragas from an evaluation library for RAG
 
 ## Evaluation Dataset
 
-We have moved from using HuggingFace [`Datasets`](https://huggingface.co/docs/datasets/v3.0.1/en/package_reference/main_classes#datasets.Dataset) to our own [`EvaluationDataset`][ragas.dataset_schema.EvaluationDataset]. You can read more about it from the core concepts section for [EvaluationDataset](../../concepts/components/eval_dataset.md) and [EvaluationSample](../../concepts/components/eval_sample.md)
+We have moved from using HuggingFace [`Datasets`](https://huggingface.co/docs/datasets/v3.0.1/en/package_reference/main_classes#datasets.Dataset) to our own `EvaluationDataset`. You can read more about it from the core concepts section for [EvaluationDataset](../../concepts/components/eval_dataset.md) and [EvaluationSample](../../concepts/components/eval_sample.md)
 
 You can easily translate
 
@@ -34,7 +37,7 @@ All the default metrics are still supported, and many new metrics have been adde
 
 However, there are a couple of changes in how you use metrics
 
-Firstly it is now preferred to initialize metrics with the evaluator LLM of your choice as opposed to using the initialized version of the metrics into [`evaluate()`][ragas.evaluation.evaluate]. This avoids a lot of confusion regarding which LLMs are used where.
+Firstly it is now preferred to initialize metrics with the evaluator LLM of your choice as opposed to using the initialized version of the metrics into `evaluate()`. This avoids a lot of confusion regarding which LLMs are used where.
 
 ```python
 from ragas.metrics import (

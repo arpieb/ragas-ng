@@ -8,7 +8,7 @@ When using LLMs for evaluation and test set generation, cost will be an importan
 
 ## Implement `TokenUsageParser`
 
-By default Ragas does not calculate token usage for `evaluate()`, because providers report it in different shapes. To get usage data, pass a `TokenUsageParser`.
+Ragas records token usage only when you ask for it, because providers report it in different shapes. To get usage data, collect it with a `TokenUsageCollector` built from a `TokenUsageParser`.
 
 A `TokenUsageParser` is a function that takes the provider's raw completion and returns the `TokenUsage` that Ragas expects. Ragas ships parsers for OpenAI-shaped (`get_token_usage_for_openai`), Anthropic, Bedrock and Azure AI responses. LLMs created with `llm_factory()` call through LiteLLM, which returns OpenAI-shaped responses, so `get_token_usage_for_openai` works for them whatever the provider.
 
@@ -45,42 +45,43 @@ Let's use the `get_token_usage_for_openai` parser to calculate the token usage f
 ```python
 from datasets import load_dataset
 
-from ragas import EvaluationDataset
+from ragas import Dataset
+from ragas.dataset_schema import SingleTurnSample
 
-dataset = load_dataset("vibrantlabsai/amnesty_qa", "english_v3")
-
-eval_dataset = EvaluationDataset.from_hf_dataset(dataset["eval"])
+df = load_dataset("vibrantlabsai/amnesty_qa", "english_v3")["eval"].to_pandas()
+df = df.astype(object).where(df.notna(), None)  # NaN -> None
+eval_dataset = Dataset.from_pandas(
+    df, "amnesty_qa", "inmemory", data_model=SingleTurnSample
+)
 ```
 Output
 ```
 Repo card metadata block was not found. Setting CardData to empty.
 ```
 
-You can pass in the parser to the `evaluate()` function and the cost will be calculated and returned in the `Result` object.
+Pass a `TokenUsageCollector` with the parser to `metrics_experiment(usage=...)`. Every LLM call the run makes records its usage into it.
 
 
 ```python
-from ragas import evaluate
-from ragas.cost import get_token_usage_for_openai
+from ragas import metrics_experiment
+from ragas.cost import TokenUsageCollector, get_token_usage_for_openai
 from ragas.llms import llm_factory
 from ragas.metrics.collections import ContextRecall
 
 evaluator_llm = llm_factory("gpt-6-luna", client=client)
 
-result = evaluate(
-    eval_dataset,
-    metrics=[ContextRecall(llm=evaluator_llm)],
-    token_usage_parser=get_token_usage_for_openai,
-)
+usage = TokenUsageCollector(get_token_usage_for_openai)
+run = metrics_experiment([ContextRecall(llm=evaluator_llm)], usage=usage)
+exp = run.run(eval_dataset, name="context_recall_cost")
 ```
 Output
 ```
-Evaluating:   0%|          | 0/20 [00:00<?, ?it/s]
+Running experiment:   0%|          | 0/20 [00:00<?, ?it/s]
 ```
 
 
 ```python
-result.total_tokens()
+usage.total_tokens()
 ```
 Output
 ```
@@ -88,13 +89,13 @@ TokenUsage(input_tokens=25097, output_tokens=3757, model='')
 ```
 
 
-You can compute the cost for each run by passing in the cost per token to `Result.total_cost()` function.
+You can compute the cost of the run by passing the cost per token to `usage.total_cost()`. Use a new collector for each run you want to price separately.
 
 In this example the model costs $5 per 1M input tokens and $15 per 1M output tokens. Use your own model's prices.
 
 
 ```python
-result.total_cost(cost_per_input_token=5 / 1e6, cost_per_output_token=15 / 1e6)
+usage.total_cost(cost_per_input_token=5 / 1e6, cost_per_output_token=15 / 1e6)
 ```
 
 Output

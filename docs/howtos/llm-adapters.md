@@ -24,18 +24,16 @@ llm = llm_factory("ollama/qwen3.8:27b", api_base="http://gpu-box:11434")
 
 `provider=` prefixes a bare model name: `llm_factory("llama3", provider="ollama")` is `"ollama/llama3"`. `"openai"`, the default, adds no prefix.
 
-### Default embeddings in `evaluate()`
+### Embeddings to go with the LLM
 
-When a metric needs embeddings and you pass none, `evaluate()` picks them from the LLM's prefix:
+Metrics that need embeddings take them when you build them, e.g. `AnswerRelevancy(llm=llm, embeddings=embeddings)`. Neither the metrics nor `metrics_experiment` pick a default. Through LiteLLM, for example:
 
-| LLM | Default embeddings (through LiteLLM) |
+| LLM | Embeddings |
 |---|---|
-| bare name or `openai/...` | `text-embedding-ada-002` (`OPENAI_API_KEY`) |
-| `gemini/...` | `gemini/gemini-embedding-2`, with the LLM's `api_key` if given |
-| `vertex_ai/...` | `vertex_ai/gemini-embedding-2`, with the LLM's `vertex_project` / `vertex_location` |
-| anything else (`ollama/`, `anthropic/`, `bedrock/`, ...) | `text-embedding-ada-002`, with a warning to pass `embeddings=` |
-
-Pass `embeddings=embedding_factory("litellm", model="<provider>/<embedding model>")` to choose your own.
+| bare name or `openai/...` | `embedding_factory("openai", model="text-embedding-3-small")` (`OPENAI_API_KEY`) |
+| `gemini/...` | `embedding_factory("litellm", model="gemini/gemini-embedding-2")` |
+| `vertex_ai/...` | `embedding_factory("litellm", model="vertex_ai/gemini-embedding-2")`, with your `vertex_project` / `vertex_location` |
+| anything else | `embedding_factory("litellm", model="<provider>/<embedding model>")` |
 
 ## Bringing your own client
 
@@ -50,7 +48,7 @@ Two kinds of client are accepted:
     llm = llm_factory("qwen3.8:27b", client=client)
     ```
 
-    `evaluate()` also builds its default embeddings from this client, so a proxy or custom base URL applies to both.
+    To send embeddings through the same proxy or base URL, pass the client to `embedding_factory("openai", model=..., client=client)` too.
 
 - **A `litellm.Router`**, for load balancing or fallbacks across deployments.
 

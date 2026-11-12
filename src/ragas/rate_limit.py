@@ -14,8 +14,8 @@ provider's limit has room::
     # the same key's limit, shared: pass the same object
     other = llm_factory("gpt-6-luna", temperature=0.7, rate_limit=limit)
 
-Because it sits in the LLM layer, ``evaluate()``, metrics, testset generation
-and experiments all go through it. The counting is done by
+Because it sits in the LLM layer, metrics, ``metrics_experiment`` and other
+experiments, and testset generation all go through it. The counting is done by
 [pyrate-limiter](https://pypi.org/project/pyrate-limiter/) (sliding windows;
 thread- and event-loop-safe).
 """
@@ -62,7 +62,7 @@ class RateLimit:
 
     One object is one limit. Share it between the LLMs and embeddings that
     use the same API key; give a different key its own. Copies of the
-    metrics holding the LLM, such as the ones ``evaluate()`` runs, share it.
+    metrics holding the LLM, such as the optimizer's candidates, share it.
 
     Every request is counted, including instructor's validation retries and
     ragas' own retries. Retries made inside a client (the OpenAI SDK's

@@ -147,8 +147,10 @@ trace.set_tracer_provider(provider)
 # ragas spans now flow to your collector
 ```
 
-`EvaluationResult.traces` is **unchanged** and still populated without any OTel
-setup — it comes from an in-process run tree, not from spans.
+To inspect spans in process without a backend, use the OpenTelemetry SDK's
+in-memory exporter: see [Observability](../observability.md#without-a-backend-in-process-spans).
+(`EvaluationResult.traces` goes away with `evaluate()`; see
+[From `evaluate()` to experiments](evaluate_to_experiment.md).)
 
 ### Removed integrations
 

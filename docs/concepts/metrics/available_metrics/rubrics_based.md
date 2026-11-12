@@ -183,34 +183,38 @@ result = await metric.ascore(
 
 ## Evaluating a Dataset
 
-Both metrics work with `evaluate()`, which passes each sample's columns to `ascore()` by name:
+Both metrics work with [`metrics_experiment`](../../experimentation.md#scoring-a-dataset-in-one-call-metrics_experiment), which passes each sample's fields to `ascore()` by name:
 
 ```python
-from ragas import EvaluationDataset, evaluate
+from ragas import Dataset, SingleTurnSample, metrics_experiment, summarize
 from ragas.metrics.collections import (
     RubricsScoreWithoutReference,
     RubricsScoreWithReference,
 )
 
-dataset = EvaluationDataset.from_list(
-    [
-        {
-            "user_input": "What's the longest river in the world?",
-            "response": "The longest river in the world is the Nile, stretching approximately 6,650 kilometers (4,130 miles) through northeastern Africa.",
-            "reference": "The Nile is a major north-flowing river in northeastern Africa.",
-            "retrieved_contexts": [
+dataset = Dataset(
+    "rivers",
+    "inmemory",
+    data_model=SingleTurnSample,
+    data=[
+        SingleTurnSample(
+            user_input="What's the longest river in the world?",
+            response="The longest river in the world is the Nile, stretching approximately 6,650 kilometers (4,130 miles) through northeastern Africa.",
+            reference="The Nile is a major north-flowing river in northeastern Africa.",
+            retrieved_contexts=[
                 "Scientists debate whether the Amazon or the Nile is the longest river in the world.",
                 "The Nile River was central to the Ancient Egyptians' rise to wealth and power.",
             ],
-        }
-    ]
-)
-
-result = evaluate(
-    dataset,
-    metrics=[
-        RubricsScoreWithoutReference(llm=llm),
-        RubricsScoreWithReference(llm=llm),
+        )
     ],
 )
+
+run = metrics_experiment(
+    [
+        RubricsScoreWithoutReference(llm=llm),
+        RubricsScoreWithReference(llm=llm),
+    ]
+)
+exp = run.run(dataset, name="rivers_rubrics")
+summarize(exp)
 ```

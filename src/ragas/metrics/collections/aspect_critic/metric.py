@@ -38,7 +38,7 @@ class AspectCritic(CriteriaJudgeMetric):
         >>> print(result.value)  # 0.0
 
     Multi-turn conversations are scored by passing the rendered exchange as
-    ``user_input``; ``evaluate()`` does that rendering for you.
+    ``user_input``; ``metrics_experiment`` does that rendering for you.
 
     Attributes:
         llm: Modern instructor-based LLM for evaluation

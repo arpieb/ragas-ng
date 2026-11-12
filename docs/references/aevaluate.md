@@ -1,45 +1,34 @@
-# Async Evaluation
+# Sync and async runs
 
-## aevaluate()
+A `metrics_experiment()` (like any `@experiment`) has an async `arun()` and a sync `run()`. Both take the same arguments and return the same `Experiment`.
 
-::: ragas.evaluation.aevaluate
-
-## Async Usage
-
-Ragas provides both synchronous and asynchronous evaluation APIs to accommodate different use cases:
-
-### Using aevaluate() (Recommended for Production)
-
-For production async applications, use `aevaluate()` to avoid event loop conflicts:
+## In async code: `arun()`
 
 ```python
-import asyncio
-from ragas import aevaluate
+from ragas import metrics_experiment, summarize
+
+run = metrics_experiment([Faithfulness(llm=llm)])
 
 
-async def evaluate_app():
-    result = await aevaluate(dataset, metrics)
-    return result
-
-
-# In your async application
-result = await evaluate_app()
+async def score(dataset):
+    exp = await run.arun(dataset, name="nightly")
+    return summarize(exp)
 ```
 
-### Using evaluate() from Sync Code
+Use `arun()` in async applications and notebooks you drive with `await`. A running `arun()` can be cancelled like any task: `task = asyncio.create_task(run.arun(dataset))`, then `task.cancel()`. The rows still running are cancelled and nothing is saved.
 
-`evaluate()` runs `aevaluate()` on a shared background event loop, so the same
-call works in scripts, in Jupyter, and from sync code inside async
-applications. It does not patch your event loop. Earlier versions used
-`nest_asyncio`; ragas no longer depends on it, and `allow_nest_asyncio=` is
-deprecated and ignored.
+## From sync code: `run()`
 
 ```python
-result = evaluate(dataset, metrics)
+exp = run.run(dataset, name="nightly")
 ```
+
+`run()` runs `arun()` on a shared background event loop, so the same call works in scripts, in Jupyter, and from sync code inside async applications. It doesn't patch your event loop.
 
 !!! note "Async clients in async code"
     If your evaluator LLM wraps an async client (such as `AsyncOpenAI`) that your
-    own async code also awaits, call `await aevaluate(...)` (or the metrics'
+    own async code also awaits, call `await run.arun(...)` (or the metrics'
     `ascore()`) instead. Otherwise the client is used from two event loops, which
     can fail with "bound to a different event loop".
+
+See [Scoring a dataset](evaluate.md) for the arguments, and [Experiments](../concepts/experimentation.md) for writing your own experiment function.

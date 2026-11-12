@@ -576,8 +576,14 @@ evaluator_llm = llm_factory(f"bedrock/{model_id}", aws_region_name=region_name)
 
 ```python
 from ragas.metrics.collections import AspectCritic, DomainSpecificRubrics
-from ragas.dataset_schema import SingleTurnSample, MultiTurnSample, EvaluationDataset
-from ragas import evaluate
+from ragas.dataset_schema import SingleTurnSample, MultiTurnSample
+from ragas import Dataset, metrics_experiment
+
+
+def as_dataset(name, samples):
+    """An in-memory Dataset of samples, all one type, to score."""
+    return Dataset(name, "inmemory", data_model=type(samples[0]), data=samples)
+
 
 rubrics = {
     "score-1_description": (
@@ -662,17 +668,17 @@ ragas_messages_trace_2 = convert_to_ragas_messages(traces_2)
 sample_1 = MultiTurnSample(user_input=ragas_messages_trace_1)
 sample_2 = MultiTurnSample(user_input=ragas_messages_trace_2)
 
-result = evaluate(
-    # Create an evaluation dataset from the multi-turn samples
-    dataset=EvaluationDataset(samples=[sample_1, sample_2]),
-    metrics=[request_completeness, brand_tone],
+result = metrics_experiment([request_completeness, brand_tone]).run(
+    # a dataset of the multi-turn samples
+    as_dataset("conversations", [sample_1, sample_2]),
+    name="request_completeness_and_tone",
 )
 
 result.to_pandas()
 ```
 Output
 ```
-Evaluating: 100%|██████████| 4/4 [00:00<?, ?it/s]
+Running experiment: 100%|██████████| 2/2 [00:00<?, ?it/s]
 ```
 <div>
 <style scoped>
@@ -786,15 +792,15 @@ sample_3 = MultiTurnSample(user_input=ragas_messages_trace_3)
 sample_4 = MultiTurnSample(user_input=ragas_messages_trace_4)
 sample_5 = MultiTurnSample(user_input=ragas_messages_trace_5)
 
-result = evaluate(
-    dataset=EvaluationDataset(samples=[sample_3, sample_4, sample_5]),
-    metrics=[recommendations],
+result = metrics_experiment([recommendations]).run(
+    as_dataset("menu_conversations", [sample_3, sample_4, sample_5]),
+    name="recommendations",
 )
 
 result.to_pandas()
 ```
 ```
-Evaluating: 100%|██████████| 3/3 [00:00<?, ?it/s]
+Running experiment: 100%|██████████| 3/3 [00:00<?, ?it/s]
 ```
 
 <div>
@@ -887,16 +893,16 @@ trace_4_single_turn_sample = SingleTurnSample(
 
 single_turn_samples = [trace_3_single_turn_sample, trace_4_single_turn_sample]
 
-dataset = EvaluationDataset(samples=single_turn_samples)
+dataset = as_dataset("kb_answers", single_turn_samples)
 ```
 
 
 ```python
-kb_results = evaluate(dataset=dataset, metrics=metrics)
+kb_results = metrics_experiment(metrics).run(dataset, name="knowledge_base")
 kb_results.to_pandas()
 ```
 ```
-Evaluating: 100%|██████████| 6/6 [00:00<?, ?it/s]
+Running experiment: 100%|██████████| 2/2 [00:00<?, ?it/s]
 ```
 <div>
 <style scoped>
@@ -995,15 +1001,14 @@ sample_6 = MultiTurnSample(
     reference="Response contains entrees food items for the children.",
 )
 
-result = evaluate(
-    dataset=EvaluationDataset(samples=[sample_6]),
-    metrics=[goal_accuracy_with_reference],
+result = metrics_experiment([goal_accuracy_with_reference]).run(
+    as_dataset("kids_menu", [sample_6]), name="goal_with_reference"
 )
 
 result.to_pandas()
 ```
 ```
-Evaluating: 100%|██████████| 1/1 [00:00<?, ?it/s]
+Running experiment: 100%|██████████| 1/1 [00:00<?, ?it/s]
 ```
 
 <div>
@@ -1044,15 +1049,14 @@ Evaluating: 100%|██████████| 1/1 [00:00<?, ?it/s]
 ```python
 sample_6 = MultiTurnSample(user_input=ragas_messages_trace_6)
 
-result = evaluate(
-    dataset=EvaluationDataset(samples=[sample_6]),
-    metrics=[goal_accuracy_without_reference],
+result = metrics_experiment([goal_accuracy_without_reference]).run(
+    as_dataset("kids_menu", [sample_6]), name="goal_without_reference"
 )
 
 result.to_pandas()
 ```
 ```
-Evaluating: 100%|██████████| 1/1 [00:00<?, ?it/s]
+Running experiment: 100%|██████████| 1/1 [00:00<?, ?it/s]
 ```
 <div>
 <style scoped>

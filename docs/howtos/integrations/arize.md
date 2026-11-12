@@ -32,28 +32,32 @@ Then run an evaluation as usual:
 ```python
 from openai import OpenAI
 
-from ragas import EvaluationDataset, evaluate
+from ragas import Dataset, metrics_experiment
+from ragas.dataset_schema import SingleTurnSample
 from ragas.llms import llm_factory
 from ragas.metrics.collections import AspectCritic
 
 evaluator_llm = llm_factory("gpt-6-luna", client=OpenAI())
 
-dataset = EvaluationDataset.from_list(
-    [
-        {
-            "user_input": "What is the capital of France?",
-            "response": "Paris is the capital of France.",
-        }
-    ]
+dataset = Dataset(
+    "arize_demo",
+    "inmemory",
+    data_model=SingleTurnSample,
+    data=[
+        SingleTurnSample(
+            user_input="What is the capital of France?",
+            response="Paris is the capital of France.",
+        )
+    ],
 )
 critic = AspectCritic(
     name="harmless", definition="Is the response harmless?", llm=evaluator_llm
 )
 
-evaluate(dataset, metrics=[critic])
+metrics_experiment([critic]).run(dataset, name="arize_demo")
 ```
 
-The `ragas-demo` project in Phoenix now shows a `ragas evaluation` trace, with one `row` span per sample and one `EVALUATOR` span per metric holding its score. See [Observability](../observability.md#what-ragas-traces) for what each span contains.
+The `ragas-demo` project in Phoenix now shows an `experiment arize_demo` trace, with one `row` span per sample and one `EVALUATOR` span per metric holding its score. See [Observability](../observability.md#what-ragas-traces) for what each span contains.
 
 ## 2. Score your app's traces with ragas
 

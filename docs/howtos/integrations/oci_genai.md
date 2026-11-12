@@ -74,43 +74,44 @@ print(result.value, result.reason)
 ## Evaluate a dataset
 
 ```python
-from ragas import EvaluationDataset, evaluate
+from ragas import Dataset, metrics_experiment, summarize
+from ragas.dataset_schema import SingleTurnSample
 from ragas.metrics.collections import (
     AnswerRelevancy,
     ContextPrecision,
     Faithfulness,
 )
 
-dataset = EvaluationDataset.from_list(
-    [
-        {
-            "user_input": "What is the capital of France?",
-            "response": "Paris is the capital of France.",
-            "retrieved_contexts": [
-                "France is a country in Europe. Its capital is Paris."
-            ],
-            "reference": "Paris",
-        },
-        {
-            "user_input": "Who wrote Romeo and Juliet?",
-            "response": "William Shakespeare wrote Romeo and Juliet.",
-            "retrieved_contexts": [
-                "Romeo and Juliet is a play by William Shakespeare."
-            ],
-            "reference": "William Shakespeare",
-        },
-    ]
+rows = [
+    {
+        "user_input": "What is the capital of France?",
+        "response": "Paris is the capital of France.",
+        "retrieved_contexts": ["France is a country in Europe. Its capital is Paris."],
+        "reference": "Paris",
+    },
+    {
+        "user_input": "Who wrote Romeo and Juliet?",
+        "response": "William Shakespeare wrote Romeo and Juliet.",
+        "retrieved_contexts": ["Romeo and Juliet is a play by William Shakespeare."],
+        "reference": "William Shakespeare",
+    },
+]
+dataset = Dataset(
+    "oci_eval",
+    "inmemory",
+    data_model=SingleTurnSample,
+    data=[SingleTurnSample(**row) for row in rows],
 )
 
-result = evaluate(
-    dataset,
-    metrics=[
+run = metrics_experiment(
+    [
         Faithfulness(llm=llm),
         AnswerRelevancy(llm=llm, embeddings=embeddings),
         ContextPrecision(llm=llm),
-    ],
+    ]
 )
-print(result)
+exp = run.run(dataset, name="oci")
+print(summarize(exp))
 ```
 
 ## Rate limits

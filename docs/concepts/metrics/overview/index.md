@@ -115,7 +115,7 @@ result = await scorer.ascore(
 )
 ```
 
-To score a whole dataset, pass the metrics to `evaluate(dataset, metrics=[...])`. Each sample's fields are passed to `ascore()` by name.
+To score a whole dataset, pass the metrics to [`metrics_experiment([...])`](../../experimentation.md#scoring-a-dataset-in-one-call-metrics_experiment) and run it on a `Dataset` of samples. Each sample's fields are passed to `ascore()` by name.
 
 ### Output Types
 
@@ -192,12 +192,12 @@ print(result.reason)
 # - [not supported] The Eiffel Tower is 500 m tall.: the context says 330 m
 ```
 
-With `evaluate()`, the explanations are kept per row:
+With `metrics_experiment`, the explanations are kept per row, in a `<metric>_reason` column next to the score:
 
 ```python
-results = evaluate(dataset, metrics=[Faithfulness(llm=llm)])
-results.reasons["faithfulness"][0]  # one explanation per row
-results.to_pandas(include_reasons=True)  # adds a faithfulness_reason column
+exp = metrics_experiment([Faithfulness(llm=llm)]).run(dataset)
+exp[0]["faithfulness_reason"]  # one explanation per row
+exp.to_pandas()  # has faithfulness and faithfulness_reason columns
 ```
 
 When a score is undefined (`NaN`), for example because no statements could be extracted, the reason says why. Non-LLM metrics such as BLEU or exact match have nothing to explain and don't set a reason.

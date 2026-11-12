@@ -29,19 +29,22 @@ llm = llm_factory("gpt-6-luna")
 llm.set_run_config(RunConfig(max_retries=5, max_wait=30))
 ```
 
-`evaluate(run_config=...)` and `TestsetGenerator` apply their `RunConfig` to
-every metric's LLM, so for a whole run you only set it once:
+`metrics_experiment(run_config=...)` and `TestsetGenerator` apply their
+`RunConfig` to every LLM called during the run, so for a whole run you only set
+it once. The LLMs themselves aren't changed, so they can be shared with other
+runs:
 
 ```python
-from ragas import evaluate
+from ragas import metrics_experiment
 from ragas.metrics.collections import Faithfulness
 from ragas.run_config import RunConfig
 
-results = evaluate(
-    dataset=eval_dataset,
-    metrics=[Faithfulness(llm=llm)],
-    run_config=RunConfig(max_workers=8, max_retries=8, max_wait=60),
+run = metrics_experiment(
+    [Faithfulness(llm=llm)],
+    run_config=RunConfig(max_retries=8, max_wait=60),
+    max_workers=8,  # rows scored at once
 )
+exp = run.run(dataset, name="baseline")
 ```
 
 To see the retries, set `log_tenacity=True`: each one is then logged at
@@ -59,8 +62,8 @@ The default, `(Exception,)`, means "transient errors" as described above.
 
 ## Requests and Tokens per Minute
 
-`max_workers` limits how many jobs run at once, not how many requests reach the
-provider: one metric or experiment row can make several LLM calls. To keep under
+`max_workers` limits how many jobs or rows run at once, not how many requests
+reach the provider: one metric or experiment row can make several LLM calls. To keep under
 your provider's limit, pass a `RateLimit` to `llm_factory`:
 
 ```python
@@ -72,8 +75,9 @@ llm = llm_factory("gpt-6-luna", rate_limit=limit)
 ```
 
 Each request then waits until the limit has room, instead of being sent and
-failing with a 429. It is paced in the LLM, so `evaluate()`, `metric.ascore()`,
-testset generation and experiments all go through it.
+failing with a 429. It is paced in the LLM, so `metric.ascore()`,
+`metrics_experiment`, your own experiments and testset generation all go
+through it.
 
 - **One object is one limit.** Limits usually apply per API key, so give every
   LLM that uses the key the same `RateLimit`. It also holds across threads and
@@ -95,7 +99,8 @@ then retried as described above.
 ## Timeouts
 
 `RunConfig.timeout` (default 180 seconds) is a wall-clock limit on one **job**:
-one metric scoring one sample in `evaluate()`, or one step of testset generation.
+one metric scoring one row in `metrics_experiment`, or one step of testset
+generation.
 It covers every LLM call the job makes, **retries and backoff waits included**.
 A metric that makes several calls, or a job that backs off on rate limits, can
 reach it even though each request is quick. The job then fails with
@@ -141,7 +146,7 @@ run_config = RunConfig(
     timeout=180,  # Max seconds per job, retries included (default: 180)
     max_retries=10,  # Attempts per LLM call (default: 10)
     max_wait=60,  # Max seconds between attempts (default: 60)
-    max_workers=16,  # Concurrent jobs (default: 16)
+    max_workers=16,  # Concurrent jobs in testset generation (default: 16)
     log_tenacity=False,  # Log each retry at WARNING (default: False)
     seed=42,  # Random seed (default: 42)
 )

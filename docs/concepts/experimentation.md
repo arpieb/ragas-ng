@@ -73,7 +73,7 @@ dataset = Dataset.load(name="test_data", backend="local/csv", root_dir="./data")
 results = await my_experiment.arun(dataset)
 ```
 
-From synchronous code, such as a script without an event loop, use `run()`. It takes the same arguments as `arun()` and returns the same results. Like `evaluate()` and `metric.score()`, it also works inside a running event loop (Jupyter), but in async code `await arun(...)` is better, because `run()` blocks the loop until the experiment finishes.
+From synchronous code, such as a script without an event loop, use `run()`. It takes the same arguments as `arun()` and returns the same results. Like `metric.score()`, it also works inside a running event loop (Jupyter), but in async code `await arun(...)` is better, because `run()` blocks the loop until the experiment finishes.
 
 ```python
 results = my_experiment.run(dataset)
@@ -81,7 +81,7 @@ results = my_experiment.run(dataset)
 
 ### Concurrency and rate limits
 
-`arun` runs the rows concurrently, at most `max_workers` at a time. The default is 16, the same as `evaluate()`. Set it on the decorator, or for one run:
+`arun` runs the rows concurrently, at most `max_workers` at a time. The default is 16. Set it on the decorator, or for one run:
 
 ```python
 @experiment(max_workers=4)  # every run of this experiment

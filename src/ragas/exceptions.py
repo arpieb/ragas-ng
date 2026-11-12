@@ -166,7 +166,7 @@ class DuplicateExperimentError(DuplicateResourceError):
 
 
 class ThresholdError(RagasError, AssertionError):
-    """``EvaluationResult.check()`` found metrics outside their thresholds.
+    """``ragas.check()`` found metrics outside their thresholds.
 
     An ``AssertionError``, so pytest reports it as a failed assertion. The
     message is a per-metric table; ``failures`` holds the same as

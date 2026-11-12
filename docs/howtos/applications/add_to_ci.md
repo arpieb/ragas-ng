@@ -7,17 +7,18 @@ search:
 
 You can add Ragas evaluations to your continuous integration pipeline to track the quality of your RAG pipeline over time. Treat them as part of your end-to-end test suite, and run them before major changes and releases.
 
-A Ragas CI test is an ordinary Pytest test that runs `evaluate()` and checks the result with `result.check()`: a lower or upper bound on each metric's mean, and no unscored rows.
+A Ragas CI test is an ordinary Pytest test that scores a dataset with [`metrics_experiment`](../../concepts/experimentation.md#scoring-a-dataset-in-one-call-metrics_experiment) and checks the result with `check()`: a lower or upper bound on each metric's mean, and no unscored rows.
 
 !!! note
-    This example uses a dataset that already holds outputs from a reference RAG pipeline. When testing your own system, generate the `response` and `retrieved_contexts` columns with the pipeline you want to test. See [Evaluation Dataset](../../concepts/components/eval_dataset.md) for how to build one from your own data.
+    This example uses a dataset that already holds outputs from a reference RAG pipeline. When testing your own system, generate the `response` and `retrieved_contexts` columns with the pipeline you want to test. See [Evaluation Dataset](../../concepts/components/eval_dataset.md) for how to build a `Dataset` from your own data.
 
 ```python
 import pytest
 from datasets import load_dataset
 from openai import AsyncOpenAI
 
-from ragas import EvaluationDataset, evaluate
+from ragas import Dataset, check, metrics_experiment
+from ragas.dataset_schema import SingleTurnSample
 from ragas.embeddings import embedding_factory
 from ragas.llms import llm_factory
 from ragas.metrics.collections import (
@@ -30,8 +31,10 @@ from ragas.metrics.collections import (
 
 def test_amnesty_e2e():
     # columns: user_input, response, retrieved_contexts, reference
-    dataset = EvaluationDataset.from_hf_dataset(
-        load_dataset("vibrantlabsai/amnesty_qa", "english_v3")["eval"]
+    df = load_dataset("vibrantlabsai/amnesty_qa", "english_v3")["eval"].to_pandas()
+    df = df.astype(object).where(df.notna(), None)  # NaN -> None
+    dataset = Dataset.from_pandas(
+        df, "amnesty_qa", "inmemory", data_model=SingleTurnSample
     )
 
     client = AsyncOpenAI()
@@ -40,16 +43,17 @@ def test_amnesty_e2e():
         "openai", model="text-embedding-3-small", client=client
     )
 
-    result = evaluate(
-        dataset,
-        metrics=[
+    run = metrics_experiment(
+        [
             AnswerRelevancy(llm=llm, embeddings=embeddings),
             Faithfulness(llm=llm),
             ContextRecall(llm=llm),
             ContextPrecision(llm=llm),
-        ],
+        ]
     )
-    result.check(
+    exp = run.run(dataset, name="amnesty_ci")
+    check(
+        exp,
         min_mean={
             "answer_relevancy": 0.9,
             "context_recall": 0.95,
@@ -60,7 +64,7 @@ def test_amnesty_e2e():
     )
 ```
 
-`check()` also fails if any row of any metric has no score. A metric that errors or can't judge a row (a NaN score) is left out of the mean, so the mean alone would hide it. Pass `allow_missing=n` to allow up to `n` per metric, or `allow_missing=None` not to check. A metric name that isn't in the result raises `ValueError`, so a typo can't pass silently. `min_mean=0.8` (one number) applies to every metric.
+`check()` also fails if any row of any metric has no score. A metric that errors or can't judge a row (a NaN score) is left out of the mean, so the mean alone would hide it. Pass `allow_missing=n` to allow up to `n` per metric, or `allow_missing=None` not to check. A metric name that isn't in the experiment raises `ValueError`, so a typo can't pass silently. `min_mean=0.8` (one number) applies to every metric.
 
 When a check fails, `check()` raises `ThresholdError`, an `AssertionError`, so pytest shows it as a failed assertion with a table:
 
@@ -73,7 +77,7 @@ context_precision  0.9533  >= 0.95     50     0        ok
 faithfulness       0.5800  0.3 .. 0.5  48     2        mean above 0.5; 2 rows missing (allowed 0)
 ```
 
-For other checks, `result.summary()` gives each metric's `mean`, `count` and `missing`, and `result["faithfulness"]` the per-row scores.
+For other checks, `summarize(exp)` gives each metric's `mean`, `count` and `missing`, and `[row["faithfulness"] for row in exp]` the per-row scores.
 
 ## Keeping CI scores stable
 

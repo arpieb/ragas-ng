@@ -41,9 +41,9 @@ evaluator_llm = llm_factory("gpt-6-luna", client=OpenAI())
 
 ```python
 from ragas.metrics.collections import AspectCritic
-from ragas.dataset_schema import MultiTurnSample, EvaluationDataset
+from ragas import Dataset, metrics_experiment
+from ragas.dataset_schema import MultiTurnSample
 from ragas.messages import HumanMessage, AIMessage
-from ragas import evaluate
 
 
 sample1 = MultiTurnSample(
@@ -98,16 +98,16 @@ aspect_critic = AspectCritic(
 
 
 ```python
-result = evaluate(
-    dataset=EvaluationDataset(samples=[sample1, sample2]),
-    metrics=[aspect_critic],
+dataset = Dataset(
+    "forgetfulness", "inmemory", data_model=MultiTurnSample, data=[sample1, sample2]
 )
+exp = metrics_experiment([aspect_critic]).run(dataset, name="forgetfulness")
 
-result.to_pandas()
+exp.to_pandas()
 ```
 Output
 ```
-Evaluating: 100%|██████████| 2/2 [00:00<?, ?it/s]
+Running experiment: 100%|██████████| 2/2 [00:00<?, ?it/s]
 ```
 
 
@@ -152,7 +152,7 @@ Evaluating: 100%|██████████| 2/2 [00:00<?, ?it/s]
 
 
 
-When evaluating with LLM-based metrics, each metric may involve one or more calls to the LLM. The traces of evaluation can provide insights for understanding the results and diagnosing any issues. You can find more details on this process by visiting [this page](../migrations/migrate_off_langchain.md#tracing).
+When evaluating with LLM-based metrics, each metric may involve one or more calls to the LLM. Each score's explanation is in its `<metric>_reason` column, and the traces of the run (every prompt and output) can help you diagnose a result: see [Observability](../observability.md).
 
 Another pattern identified during error analysis is that your banking chatbot occasionally drifts from discussing basic account services into offering unauthorized investment advice. To maintain user trust and ensure regulatory compliance, you want the system to implement **graceful transitions** when conversations approach these boundaries. You can achieve this by defining a metric like the one below.
 
@@ -217,16 +217,19 @@ sample2 = MultiTurnSample(
 
 
 ```python
-result = evaluate(
-    dataset=EvaluationDataset(samples=[sample1, sample2]),
-    metrics=[aspect_critic],
+dataset = Dataset(
+    "banking_compliance",
+    "inmemory",
+    data_model=MultiTurnSample,
+    data=[sample1, sample2],
 )
+exp = metrics_experiment([aspect_critic]).run(dataset, name="banking_compliance")
 
-result.to_pandas()
+exp.to_pandas()
 ```
 Output
 ```
-Evaluating: 100%|██████████| 2/2 [00:00<?, ?it/s]
+Running experiment: 100%|██████████| 2/2 [00:00<?, ?it/s]
 ```
 
 <div>
@@ -332,16 +335,18 @@ sample2 = MultiTurnSample(
 
 
 ```python
-result = evaluate(
-    dataset=EvaluationDataset(samples=[sample1, sample2]),
-    metrics=[jpn_polite_aspect_critic, mex_polite_aspect_critic],
+dataset = Dataset(
+    "politeness", "inmemory", data_model=MultiTurnSample, data=[sample1, sample2]
+)
+exp = metrics_experiment([jpn_polite_aspect_critic, mex_polite_aspect_critic]).run(
+    dataset, name="politeness"
 )
 
-result.to_pandas()
+exp.to_pandas()
 ```
 Output
 ```
-Evaluating: 100%|██████████| 4/4 [00:00<?, ?it/s]
+Running experiment: 100%|██████████| 2/2 [00:00<?, ?it/s]
 ```
 
 
@@ -442,16 +447,14 @@ sample = MultiTurnSample(
 
 
 ```python
-result = evaluate(
-    dataset=EvaluationDataset(samples=[sample]),
-    metrics=[aspect_critic],
-)
+dataset = Dataset("brand_tone", "inmemory", data_model=MultiTurnSample, data=[sample])
+exp = metrics_experiment([aspect_critic]).run(dataset, name="brand_tone")
 
-result.to_pandas()
+exp.to_pandas()
 ```
 Output
 ```
-Evaluating:   100%|██████████| 1/1 [00:00<?, ?it/s]
+Running experiment: 100%|██████████| 1/1 [00:00<?, ?it/s]
 ```
 
 

@@ -26,9 +26,8 @@ First, let's install the required packages and set up our environment.
 ```python
 import os
 
-from datasets import Dataset
-
-from ragas import evaluate
+from ragas import Dataset, metrics_experiment
+from ragas.dataset_schema import SingleTurnSample
 from ragas.embeddings import LiteLLMEmbeddings
 from ragas.integrations.helicone import helicone_config  # import helicone_config
 from ragas.llms import llm_factory
@@ -57,12 +56,15 @@ Let's prepare some sample data for our RAG system evaluation.
 
 ```python
 data_samples = {
-    "question": ["When was the first Super Bowl?", "Who has won the most Super Bowls?"],
-    "answer": [
+    "user_input": [
+        "When was the first Super Bowl?",
+        "Who has won the most Super Bowls?",
+    ],
+    "response": [
         "The first Super Bowl was held on January 15, 1967.",
         "The New England Patriots have won the most Super Bowls, with six championships.",
     ],
-    "contexts": [
+    "retrieved_contexts": [
         [
             "The First AFL–NFL World Championship Game, later known as Super Bowl I, was played on January 15, 1967, at the Los Angeles Memorial Coliseum in Los Angeles, California."
         ],
@@ -70,13 +72,19 @@ data_samples = {
             "As of 2021, the New England Patriots have won the most Super Bowls with six championships, all under the leadership of quarterback Tom Brady and head coach Bill Belichick."
         ],
     ],
-    "ground_truth": [
+    "reference": [
         "The first Super Bowl was held on January 15, 1967.",
         "The New England Patriots have won the most Super Bowls, with six championships as of 2021.",
     ],
 }
 
-dataset = Dataset.from_dict(data_samples)
+rows = [dict(zip(data_samples, values)) for values in zip(*data_samples.values())]
+dataset = Dataset(
+    "super_bowl",
+    "inmemory",
+    data_model=SingleTurnSample,
+    data=[SingleTurnSample(**row) for row in rows],
+)
 print(dataset)
 ```
 
@@ -95,17 +103,17 @@ llm = llm_factory("gpt-6-luna", **helicone)
 embeddings = LiteLLMEmbeddings(model="text-embedding-3-small", **helicone)
 
 # Evaluate using Ragas
-score = evaluate(
-    dataset,
-    metrics=[
+run = metrics_experiment(
+    [
         Faithfulness(llm=llm),
         AnswerRelevancy(llm=llm, embeddings=embeddings),
         ContextPrecision(llm=llm),
-    ],
+    ]
 )
+exp = run.run(dataset, name="helicone")
 
 # Display results
-print(score.to_pandas())
+print(exp.to_pandas())
 ```
 
 ## Viewing Results in Helicone
