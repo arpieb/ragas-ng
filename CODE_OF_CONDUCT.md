@@ -50,7 +50,7 @@ The Code of Conduct applies equally to all participants, including maintainers, 
 
 ## Reporting Violations
 
-If you experience or witness behaviour that violates this Code of Conduct, please report it by emailing **support@ragas.io**. Include as much detail as you're comfortable sharing, including:
+If you experience or witness behaviour that violates this Code of Conduct, please report it by emailing **ragas-ng@octobang.com**. Please don't report violations in public issues, discussions or pull requests. Include as much detail as you're comfortable sharing, including:
 
 - What happened
 - Who was involved
@@ -60,7 +60,7 @@ If you experience or witness behaviour that violates this Code of Conduct, pleas
 
 All reports will be treated confidentially. We will not disclose the identity of the reporter without their consent, except as necessary for investigation and response.
 
-If the violation involves a member of the Code of Conduct committee, or if you're not comfortable reporting directly to that address, please reach out to a project maintainer directly through alternative means.
+If the violation involves a maintainer, or you'd rather not report to the maintainers, you can report the content or account to GitHub instead: see [Reporting abuse or spam](https://docs.github.com/en/communities/maintaining-your-safety-on-github/reporting-abuse-or-spam).
 
 ## Enforcement
 
@@ -100,7 +100,7 @@ Anyone who violates this Code of Conduct may face consequences determined by the
 
 ## Appeal Process
 
-If you believe you have been unfairly sanctioned under this Code of Conduct, you may appeal by sending a detailed explanation to **support@ragas.io**. The appeal will be reviewed by a different set of maintainers when possible, and a decision will be communicated to you within a reasonable timeframe.
+If you believe you have been unfairly sanctioned under this Code of Conduct, you may appeal by sending a detailed explanation to **ragas-ng@octobang.com**. The appeal will be reviewed by a different set of maintainers when possible, and a decision will be communicated to you within a reasonable timeframe.
 
 ## Attribution
 
@@ -108,7 +108,7 @@ This Code of Conduct is adapted from the Contributor Covenant (https://www.contr
 
 ## Questions?
 
-If you have questions about this Code of Conduct or how it applies to a specific situation, please reach out to the maintainers at **support@ragas.io** or through a project maintainer you trust.
+If you have questions about this Code of Conduct or how it applies to a specific situation, please ask in [GitHub Discussions](https://github.com/arpieb/ragas-ng/discussions), or email **ragas-ng@octobang.com** if your question involves a specific situation you'd rather not discuss publicly.
 
 ---
 

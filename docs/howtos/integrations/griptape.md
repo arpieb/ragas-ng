@@ -14,7 +14,7 @@ First, let's make sure we have all the required packages installed:
 
 
 ```shell
-%pip install "griptape[all]" ragas -q
+%pip install "griptape[all]" ragas-ng -q
 ```
 
 ### Creating Our Dataset

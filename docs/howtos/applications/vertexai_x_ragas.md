@@ -33,7 +33,7 @@ For additional use cases and advanced features, refer to the documentation and H
 
 
 ```python
-!pip install --upgrade --user --quiet google-cloud-aiplatform ragas rouge_score
+!pip install --upgrade --user --quiet google-cloud-aiplatform ragas-ng rouge_score
 ```
 
 ### Restart runtime

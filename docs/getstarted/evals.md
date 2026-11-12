@@ -7,7 +7,7 @@ The purpose of this guide is to illustrate a simple workflow for testing and eva
 
     === "uvx (Recommended)"
         ```sh
-        uvx ragas quickstart rag_eval
+        uvx --from ragas-ng ragas quickstart rag_eval
         cd rag_eval
         uv sync
         ```

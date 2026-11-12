@@ -25,7 +25,7 @@ In this tutorial, you will:
 
 
 ```python
-%pip install --upgrade --user --quiet google-cloud-aiplatform ragas
+%pip install --upgrade --user --quiet google-cloud-aiplatform ragas-ng
 ```
 
 ### Restart runtime

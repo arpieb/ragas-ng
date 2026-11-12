@@ -6,7 +6,7 @@ The `rag_eval` template provides a complete RAG evaluation setup with custom met
 
 ```sh
 # Using uvx (no installation required)
-uvx ragas quickstart rag_eval
+uvx --from ragas-ng ragas quickstart rag_eval
 cd rag_eval
 
 # Or with ragas installed

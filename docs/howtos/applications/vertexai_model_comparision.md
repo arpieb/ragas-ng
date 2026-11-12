@@ -16,7 +16,7 @@ In this tutorial, you will learn how to use the Ragas to score and evaluate di
 
 
 ```python
-%pip install --upgrade --user --quiet google-cloud-aiplatform ragas rouge_score
+%pip install --upgrade --user --quiet google-cloud-aiplatform ragas-ng rouge_score
 ```
 
 ### Restart runtime
