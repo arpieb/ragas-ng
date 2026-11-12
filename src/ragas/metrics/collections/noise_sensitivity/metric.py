@@ -10,17 +10,16 @@ from ragas.metrics.collections._concurrency import gather_bounded
 from ragas.metrics.collections._reasons import count_phrase, count_verb, itemized
 from ragas.metrics.collections._verdicts import judge_each
 from ragas.metrics.collections.base import BaseMetric
-from ragas.metrics.result import MetricResult
-
-from .util import (
+from ragas.metrics.collections.faithfulness.util import (
+    NLIStatementInput,
+    NLIStatementOutput,
+    NLIStatementPrompt,
     StatementFaithfulnessAnswer,
-    StatementFaithfulnessInput,
-    StatementFaithfulnessOutput,
-    StatementFaithfulnessPrompt,
     StatementGeneratorInput,
     StatementGeneratorOutput,
     StatementGeneratorPrompt,
 )
+from ragas.metrics.result import MetricResult
 
 if t.TYPE_CHECKING:
     from ragas.llms.base import InstructorBaseRagasLLM
@@ -95,7 +94,7 @@ class NoiseSensitivity(BaseMetric):
         self.llm = llm
         self.mode = mode
         self.statement_prompt = StatementGeneratorPrompt()
-        self.faithfulness_prompt = StatementFaithfulnessPrompt()
+        self.faithfulness_prompt = NLIStatementPrompt()
 
         # Validate mode
         if mode not in {"relevant", "irrelevant"}:
@@ -218,11 +217,11 @@ class NoiseSensitivity(BaseMetric):
         One verdict per statement, or None if the judge's verdicts can't be
         matched to the statements (#52).
         """
-        input_data = StatementFaithfulnessInput(context=context, statements=statements)
+        input_data = NLIStatementInput(context=context, statements=statements)
         prompt_str = self.faithfulness_prompt.to_string(input_data)
 
         async def ask() -> List[StatementFaithfulnessAnswer]:
-            result = await self.llm.agenerate(prompt_str, StatementFaithfulnessOutput)
+            result = await self.llm.agenerate(prompt_str, NLIStatementOutput)
             return result.statements
 
         aligned = await judge_each(

@@ -20,7 +20,7 @@ from ragas.metrics.collections import (
 )
 from ragas.metrics.collections._concurrency import gather_bounded
 from ragas.metrics.collections.context_precision.util import ContextPrecisionOutput
-from ragas.metrics.collections.noise_sensitivity import util as ns
+from ragas.metrics.collections.faithfulness import util as ns
 from ragas.metrics.collections.topic_adherence import util as ta
 
 
@@ -115,7 +115,7 @@ def noise_llm(flight: InFlight, seed: int):
         tail = prompt.split("Now perform")[-1]
         ctx = re.findall(r"CTX\d+|REFTEXT", tail)[0]
         stmts = re.findall(r"(?:gt|ans)\d", tail)
-        return ns.StatementFaithfulnessOutput(
+        return ns.NLIStatementOutput(
             statements=[
                 ns.StatementFaithfulnessAnswer(
                     statement=s,

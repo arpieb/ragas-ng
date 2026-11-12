@@ -13,6 +13,12 @@ from ragas.metrics.collections._reasons import (
 )
 from ragas.metrics.collections._verdicts import judge_each
 from ragas.metrics.collections.base import BaseMetric
+from ragas.metrics.collections.faithfulness.util import (
+    NLIStatementInput,
+    NLIStatementOutput,
+    NLIStatementPrompt,
+    StatementFaithfulnessAnswer,
+)
 from ragas.metrics.result import MetricResult
 from ragas.metrics.utils import fbeta_from_precision_recall
 
@@ -20,10 +26,6 @@ from .util import (
     ClaimDecompositionInput,
     ClaimDecompositionOutput,
     ClaimDecompositionPrompt,
-    NLIStatementInput,
-    NLIStatementOutput,
-    NLIStatementPrompt,
-    StatementFaithfulnessAnswer,
 )
 
 if t.TYPE_CHECKING:

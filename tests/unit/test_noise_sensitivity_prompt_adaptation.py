@@ -12,7 +12,6 @@ import pytest
 
 from ragas.llms.base import InstructorLLM
 from ragas.metrics.collections import NoiseSensitivity
-from ragas.metrics.collections.noise_sensitivity import util as ns
 
 
 def translator_llm():
@@ -46,10 +45,22 @@ async def test_both_prompts_adapt_and_render_translated_examples(attr):
     assert "[es]" not in prompt.to_string(prompt.examples[0][0])
 
 
-def test_prompts_are_the_faithfulness_prompts():
+def test_statement_and_nli_prompts_are_shared():
+    """One statements/NLI module serves all four metrics (#217)."""
+    from ragas.metrics.collections import (
+        AnswerCorrectness,
+        FactualCorrectness,
+        Faithfulness,
+    )
     from ragas.metrics.collections.faithfulness import util as faith
 
-    assert ns.StatementGeneratorPrompt is faith.StatementGeneratorPrompt
-    assert ns.StatementFaithfulnessPrompt is faith.NLIStatementPrompt
-    assert ns.StatementGeneratorPrompt().examples
-    assert ns.StatementFaithfulnessPrompt().examples
+    llm = MagicMock(spec=InstructorLLM)
+    ns = NoiseSensitivity(llm=llm)
+    assert type(ns.statement_prompt) is faith.StatementGeneratorPrompt
+    assert type(ns.faithfulness_prompt) is faith.NLIStatementPrompt
+    assert type(Faithfulness(llm=llm).nli_statement_prompt) is faith.NLIStatementPrompt
+    assert type(FactualCorrectness(llm=llm).nli_prompt) is faith.NLIStatementPrompt
+    ac = AnswerCorrectness(llm=llm, weights=[1.0, 0.0])
+    assert type(ac.statement_generator_prompt) is faith.StatementGeneratorPrompt
+    assert faith.StatementGeneratorPrompt().examples
+    assert faith.NLIStatementPrompt().examples

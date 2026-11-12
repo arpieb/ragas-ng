@@ -6,15 +6,17 @@ from typing import List
 import numpy as np
 
 from ragas.metrics.collections.base import BaseMetric
+from ragas.metrics.collections.faithfulness.util import (
+    StatementGeneratorInput,
+    StatementGeneratorOutput,
+    StatementGeneratorPrompt,
+)
 from ragas.metrics.result import MetricResult
 
 from .util import (
     ClassificationWithReason,
     CorrectnessClassifierInput,
     CorrectnessClassifierPrompt,
-    StatementGeneratorInput,
-    StatementGeneratorOutput,
-    StatementGeneratorPrompt,
 )
 
 if t.TYPE_CHECKING:

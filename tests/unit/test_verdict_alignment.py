@@ -22,7 +22,6 @@ from ragas.metrics.collections.faithfulness.util import (
     StatementFaithfulnessAnswer,
     StatementGeneratorOutput,
 )
-from ragas.metrics.collections.noise_sensitivity import util as ns
 from ragas.metrics.collections.topic_adherence import util as ta
 
 
@@ -148,18 +147,18 @@ async def test_faithfulness_matches_reordered_extra_verdicts_by_text():
 async def test_noise_sensitivity_mismatch_is_nan_not_a_ragged_matrix():
     def nli(prompt):
         # always one verdict short
-        return ns.StatementFaithfulnessOutput(
+        return NLIStatementOutput(
             statements=[
-                ns.StatementFaithfulnessAnswer(statement="s1", reason="r", verdict=1)
+                StatementFaithfulnessAnswer(statement="s1", reason="r", verdict=1)
             ]
         )
 
     llm = scripted_llm(
         {
-            ns.StatementGeneratorOutput: lambda p: ns.StatementGeneratorOutput(
+            StatementGeneratorOutput: lambda p: StatementGeneratorOutput(
                 statements=["s1", "s2"]
             ),
-            ns.StatementFaithfulnessOutput: nli,
+            NLIStatementOutput: nli,
         }
     )
     result = await NoiseSensitivity(llm=llm).ascore(

@@ -1,55 +1,14 @@
-"""Answer Correctness prompt classes and models."""
+"""Answer Correctness prompt classes and models.
+
+Statement generation is shared with Faithfulness
+(``ragas.metrics.collections.faithfulness.util``).
+"""
 
 import typing as t
 
 from pydantic import BaseModel, Field
 
 from ragas.prompt.metrics.base_prompt import BasePrompt
-
-
-class StatementGeneratorInput(BaseModel):
-    """Input model for statement generation."""
-
-    question: str = Field(..., description="The question being answered")
-    answer: str = Field(
-        ..., description="The answer text to break down into statements"
-    )
-
-
-class StatementGeneratorOutput(BaseModel):
-    """Structured output for statement generation."""
-
-    statements: t.List[str] = Field(
-        ..., description="The generated statements from the answer"
-    )
-
-
-class StatementGeneratorPrompt(
-    BasePrompt[StatementGeneratorInput, StatementGeneratorOutput]
-):
-    """Prompt for breaking down answers into atomic statements."""
-
-    input_model = StatementGeneratorInput
-    output_model = StatementGeneratorOutput
-
-    instruction = """Given a question and an answer, analyze the complexity of each sentence in the answer. Break down each sentence into one or more fully understandable statements. Ensure that no pronouns are used in any statement."""
-
-    examples = [
-        (
-            StatementGeneratorInput(
-                question="Who was Albert Einstein and what is he best known for?",
-                answer="He was a German-born theoretical physicist, widely acknowledged to be one of the greatest and most influential physicists of all time. He was best known for developing the theory of relativity, he also made important contributions to the development of the theory of quantum mechanics.",
-            ),
-            StatementGeneratorOutput(
-                statements=[
-                    "Albert Einstein was a German-born theoretical physicist.",
-                    "Albert Einstein is recognized as one of the greatest and most influential physicists of all time.",
-                    "Albert Einstein was best known for developing the theory of relativity.",
-                    "Albert Einstein made important contributions to the development of the theory of quantum mechanics.",
-                ]
-            ),
-        ),
-    ]
 
 
 class StatementsWithReason(BaseModel):
