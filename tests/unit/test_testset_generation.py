@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 import pytest
 
 from ragas.dataset_schema import SingleTurnSample
-from ragas.testset.graph import KnowledgeGraph, Node
+from ragas.testset.graph import KnowledgeGraph, Node, NodeType
 from ragas.testset.persona import Persona, PersonaList
 from ragas.testset.synthesizers.base import (
     BaseScenario,
@@ -463,3 +463,24 @@ def test_generate_with_docs_keeps_an_empty_transform_list(monkeypatch):
     gen.generate_with_docs(
         ["some text"], 1, transforms=[], query_distribution=[(_synth("s"), 1.0)]
     )
+
+
+def test_default_query_distribution_asks_each_synthesizer_if_it_applies(monkeypatch):
+    from ragas.testset.synthesizers import default_query_distribution
+    from ragas.testset.synthesizers.multi_hop import MultiHopAbstractQuerySynthesizer
+
+    monkeypatch.setattr(
+        MultiHopAbstractQuerySynthesizer, "is_applicable", lambda self, kg: False
+    )
+    node = Node(
+        type=NodeType.CHUNK, properties={"page_content": "x", "entities": ["a"]}
+    )
+    distribution = default_query_distribution(fake_llm(), KnowledgeGraph(nodes=[node]))
+
+    assert [type(s).__name__ for s, _ in distribution] == [
+        "SingleHopSpecificQuerySynthesizer"
+    ]
+
+
+def test_base_synthesizer_applies_to_any_graph():
+    assert _synth("s").is_applicable(KnowledgeGraph())

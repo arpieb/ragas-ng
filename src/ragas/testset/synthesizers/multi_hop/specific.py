@@ -15,10 +15,7 @@ from ragas.testset.synthesizers.multi_hop.base import (
     MultiHopScenario,
 )
 from ragas.testset.synthesizers.multi_hop.prompts import QueryAnswerGenerationPrompt
-from ragas.testset.synthesizers.prompts import (
-    ThemesPersonasInput,
-    ThemesPersonasMatchingPrompt,
-)
+from ragas.testset.synthesizers.prompts import ThemesPersonasMatchingPrompt
 
 if t.TYPE_CHECKING:
     from ragas.callbacks import Callbacks
@@ -44,6 +41,9 @@ class MultiHopSpecificQuerySynthesizer(MultiHopQuerySynthesizer):
         )
         logger.info("found %d clusters", len(node_clusters))
         return node_clusters
+
+    def is_applicable(self, knowledge_graph: KnowledgeGraph) -> bool:
+        return bool(self.get_node_clusters(knowledge_graph))
 
     async def _generate_scenarios(
         self,
@@ -86,15 +86,12 @@ class MultiHopSpecificQuerySynthesizer(MultiHopQuerySynthesizer):
                     ):
                         logger.debug("Overlapped items are not strings or iterables.")
                         continue
-                    themes = self._extract_themes_from_overlaps(overlapped_items)
-
-                    prompt_input = ThemesPersonasInput(
-                        themes=themes, personas=persona_list
-                    )
-                    persona_concepts = (
-                        await self.theme_persona_matching_prompt.generate(
-                            data=prompt_input, llm=self.llm, callbacks=callbacks
-                        )
+                    themes = self._extract_themes(overlapped_items)
+                    persona_concepts = await self._match_personas_to_themes(
+                        self.theme_persona_matching_prompt,
+                        themes,
+                        persona_list,
+                        callbacks,
                     )
 
                     combinations = self._extract_theme_groups_from_overlaps(
@@ -105,7 +102,7 @@ class MultiHopSpecificQuerySynthesizer(MultiHopQuerySynthesizer):
                         [node_a, node_b],
                         combinations,
                         personas=persona_list,
-                        persona_item_mapping=persona_concepts.mapping,
+                        persona_item_mapping=persona_concepts,
                         property_name=self.property_name,
                     )
                     base_scenarios = self.sample_diverse_combinations(
@@ -114,34 +111,6 @@ class MultiHopSpecificQuerySynthesizer(MultiHopQuerySynthesizer):
                     scenarios.extend(base_scenarios)
 
         return scenarios
-
-    def _extract_themes_from_overlaps(self, overlapped_items: t.Any) -> t.List[str]:
-        """
-        Extract unique entity names from overlapped items.
-
-        Handles multiple formats:
-        - List[Tuple[str, str]]: Entity pairs from overlap detection
-        - List[List[str]]: Entity pairs as lists
-        - List[str]: Direct entity names
-        - Dict[str, Any]: Keys as entity names
-        """
-        if isinstance(overlapped_items, dict):
-            return list(overlapped_items.keys())
-
-        if not isinstance(overlapped_items, list):
-            return []
-
-        unique_entities = set()
-        for item in overlapped_items:
-            if isinstance(item, (tuple, list)):
-                # Extract both entities from the pair
-                for entity in item:
-                    if isinstance(entity, str):
-                        unique_entities.add(entity)
-            elif isinstance(item, str):
-                unique_entities.add(item)
-
-        return list(unique_entities)
 
     def _extract_theme_groups_from_overlaps(
         self, overlapped_items: t.Any

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import random
 import typing as t
 from collections import defaultdict
@@ -8,7 +7,7 @@ from dataclasses import dataclass
 
 from ragas import SingleTurnSample
 from ragas.prompt.metrics.base_prompt import BasePrompt
-from ragas.testset.persona import Persona, PersonaList
+from ragas.testset.persona import Persona
 from ragas.testset.synthesizers.base import (
     BaseScenario,
     BaseSynthesizer,
@@ -23,8 +22,6 @@ from ragas.testset.synthesizers.multi_hop.prompts import (
 
 if t.TYPE_CHECKING:
     from ragas.callbacks import Callbacks
-
-logger = logging.getLogger(__name__)
 
 
 class MultiHopScenario(BaseScenario):
@@ -59,23 +56,8 @@ class MultiHopQuerySynthesizer(BaseSynthesizer[Scenario]):
         persona_item_mapping: t.Dict[str, t.List[str]],
         property_name: str,
     ) -> t.List[t.Dict[str, t.Any]]:
-        persona_list = PersonaList(personas=personas)
         possible_combinations = []
         for combination in combinations:
-            dict = {"combination": combination}
-            valid_personas = []
-            for persona, concept_list in persona_item_mapping.items():
-                concept_list = [c.lower() for c in concept_list]
-                if not any(concept.lower() in concept_list for concept in combination):
-                    continue
-                # the name came back from the LLM and may not match exactly;
-                # skip one that matches no persona instead of raising (#84)
-                matched = persona_list.get(persona)
-                if matched is None:
-                    logger.debug("No persona named %r; skipping it.", persona)
-                elif matched not in valid_personas:
-                    valid_personas.append(matched)
-            dict["personas"] = valid_personas
             valid_nodes = []
             for node in nodes:
                 node_themes = [
@@ -85,12 +67,17 @@ class MultiHopQuerySynthesizer(BaseSynthesizer[Scenario]):
                     concept.lower() in node_themes for concept in combination
                 ):
                     valid_nodes.append(node)
-
-            dict["nodes"] = valid_nodes
-            dict["styles"] = list(QueryStyle)
-            dict["lengths"] = list(QueryLength)
-
-            possible_combinations.append(dict)
+            possible_combinations.append(
+                {
+                    "combination": combination,
+                    "personas": self._personas_for(
+                        combination, personas, persona_item_mapping
+                    ),
+                    "nodes": valid_nodes,
+                    "styles": list(QueryStyle),
+                    "lengths": list(QueryLength),
+                }
+            )
         return possible_combinations
 
     def sample_diverse_combinations(
@@ -104,24 +91,14 @@ class MultiHopQuerySynthesizer(BaseSynthesizer[Scenario]):
         style_count = defaultdict(int)
         length_count = defaultdict(int)
 
-        all_possible_samples = []
-
-        for entry in data:
-            combination = tuple(entry["combination"])
-            nodes = entry["nodes"]
-
-            for persona in entry["personas"]:
-                for style in entry["styles"]:
-                    for length in entry["lengths"]:
-                        all_possible_samples.append(
-                            {
-                                "combination": combination,
-                                "persona": persona,
-                                "nodes": nodes,
-                                "style": style,
-                                "length": length,
-                            }
-                        )
+        all_possible_samples = [
+            sample
+            for entry in data
+            for sample in self._expand_combinations(
+                {"combination": tuple(entry["combination"]), "nodes": entry["nodes"]},
+                entry,
+            )
+        ]
 
         random.shuffle(all_possible_samples)
 
@@ -171,16 +148,12 @@ class MultiHopQuerySynthesizer(BaseSynthesizer[Scenario]):
             query_style=scenario.style.value,
             llm_context=self.llm_context,
         )
-        response = await self.generate_query_reference_prompt.generate(
-            data=prompt_input, llm=self.llm, callbacks=callbacks
-        )
-        return SingleTurnSample(
-            user_input=response.query,
-            reference=response.answer,
-            reference_contexts=reference_context,
-            persona_name=getattr(scenario.persona, "name", None),
-            query_style=getattr(scenario.style, "name", None),
-            query_length=getattr(scenario.length, "name", None),
+        return await self._generate_query_sample(
+            scenario,
+            self.generate_query_reference_prompt,
+            prompt_input,
+            reference_context,
+            callbacks,
         )
 
     def make_contexts(self, scenario: MultiHopScenario) -> t.List[str]:

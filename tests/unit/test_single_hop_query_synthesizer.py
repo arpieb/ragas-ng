@@ -27,62 +27,62 @@ class MockThemePersonaMatchingPrompt(BasePrompt):
         )
 
 
-def test_extract_themes_from_items_with_strings(fake_llm):
-    """Test _extract_themes_from_items with string input."""
+def test_extract_themes_with_strings(fake_llm):
+    """Test _extract_themes with string input."""
     synthesizer = SingleHopSpecificQuerySynthesizer(llm=fake_llm)
 
     items = ["Theme1", "Theme2", "Theme3"]
-    themes = synthesizer._extract_themes_from_items(items)
+    themes = synthesizer._extract_themes(items)
 
     assert set(themes) == {"Theme1", "Theme2", "Theme3"}
 
 
-def test_extract_themes_from_items_with_tuples(fake_llm):
-    """Test _extract_themes_from_items with tuple input (the bug fix)."""
+def test_extract_themes_with_tuples(fake_llm):
+    """Test _extract_themes with tuple input (the bug fix)."""
     synthesizer = SingleHopSpecificQuerySynthesizer(llm=fake_llm)
 
     # This is the format that was causing the ValidationError in issue #2368
     items = [("Entity1", "Entity1"), ("Entity2", "Entity2")]
-    themes = synthesizer._extract_themes_from_items(items)
+    themes = synthesizer._extract_themes(items)
 
     assert set(themes) == {"Entity1", "Entity2"}
 
 
-def test_extract_themes_from_items_with_mixed_formats(fake_llm):
-    """Test _extract_themes_from_items with mixed formats."""
+def test_extract_themes_with_mixed_formats(fake_llm):
+    """Test _extract_themes with mixed formats."""
     synthesizer = SingleHopSpecificQuerySynthesizer(llm=fake_llm)
 
     items = ["Theme1", ("Entity2", "Entity2"), ["Entity3", "Entity3"]]
-    themes = synthesizer._extract_themes_from_items(items)
+    themes = synthesizer._extract_themes(items)
 
     assert set(themes) == {"Theme1", "Entity2", "Entity3"}
 
 
-def test_extract_themes_from_items_with_dict(fake_llm):
-    """Test _extract_themes_from_items with dict input."""
+def test_extract_themes_with_dict(fake_llm):
+    """Test _extract_themes with dict input."""
     synthesizer = SingleHopSpecificQuerySynthesizer(llm=fake_llm)
 
     items = {"Theme1": "value1", "Theme2": "value2"}
-    themes = synthesizer._extract_themes_from_items(items)
+    themes = synthesizer._extract_themes(items)
 
     assert set(themes) == {"Theme1", "Theme2"}
 
 
-def test_extract_themes_from_items_empty_input(fake_llm):
-    """Test _extract_themes_from_items with empty input."""
+def test_extract_themes_empty_input(fake_llm):
+    """Test _extract_themes with empty input."""
     synthesizer = SingleHopSpecificQuerySynthesizer(llm=fake_llm)
 
-    assert synthesizer._extract_themes_from_items([]) == []
-    assert synthesizer._extract_themes_from_items(None) == []
-    assert synthesizer._extract_themes_from_items("invalid") == []
+    assert synthesizer._extract_themes([]) == []
+    assert synthesizer._extract_themes(None) == []
+    assert synthesizer._extract_themes("invalid") == []
 
 
-def test_extract_themes_from_items_with_nested_empty_tuples(fake_llm):
-    """Test _extract_themes_from_items skips non-string elements."""
+def test_extract_themes_with_nested_empty_tuples(fake_llm):
+    """Test _extract_themes skips non-string elements."""
     synthesizer = SingleHopSpecificQuerySynthesizer(llm=fake_llm)
 
     items = [("Theme1", 123), (456, "Theme2"), ("Theme3", "Theme3")]
-    themes = synthesizer._extract_themes_from_items(items)
+    themes = synthesizer._extract_themes(items)
 
     # Only string elements should be extracted
     assert set(themes) == {"Theme1", "Theme2", "Theme3"}
