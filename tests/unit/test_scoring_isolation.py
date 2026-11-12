@@ -1,10 +1,11 @@
-"""evaluate() leaves the caller's metrics and LLMs untouched (#76).
+"""Scoring runs leave the caller's metrics and LLMs untouched (#76).
 
 The legacy path used to fill in ``metric.llm`` / ``metric.embeddings``, set its RunConfig
 and token collector on the metric's LLM, and reset it all in ``finally``.
 Two runs sharing a metric or an LLM -- threads, a web server, a notebook --
 then used each other's LLM, lost theirs mid-run ("NoneType has no attribute
-generate"), or counted each other's tokens.
+generate"), or counted each other's tokens. (These tests ran on evaluate()
+until #257; they now run on metrics_experiment.)
 """
 
 from __future__ import annotations
@@ -13,12 +14,12 @@ import asyncio
 import math
 import threading
 import typing as t
-import warnings
 
 import pytest
 
-from ragas import EvaluationDataset, SingleTurnSample, evaluate
-from ragas.cost import TokenUsage
+from ragas import Dataset, SingleTurnSample, metrics_experiment
+from ragas.backends import InMemoryBackend
+from ragas.cost import TokenUsage, TokenUsageCollector
 from ragas.llms.base import InstructorLLM
 from ragas.run_config import RunConfig
 
@@ -73,10 +74,15 @@ def entity_llm(sees: t.Sequence[str], gate: t.Optional[Gate] = None):
     return llm
 
 
-def dataset(n: int = 1) -> EvaluationDataset:
-    return EvaluationDataset(
-        samples=[SingleTurnSample(reference="ALPHA BETA", retrieved_contexts=["ALPHA"])]
-        * n
+def dataset(n: int = 1) -> Dataset:
+    return Dataset(
+        "rows",
+        InMemoryBackend(),
+        data_model=SingleTurnSample,
+        data=[
+            SingleTurnSample(reference="ALPHA BETA", retrieved_contexts=["ALPHA"])
+            for _ in range(n)
+        ],
     )
 
 
@@ -86,10 +92,8 @@ def shared_metric(llm):
     return ContextEntityRecall(llm=llm)
 
 
-def run(results: t.Dict[str, t.Any], key: str, **kwargs):
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        results[key] = evaluate(show_progress=False, **kwargs)
+def run(results: t.Dict[str, t.Any], key: str, *, dataset, metrics, **kwargs):
+    results[key] = metrics_experiment(metrics, **kwargs).run(dataset)
 
 
 def in_parallel(*jobs: t.Callable[[], None]):
@@ -109,28 +113,27 @@ def test_concurrent_runs_on_a_shared_llm_count_their_own_tokens():
     def parser(raw):
         return TokenUsage(input_tokens=raw["usage"], output_tokens=0, model="m")
 
+    one, three = TokenUsageCollector(parser), TokenUsageCollector(parser)
     in_parallel(
         lambda: run(
             results,
             "one",
             dataset=dataset(1),
             metrics=[shared_metric(llm)],
-            llm=llm,
-            token_usage_parser=parser,
+            usage=one,
         ),
         lambda: run(
             results,
             "three",
             dataset=dataset(3),
             metrics=[shared_metric(llm)],
-            llm=llm,
-            token_usage_parser=parser,
+            usage=three,
         ),
     )
 
     # two extraction calls per sample
-    assert results["one"].total_tokens().input_tokens == 2
-    assert results["three"].total_tokens().input_tokens == 6
+    assert one.total_tokens().input_tokens == 2
+    assert three.total_tokens().input_tokens == 6
     assert llm.usage_collector is None
 
 
@@ -146,7 +149,6 @@ def test_the_runs_config_applies_inside_the_run_and_does_not_stick():
         "r",
         dataset=dataset(),
         metrics=[shared_metric(llm)],
-        llm=llm,
         run_config=rc,
     )
 
@@ -160,27 +162,9 @@ def test_without_a_run_config_the_llms_own_applies():
     llm.set_run_config(own)
     results: t.Dict[str, t.Any] = {}
 
-    run(results, "r", dataset=dataset(), metrics=[shared_metric(llm)], llm=llm)
+    run(results, "r", dataset=dataset(), metrics=[shared_metric(llm)])
 
     assert all(c is own for c in llm.seen_configs)
-
-
-def test_return_executor_jobs_keep_the_runs_config():
-    llm = entity_llm(["ALPHA", "BETA"])
-    rc = RunConfig(max_retries=3)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        executor = evaluate(
-            dataset(),
-            metrics=[shared_metric(llm)],
-            llm=llm,
-            run_config=rc,
-            show_progress=False,
-            return_executor=True,
-        )
-    # results() runs here, after evaluate() returned
-    assert executor.results() == pytest.approx([0.5])  # type: ignore[union-attr]
-    assert llm.seen_configs and all(c is rc for c in llm.seen_configs)
 
 
 def test_metric_objects_are_not_modified():
@@ -193,25 +177,6 @@ def test_metric_objects_are_not_modified():
     assert {k: v for k, v in metric.__dict__.items() if not k.startswith("_")} == {
         k: v for k, v in before.items() if not k.startswith("_")
     }
-
-
-def test_default_metrics_are_fresh_collections_instances():
-    from unittest.mock import MagicMock
-
-    from ragas.embeddings.base import BaseRagasEmbedding
-    from ragas.evaluation import _default_metrics_for, _Models
-    from ragas.metrics.collections.base import BaseMetric
-
-    models = _Models(entity_llm([]), MagicMock(spec=BaseRagasEmbedding))
-    first, second = _default_metrics_for(models), _default_metrics_for(models)
-    assert [m.name for m in first] == [
-        "answer_relevancy",
-        "context_precision",
-        "faithfulness",
-        "context_recall",
-    ]
-    assert all(isinstance(m, BaseMetric) for m in first)
-    assert all(a is not b for a, b in zip(first, second))
 
 
 # --- ContextEntityRecall epsilon ------------------------------------------------

@@ -56,8 +56,9 @@ class MetricOutputType(Enum):
 # Tracing for SimpleBaseMetric subclasses (#196): collections metrics and the
 # DiscreteMetric / NumericMetric / decorator family take no `callbacks`.
 
-# Set by evaluate()'s adapters: the metric run evaluate() already opened, for the
-# metric's own score()/ascore() to adopt instead of opening a second one.
+# Set by a scoring run that opened the metric's run itself (the optimizers'
+# candidate scoring), for the metric's own score()/ascore() to adopt instead of
+# opening a second one.
 _adopted_metric_run: contextvars.ContextVar[t.Optional[CallbackGroup]] = (
     contextvars.ContextVar("ragas_adopted_metric_run", default=None)
 )
@@ -75,7 +76,7 @@ _NOT_INPUTS = frozenset({"llm", "embeddings", "callbacks"})
 def adopt_metric_run(callbacks: "Callbacks") -> t.Iterator[None]:
     """Run the enclosed metric call inside the metric run in ``callbacks``.
 
-    ``evaluate()`` opens a run per metric and row before handing over to a
+    A scoring run may open a run per metric and row before handing over to a
     collections metric; the metric's LLM calls should nest under that run, not
     under a second one.
     """

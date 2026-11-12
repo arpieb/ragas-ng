@@ -1,6 +1,6 @@
-"""EvaluationResult.check(): the one-call CI threshold check (#169).
+"""ragas.check(): the one-call CI threshold check (#169).
 
-The CI guide asserted on ``result.summary()`` by hand. ``check()`` does the
+The CI guide asserted on the summary by hand. ``check()`` does the
 common case -- lower/upper bounds on each metric's mean, and no unscored rows
 -- and raises a ``ThresholdError`` (an ``AssertionError``) with a per-metric
 table.
@@ -10,18 +10,33 @@ import math
 
 import pytest
 
-from ragas.dataset_schema import EvaluationDataset, EvaluationResult, SingleTurnSample
+from ragas import check
+from ragas.backends import InMemoryBackend
+from ragas.experiment import Experiment
 
 NAN = math.nan
 
 
+class _Result:
+    """An experiment with the given metric columns, and ``check`` on it."""
+
+    def __init__(self, exp: Experiment):
+        self.exp = exp
+
+    def check(self, **kwargs):
+        return check(self.exp, **kwargs)
+
+
 def _result(**columns):
     n = len(next(iter(columns.values())))
-    rows = [{name: values[i] for name, values in columns.items()} for i in range(n)]
-    dataset = EvaluationDataset(
-        samples=[SingleTurnSample(user_input=f"q{i}") for i in range(n)]
-    )
-    return EvaluationResult(scores=rows, dataset=dataset)
+    rows = []
+    for i in range(n):
+        row = {"user_input": f"q{i}"}
+        for name, values in columns.items():
+            row[name] = values[i]
+            row[f"{name}_reason"] = None
+        rows.append(row)
+    return _Result(Experiment("exp", InMemoryBackend(), data=rows))
 
 
 def _threshold_error():
@@ -134,7 +149,7 @@ def test_only_checked_metrics_are_in_the_table():
 
 
 def test_reasons_do_not_affect_the_check():
-    from ragas.metrics.result import MetricResult
-
-    result = _result(faithfulness=[MetricResult(value=0.9, reason="ok"), 0.7])
+    result = _result(faithfulness=[0.9, 0.7])
+    for row, reason in zip(result.exp, ["ok", "fine"]):
+        row["faithfulness_reason"] = reason
     result.check(min_mean={"faithfulness": 0.8})

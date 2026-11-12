@@ -1,29 +1,27 @@
-"""evaluate() runs modern metrics natively (#214).
+"""Scoring runs call each metric natively (#214).
 
 A ``SimpleBaseMetric`` (``ragas.metrics.collections``, ``NumericMetric``, the
-``@numeric_metric`` decorator) is no longer wrapped as a legacy ``Metric``:
-evaluate() maps each sample's fields onto the metric's ``ascore(**inputs)``
-and, where ``ascore`` takes a model as an argument, passes the run's.
+``@numeric_metric`` decorator) is called directly: ``metrics_experiment`` maps
+each sample's fields onto the metric's ``ascore(**inputs)`` and, where
+``ascore`` takes a model as an argument, passes the run's. (These tests ran
+on evaluate() until #257.)
 """
 
 from __future__ import annotations
 
 import math
 import typing as t
-import warnings
 
 import instructor
 import pytest
 
-from ragas import EvaluationDataset, MultiTurnSample, SingleTurnSample, evaluate
-from ragas.cost import TokenUsage
+from ragas import Dataset, MultiTurnSample, SingleTurnSample, metrics_experiment
+from ragas.backends import InMemoryBackend
 from ragas.llms import llm_factory
 from ragas.messages import AIMessage, HumanMessage
 from ragas.metrics import NumericMetric, numeric_metric
-from ragas.metrics.collections import AspectCritic
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
-from ragas.run_config import RunConfig
 
 VERDICT = '{"reason": "It answers the question.", "verdict": 1}'
 
@@ -37,19 +35,32 @@ def make_llm(response: str = VERDICT):
     return llm_factory("gpt-6-luna", mode=instructor.Mode.JSON, mock_response=response)
 
 
-def run(dataset, metrics, **kwargs):
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        return evaluate(dataset, metrics=metrics, show_progress=False, **kwargs)
+class Result:
+    """An experiment's metric columns, by name."""
+
+    def __init__(self, exp):
+        self.exp = exp
+
+    def __getitem__(self, name: str) -> t.List[t.Any]:
+        return [row[name] for row in self.exp]
+
+    @property
+    def reasons(self) -> t.Dict[str, t.List[t.Any]]:
+        names = [k[: -len("_reason")] for k in self.exp[0] if k.endswith("_reason")]
+        return {n: self[n + "_reason"] for n in names}
 
 
-def single_turn(n: int = 2) -> EvaluationDataset:
-    return EvaluationDataset(
-        samples=[
-            SingleTurnSample(user_input=f"q{i}", response=f"r{i}", reference="ref")
-            for i in range(n)
-        ]
-    )
+def run(samples, metrics, **kwargs) -> Result:
+    data_model = type(samples[0])
+    dataset = Dataset("rows", InMemoryBackend(), data_model=data_model, data=samples)
+    return Result(metrics_experiment(metrics, **kwargs).run(dataset))
+
+
+def single_turn(n: int = 2) -> t.List[SingleTurnSample]:
+    return [
+        SingleTurnSample(user_input=f"q{i}", response=f"r{i}", reference="ref")
+        for i in range(n)
+    ]
 
 
 class Recording(BaseMetric):
@@ -97,14 +108,12 @@ class Messages(BaseMetric):
         return MetricResult(value=float(len(user_input)))
 
 
-def multi_turn() -> EvaluationDataset:
-    return EvaluationDataset(
-        samples=[
-            MultiTurnSample(
-                user_input=[HumanMessage(content="hi"), AIMessage(content="hello")]
-            )
-        ]
-    )
+def multi_turn() -> t.List[MultiTurnSample]:
+    return [
+        MultiTurnSample(
+            user_input=[HumanMessage(content="hi"), AIMessage(content="hello")]
+        )
+    ]
 
 
 # --- sample mapping -------------------------------------------------------------
@@ -122,10 +131,7 @@ def test_sample_fields_are_passed_to_ascore_by_name():
 
 def test_an_optional_input_the_sample_lacks_is_left_to_its_default():
     metric = Recording()
-    dataset = EvaluationDataset(
-        samples=[SingleTurnSample(user_input="q", response="r")]
-    )
-    run(dataset, [metric])
+    run([SingleTurnSample(user_input="q", response="r")], [metric])
     assert metric.calls == [dict(user_input="q", response="r", reference=None)]
 
 
@@ -147,9 +153,8 @@ def test_reasons_are_carried_through():
 
 def test_missing_required_column_is_rejected_before_scoring():
     metric = Recording()
-    dataset = EvaluationDataset(samples=[SingleTurnSample(user_input="q")])
     with pytest.raises(ValueError, match=r"recording.*\['response'\]"):
-        run(dataset, [metric])
+        run([SingleTurnSample(user_input="q")], [metric])
     assert metric.calls == []
 
 
@@ -160,7 +165,7 @@ def test_multi_turn_text_metric_gets_the_rendered_conversation():
     metric = Conversation()
     result = run(multi_turn(), [metric])
     assert result["conversation"] == [1.0]
-    assert metric.seen == [multi_turn().samples[0].pretty_repr()]
+    assert metric.seen == [multi_turn()[0].pretty_repr()]
 
 
 def test_multi_turn_message_metric_gets_the_messages():
@@ -178,18 +183,6 @@ def test_single_turn_only_metric_is_rejected_for_multi_turn_data():
 # --- failures -------------------------------------------------------------------
 
 
-def test_a_failing_row_is_nan_and_the_others_score():
-    result = run(single_turn(), [Recording(fail_on="q1")])
-    scores = result["recording"]
-    assert scores[0] == 0.5
-    assert math.isnan(scores[1])
-
-
-def test_raise_exceptions_propagates_the_metrics_error():
-    with pytest.raises(RuntimeError, match="boom on q1"):
-        run(single_turn(), [Recording(fail_on="q1")], raise_exceptions=True)
-
-
 def test_a_non_numeric_value_is_nan():
     class Label(BaseMetric):
         async def ascore(self, response: str) -> MetricResult:  # type: ignore[override]
@@ -197,22 +190,6 @@ def test_a_non_numeric_value_is_nan():
 
     result = run(single_turn(1), [Label(name="label")])
     assert math.isnan(result["label"][0])
-
-
-def test_the_run_timeout_applies():
-    import asyncio
-
-    class Slow(BaseMetric):
-        async def ascore(self, response: str) -> MetricResult:  # type: ignore[override]
-            await asyncio.sleep(5)
-            return MetricResult(value=1.0)
-
-    result = run(
-        single_turn(1),
-        [Slow(name="slow")],
-        run_config=RunConfig(timeout=0.05),  # type: ignore[arg-type]
-    )
-    assert math.isnan(result["slow"][0])
 
 
 # --- models ---------------------------------------------------------------------
@@ -230,32 +207,10 @@ def numeric(name: str = "quality"):
 
 
 def test_a_prompt_metric_gets_the_runs_llm():
-    """NumericMetric takes ``llm`` per call; it used to score NaN in evaluate()."""
+    """NumericMetric takes ``llm`` per call (it used to score NaN in evaluate())."""
     result = run(single_turn(1), [numeric()], llm=make_llm(NUMERIC))
     assert result["quality"] == [0.7]
     assert result.reasons["quality"] == ["fine"]
-
-
-def test_a_prompt_metric_gets_the_default_llm_when_none_was_passed(monkeypatch):
-    built = []
-
-    def fake_default():
-        built.append(1)
-        return make_llm(NUMERIC)
-
-    monkeypatch.setattr("ragas.evaluation.default_llm", fake_default)
-    result = run(single_turn(2), [numeric("a"), numeric("b")])
-    assert result["a"] == [0.7, 0.7] and result["b"] == [0.7, 0.7]
-    assert built == [1]  # one default LLM per run, shared
-
-
-def test_a_metric_with_its_own_llm_does_not_build_the_default(monkeypatch):
-    def fail():
-        raise AssertionError("default_llm() should not be called")
-
-    monkeypatch.setattr("ragas.evaluation.default_llm", fail)
-    critic = AspectCritic(name="answers", definition="Answers?", llm=make_llm())
-    assert run(single_turn(1), [critic])["answers"] == [1.0]
 
 
 def test_a_non_ragas_llm_for_a_prompt_metric_is_rejected_up_front():
@@ -275,54 +230,3 @@ def test_a_decorated_metric_gets_sample_fields_and_the_llm():
     result = run(single_turn(1), [length], llm=llm)
     assert result["length"] == [2.0]
     assert seen == [llm]
-
-
-# --- usage and tracing ------------------------------------------------------------
-
-
-def test_llm_usage_is_collected():
-    result = run(
-        single_turn(3),
-        [AspectCritic(name="answers", definition="Answers?", llm=make_llm())],
-        token_usage_parser=lambda raw: TokenUsage(input_tokens=1, output_tokens=0),
-    )
-    assert result.total_tokens().input_tokens == 3
-
-
-def test_each_row_holds_one_metric_run_with_the_llm_call_under_it():
-    critic = AspectCritic(name="answers", definition="Answers?", llm=make_llm())
-    result = run(single_turn(2), [critic])
-    assert len(result.traces) == 2
-    assert list(dict(result.traces[0]["answers"])) == ["AspectCriticOutput"]
-    assert result.traces[1].scores == {"answers": 1.0}
-
-
-# --- default metrics ----------------------------------------------------------------
-
-
-def test_default_metrics_are_collections_metrics_built_with_the_runs_models():
-    from ragas.embeddings.base import BaseRagasEmbedding
-    from ragas.evaluation import _default_metrics_for, _Models
-    from ragas.metrics.collections import (
-        AnswerRelevancy,
-        ContextPrecision,
-        ContextRecall,
-        Faithfulness,
-    )
-
-    llm = make_llm()
-    metrics = _default_metrics_for(_Models(llm, None))
-    assert [type(m) for m in metrics] == [
-        AnswerRelevancy,
-        ContextPrecision,
-        Faithfulness,
-        ContextRecall,
-    ]
-    assert [m.name for m in metrics] == [
-        "answer_relevancy",
-        "context_precision",
-        "faithfulness",
-        "context_recall",
-    ]
-    assert all(m.llm is llm for m in metrics)
-    assert isinstance(metrics[0].embeddings, BaseRagasEmbedding)

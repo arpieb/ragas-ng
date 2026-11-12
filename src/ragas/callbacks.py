@@ -3,7 +3,7 @@
 Two layers, driven from one ``new_group()`` call:
 
 1. A **native run tree** (``RagasTracer`` -> ``ChainRun``), which is the
-   in-process source of truth for ``EvaluationResult.traces``. It holds live
+   in-process record the optimizers read their candidates' prompts from. It holds live
    Python objects -- ``Testset`` instances, pydantic models, score dicts -- which
    ``optimizers/genetic.py`` reads back and calls ``.model_dump()`` on.
 2. **OpenTelemetry spans**, emitted alongside for external observability.
@@ -17,7 +17,7 @@ of the run, while the native tree keeps the objects themselves.
 
 Only ``opentelemetry-api`` is required. With no SDK configured the tracer is a
 no-op, which is correct behaviour for a library -- and costs nothing here,
-because ``EvaluationResult.traces`` comes from the native tree either way.
+because the optimizers read the native tree either way.
 
 Runs are passed down explicitly (``callbacks=`` groups) where the legacy APIs
 take them. Collections metrics, ``llm_factory()`` LLMs and experiments take no
@@ -405,7 +405,7 @@ class ChainRunEncoder(json.JSONEncoder):
 
 @dataclass
 class RagasTracer:
-    """Collects the run tree in process. Feeds ``EvaluationResult.traces``."""
+    """Collects the run tree in process, for ``parse_run_traces``."""
 
     traces: t.Dict[str, ChainRun] = field(default_factory=dict)
 
@@ -484,8 +484,8 @@ def parse_run_traces(
             "Multiple root traces found! This is a bug on our end, please file an issue and we will fix it ASAP :)"
         )
     if not root_traces:
-        # No traces to parse. Reachable whenever an EvaluationResult is built
-        # without them -- constructing one directly used to raise IndexError here.
+        # No traces to parse, e.g. nothing ran under this parent. This used to
+        # raise IndexError.
         return []
     root_trace = root_traces[0]
 

@@ -2,7 +2,7 @@
 
 ``metric.score()``, ``batch_score()``, the ``@*_metric`` decorators'
 ``score()``, ``async_to_sync``, ``Executor.results()`` and ``evaluate()``
-used ``asyncio.run()`` (a new loop per call) or nest_asyncio (patching the
+(now ``metrics_experiment(...).run()``) used ``asyncio.run()`` (a new loop per call) or nest_asyncio (patching the
 caller's loop). With an async client, whose connections are bound to the
 loop that opened them, the second ``score()`` failed with "bound to a
 different event loop"; inside Jupyter ``score()`` refused to run at all.
@@ -111,17 +111,24 @@ def test_executor_results_share_one_loop():
     assert pool.calls == 2
 
 
-def test_repeated_evaluate_with_an_async_client():
-    from ragas import EvaluationDataset, SingleTurnSample, evaluate
+def test_repeated_experiment_run_with_an_async_client():
+    from ragas import Dataset, SingleTurnSample, metrics_experiment, summarize
+    from ragas.backends import InMemoryBackend
 
-    metric = entity_recall(LoopBound())
-    dataset = EvaluationDataset(
-        samples=[SingleTurnSample(reference="Paris", retrieved_contexts=["Paris"])]
+    run = metrics_experiment([entity_recall(LoopBound())])
+    dataset = Dataset(
+        "rows",
+        InMemoryBackend(),
+        data_model=SingleTurnSample,
+        data=[SingleTurnSample(reference="Paris", retrieved_contexts=["Paris"])],
     )
     for _ in range(2):
-        with pytest.warns(DeprecationWarning):
-            result = evaluate(dataset, metrics=[metric], show_progress=False)
-        assert result["context_entity_recall"] == pytest.approx([1.0])
+        exp = run.run(dataset)
+        assert summarize(exp)["context_entity_recall"] == {
+            "mean": 1.0,
+            "count": 1,
+            "missing": 0,
+        }
 
 
 def test_nest_asyncio_is_never_imported():

@@ -1,6 +1,6 @@
 # From `evaluate()` to experiments
 
-`evaluate()`, `aevaluate()`, `EvaluationDataset` and `EvaluationResult` are being removed ([#241](https://github.com/arpieb/ragas-ng/issues/241)). Scoring a dataset is now an [experiment](../../concepts/experimentation.md):
+`evaluate()`, `aevaluate()` and `EvaluationResult` are removed ([#257](https://github.com/arpieb/ragas-ng/issues/257)), and `EvaluationDataset` goes next ([#241](https://github.com/arpieb/ragas-ng/issues/241)). Scoring a dataset is now an [experiment](../../concepts/experimentation.md):
 
 - the rows live in a `Dataset` of `SingleTurnSample` / `MultiTurnSample` objects;
 - `metrics_experiment(metrics)` scores them, as `evaluate()` did;

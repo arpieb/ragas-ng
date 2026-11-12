@@ -50,7 +50,7 @@ def test_ragas_imports_no_langfuse():
         """
         import sys
         import ragas
-        from ragas import evaluate  # noqa: F401
+        from ragas import metrics_experiment  # noqa: F401
         import ragas.integrations.tracing  # noqa: F401
         print(sorted(m for m in sys.modules if m.split(".")[0] == "langfuse"))
         """

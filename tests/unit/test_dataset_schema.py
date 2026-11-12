@@ -229,39 +229,6 @@ def test_multiturn_sample_validate_user_input_valid_types():
     assert isinstance(sample.user_input[1], AIMessage)
 
 
-def test_evaluation_result_aggregates_every_metric():
-    """Binary-valued metrics get no special treatment in the aggregate.
-
-    ``EvaluationResult`` used to carry a ``binary_columns`` field that excluded
-    those metrics from a local list which was then discarded -- so it never
-    affected anything. The field and the branch are gone; this pins the
-    behaviour that was always the real one.
-    """
-    from ragas.dataset_schema import EvaluationResult
-
-    dataset = EvaluationDataset(
-        samples=[SingleTurnSample(user_input=f"q{i}", response="r") for i in range(4)]
-    )
-    result = EvaluationResult(
-        scores=[
-            {"binary_metric": 1.0, "continuous_metric": 0.25},
-            {"binary_metric": 0.0, "continuous_metric": 0.75},
-            {"binary_metric": 1.0, "continuous_metric": 0.50},
-            {"binary_metric": 1.0, "continuous_metric": 1.00},
-        ],
-        dataset=dataset,
-    )
-
-    assert result["binary_metric"] == [1.0, 0.0, 1.0, 1.0]
-    assert repr(result) == "{'binary_metric': 0.7500, 'continuous_metric': 0.6250}"
-    assert sorted(result.to_pandas().columns) == [
-        "binary_metric",
-        "continuous_metric",
-        "response",
-        "user_input",
-    ]
-
-
 def test_sample_type_for_dispatches_on_user_input():
     assert sample_type_for({"user_input": "q"}) is SingleTurnSample
     assert sample_type_for({"response": "a"}) is SingleTurnSample

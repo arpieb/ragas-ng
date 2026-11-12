@@ -1,18 +1,21 @@
 """
 Unit tests for the cancellation functionality.
+
+The Executor (testset generation's ``return_executor``) and experiments:
+cancelling the task that runs ``arun()`` cancels its running rows and saves
+nothing.
 """
 
 import asyncio
 import threading
-import typing as t
 
-from ragas.dataset_schema import (
-    EvaluationDataset,
-    SingleTurnSample,
-    SingleTurnSampleOrMultiTurnSample,
-)
-from ragas.evaluation import evaluate
+import pytest
+
+from ragas import Dataset, metrics_experiment
+from ragas.backends import InMemoryBackend
+from ragas.dataset_schema import SingleTurnSample
 from ragas.executor import Executor
+from ragas.metrics.collections import ExactMatch
 
 
 class TestExecutorCancellation:
@@ -68,62 +71,62 @@ class TestExecutorCancellation:
         assert executor.is_cancelled()
 
 
-class TestEvaluateCancellation:
-    """Test cancellation functionality in evaluate()."""
+class SlowExactMatch(ExactMatch):
+    """ExactMatch that waits on an event, so a run is still going when cancelled."""
 
-    def create_test_dataset(self):
-        """Create a simple test dataset."""
-        samples: t.List[SingleTurnSample] = [
-            SingleTurnSample(
-                user_input="Test question",
-                response="Test answer",
-                retrieved_contexts=["Test context"],
-            )
-        ]
-        # Type cast to satisfy EvaluationDataset constructor
-        return EvaluationDataset(
-            samples=t.cast(t.List[SingleTurnSampleOrMultiTurnSample], samples)
-        )
+    def __init__(self, started: asyncio.Event, cancelled: list):
+        super().__init__()
+        self._started = started
+        self._cancelled = cancelled
 
-    def test_evaluate_return_executor_parameter(self):
-        """Test that evaluate() accepts return_executor parameter."""
-        dataset = self.create_test_dataset()
+    async def ascore(self, reference: str, response: str):  # type: ignore[override]
+        self._started.set()
+        try:
+            await asyncio.sleep(60)
+        except asyncio.CancelledError:
+            self._cancelled.append(response)
+            raise
+        return await super().ascore(reference=reference, response=response)
 
-        # Should return Executor when return_executor=True
-        executor = evaluate(dataset=dataset, metrics=[], return_executor=True)
-        assert isinstance(executor, Executor)
-        assert hasattr(executor, "cancel")
-        assert hasattr(executor, "is_cancelled")
 
-    def test_evaluate_default_behavior_unchanged(self):
-        """Test that evaluate() default behavior is unchanged."""
-        dataset = self.create_test_dataset()
+def _rows(backend: InMemoryBackend) -> Dataset:
+    return Dataset(
+        "rows",
+        backend,
+        data_model=SingleTurnSample,
+        data=[SingleTurnSample(response=f"r{i}", reference="r0") for i in range(3)],
+    )
 
-        # Test that return_executor=False is the default behavior
-        # We'll get an executor and verify it's not returned by default
-        executor = evaluate(dataset=dataset, metrics=[], return_executor=True)
-        assert isinstance(executor, Executor), (
-            "return_executor=True should return Executor"
-        )
 
-        # Test that default behavior would not return executor
-        # (We can't easily test the full evaluation without LLMs,
-        # so this tests the key API difference)
-        assert hasattr(executor, "cancel")
-        assert hasattr(executor, "is_cancelled")
+class TestExperimentCancellation:
+    """Cancelling an experiment: cancel the task running ``arun()``."""
 
-    def test_evaluate_executor_cancellation(self):
-        """Test that evaluate() executor can be cancelled."""
-        dataset = self.create_test_dataset()
+    @pytest.mark.asyncio
+    async def test_cancelling_the_task_cancels_running_rows_and_saves_nothing(self):
+        backend = InMemoryBackend()
+        started, cancelled = asyncio.Event(), []
+        run = metrics_experiment([SlowExactMatch(started, cancelled)])
 
-        result = evaluate(dataset=dataset, metrics=[], return_executor=True)
+        task = asyncio.create_task(run.arun(_rows(backend), name="long"))
+        await started.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
 
-        # Type assertion since return_executor=True guarantees Executor
-        executor = t.cast(Executor, result)
+        assert sorted(cancelled) == ["r0", "r1", "r2"]
+        assert "long" not in backend.list_experiments()
 
-        # Should be cancellable
-        executor.cancel()
-        assert executor.is_cancelled()
+    @pytest.mark.asyncio
+    async def test_wait_for_bounds_a_run(self):
+        backend = InMemoryBackend()
+        started, cancelled = asyncio.Event(), []
+        run = metrics_experiment([SlowExactMatch(started, cancelled)])
+
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(run.arun(_rows(backend), name="bounded"), 0.05)
+
+        assert sorted(cancelled) == ["r0", "r1", "r2"]
+        assert "bounded" not in backend.list_experiments()
 
 
 class TestGeneratorCancellation:
@@ -214,115 +217,3 @@ class TestCancellationIntegration:
         # Results should be empty
         results = executor.results()
         assert results == []
-
-
-class TestCancellationDocumentationExamples:
-    """Test that documentation examples work correctly."""
-
-    def test_timeout_pattern_example(self):
-        """Test the timeout pattern from documentation."""
-
-        def evaluate_with_timeout(dataset, metrics, timeout_seconds: float = 300):
-            """Example timeout function from docs."""
-            import threading
-
-            from ragas import evaluate
-
-            result = evaluate(dataset=dataset, metrics=metrics, return_executor=True)
-            # Type assertion since return_executor=True guarantees Executor
-            executor = t.cast(Executor, result)
-
-            results = None
-            exception = None
-
-            def run_evaluation():
-                nonlocal results, exception
-                try:
-                    results = executor.results()
-                except Exception as e:
-                    exception = e
-
-            thread = threading.Thread(target=run_evaluation)
-            thread.start()
-
-            thread.join(timeout=timeout_seconds)
-
-            if thread.is_alive():
-                executor.cancel()
-                thread.join(timeout=2)
-                return None, "timeout"
-
-            return results, exception
-
-        # Test with very short timeout
-        samples: t.List[SingleTurnSample] = [
-            SingleTurnSample(
-                user_input="Test", response="Test", retrieved_contexts=["Test"]
-            )
-        ]
-        dataset = EvaluationDataset(
-            samples=t.cast(t.List[SingleTurnSampleOrMultiTurnSample], samples)
-        )
-
-        results, error = evaluate_with_timeout(dataset, [], timeout_seconds=0.01)
-
-        # Should either complete very fast or timeout
-        assert error == "timeout" or results is not None
-
-    def test_evaluation_manager_example(self):
-        """Test the EvaluationManager example from documentation."""
-
-        class EvaluationManager:
-            def __init__(self):
-                self.executors = []
-
-            def start_evaluation(self, dataset, metrics):
-                result = evaluate(
-                    dataset=dataset, metrics=metrics, return_executor=True
-                )
-                # Type assertion since return_executor=True guarantees Executor
-                executor = t.cast(Executor, result)
-                self.executors.append(executor)
-                return executor
-
-            def cancel_all(self):
-                """Cancel all running evaluations."""
-                cancelled_count = 0
-                for executor in self.executors:
-                    if not executor.is_cancelled():
-                        executor.cancel()
-                        cancelled_count += 1
-                return cancelled_count
-
-            def cleanup_completed(self):
-                """Remove completed executors."""
-                before_count = len(self.executors)
-                self.executors = [ex for ex in self.executors if not ex.is_cancelled()]
-                return before_count - len(self.executors)
-
-        # Test the manager
-        manager = EvaluationManager()
-
-        samples: t.List[SingleTurnSample] = [
-            SingleTurnSample(
-                user_input="Test", response="Test", retrieved_contexts=["Test"]
-            )
-        ]
-        dataset = EvaluationDataset(
-            samples=t.cast(t.List[SingleTurnSampleOrMultiTurnSample], samples)
-        )
-
-        # Start evaluations
-        manager.start_evaluation(dataset, [])
-        manager.start_evaluation(dataset, [])
-
-        assert len(manager.executors) == 2
-
-        # Cancel all
-        cancelled = manager.cancel_all()
-        assert cancelled == 2
-
-        # Cleanup
-        removed = manager.cleanup_completed()
-        assert removed == 2
-        assert len(manager.executors) == 0

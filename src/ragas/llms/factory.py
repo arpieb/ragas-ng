@@ -285,8 +285,7 @@ def llm_factory(
     llm = InstructorLLM(
         client=instructor.from_litellm(completion, **_mode_kwargs(mode)),
         model=transport.model,
-        # "openai"/"azure" for those clients, "litellm" otherwise: evaluate()
-        # picks default embeddings from it (_infer_embedding_provider_from_llm)
+        # "openai"/"azure" for those clients, "litellm" otherwise
         provider=kind if kind in ("openai", "azure") else "litellm",
         cache=cache,
         sync_client=(

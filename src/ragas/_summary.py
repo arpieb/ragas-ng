@@ -1,8 +1,7 @@
 """Per-metric summaries and threshold checks, shared by every result type.
 
-``EvaluationResult.summary()`` / ``check()`` and ``ragas.summarize`` /
-``ragas.check`` (for experiments) use the same numbers and the same
-``ThresholdError`` table (#169, #253).
+``ragas.summarize`` / ``ragas.check`` compute them from an experiment's
+metric columns; the ``ThresholdError`` table is #169's.
 """
 
 from __future__ import annotations

@@ -62,7 +62,7 @@ class RunConfig:
 
 # -- run scope ---------------------------------------------------------------
 #
-# evaluate() and TestsetGenerator used to configure a run by setting
+# Runs (evaluate(), TestsetGenerator) used to configure themselves by setting
 # attributes on the metrics and LLMs they were given (metric.llm, the LLM's
 # run_config and usage_collector) and resetting them afterwards. Those objects
 # are often shared -- between threads, between concurrent runs, or with the
@@ -91,7 +91,7 @@ def scoped_usage_collector() -> t.Optional[t.Any]:
 
 
 def in_run_scope() -> bool:
-    """Whether the caller is inside evaluate() / testset generation."""
+    """Whether the caller is inside a run scope (a scoring run, testset generation)."""
     return _scope_active.get()
 
 
@@ -122,7 +122,8 @@ def capture_run_scope() -> t.Callable[[], t.ContextManager[None]]:
     """Snapshot the current run scope, to re-enter it where the context is lost.
 
     For work that runs later than it was scheduled, e.g. Executor jobs that
-    ``evaluate(return_executor=True)`` hands back to run outside the call.
+    ``TestsetGenerator.generate(return_executor=True)`` hands back to run
+    outside the call.
     """
     if not in_run_scope():
         return nullcontext

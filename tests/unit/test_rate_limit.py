@@ -124,7 +124,7 @@ def test_waiting_does_not_block_the_event_loop():
 
 
 def test_one_limit_is_shared_across_threads_and_event_loops():
-    # evaluate() runs on run_sync's loop, sync generate() on the caller's
+    # a sync run() runs on run_sync's loop, sync generate() on the caller's
     # thread, a notebook on its own loop: one RateLimit covers them all
     from ragas.rate_limit import RateLimit
 
@@ -414,8 +414,8 @@ def test_embedding_factory_passes_rate_limit_through():
     assert emb.rate_limit is limit
 
 
-def test_evaluates_metric_copies_keep_the_same_limit():
-    # evaluate() runs shallow copies of your metrics (#76)
+def test_metric_copies_keep_the_same_limit():
+    # runs (e.g. the optimizers' candidates) use shallow copies of a metric (#76)
     from ragas.llms import llm_factory
     from ragas.metrics.collections import Faithfulness
 

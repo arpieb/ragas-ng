@@ -1,63 +1,30 @@
-"""evaluate() input checks and result plumbing (#77, #78, #79)."""
+"""Scoring-run input checks, repeated prompts in traces, empty usage (#77, #78, #79)."""
 
 from __future__ import annotations
 
 import logging
 import math
-import warnings
 
 import pytest
 
-from ragas import EvaluationDataset, SingleTurnSample, evaluate
+from ragas import Dataset, SingleTurnSample, metrics_experiment
+from ragas.backends import InMemoryBackend
 from ragas.callbacks import ChainRun, parse_run_traces
 from ragas.cost import TokenUsage, TokenUsageCollector
 from ragas.metrics.collections import BleuScore
-
-
-def run(dataset, **kwargs):
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        return evaluate(
-            dataset,
-            metrics=kwargs.pop("metrics", [BleuScore()]),
-            show_progress=False,
-            **kwargs,
-        )
-
 
 SAMPLE = dict(
     response="the cat sat on the mat today", reference="the cat sat on the mat today"
 )
 
 
-# --- #77: dataset -------------------------------------------------------------
-
-
-def test_a_list_of_samples_is_converted():
-    result = run([SingleTurnSample(**SAMPLE), SingleTurnSample(**SAMPLE)])
-    assert result["bleu_score"] == pytest.approx([1.0, 1.0])
-
-
-def test_a_list_of_dicts_is_converted():
-    # used to fail with "'list' object has no attribute 'get_sample_type'"
-    result = run([dict(SAMPLE)])
-    assert result["bleu_score"] == pytest.approx([1.0])
-
-
-def test_an_empty_list_is_rejected():
-    with pytest.raises(ValueError, match="empty"):
-        run([])
-
-
-def test_a_mixed_list_is_rejected():
-    with pytest.raises(TypeError, match="only samples"):
-        run([SingleTurnSample(**SAMPLE), dict(SAMPLE)])
-
-
-@pytest.mark.parametrize("bad", ["user_input,response", 42, {"response": "x"}])
-def test_other_dataset_types_are_rejected_with_the_fix(bad):
-    with pytest.raises(TypeError, match="EvaluationDataset"):
-        run(bad)
+def dataset():
+    return Dataset(
+        "rows",
+        InMemoryBackend(),
+        data_model=SingleTurnSample,
+        data=[SingleTurnSample(**SAMPLE)],
+    )
 
 
 # --- #77: llm / embeddings / metrics ----------------------------------------------
@@ -78,26 +45,23 @@ def test_a_raw_client_as_llm_is_rejected_before_the_run():
     # used to be accepted, then fail in every job with NaN scores
     client = RawClient()
     with pytest.raises(TypeError, match="llm_factory"):
-        run([SingleTurnSample(**SAMPLE)], llm=client)
+        metrics_experiment([BleuScore()], llm=client)
     assert not client.called
 
 
 def test_a_raw_client_as_embeddings_is_rejected():
     with pytest.raises(TypeError, match="embedding_factory"):
-        run([SingleTurnSample(**SAMPLE)], embeddings=RawClient())
+        metrics_experiment([BleuScore()], embeddings=RawClient())
 
 
 def test_metrics_may_be_a_tuple():
-    result = run(
-        EvaluationDataset(samples=[SingleTurnSample(**SAMPLE)]),
-        metrics=(BleuScore(),),
-    )
-    assert result["bleu_score"] == pytest.approx([1.0])
+    exp = metrics_experiment((BleuScore(),)).run(dataset())
+    assert [row["bleu_score"] for row in exp] == pytest.approx([1.0])
 
 
 def test_metrics_as_a_string_is_rejected():
     with pytest.raises(TypeError, match="list"):
-        run([SingleTurnSample(**SAMPLE)], metrics="bleu_score")
+        metrics_experiment("bleu_score")  # type: ignore[arg-type]
 
 
 # --- #78: repeated prompts in traces -----------------------------------------------
@@ -162,11 +126,9 @@ def test_total_cost_still_requires_prices():
         TokenUsageCollector().total_cost()
 
 
-def test_evaluate_result_with_an_llm_that_records_nothing():
-    result = run(
-        [SingleTurnSample(**SAMPLE)],
-        token_usage_parser=lambda raw: TokenUsage(input_tokens=1, output_tokens=1),
-    )
-    assert result.total_tokens() == TokenUsage(input_tokens=0, output_tokens=0)
-    assert result.total_cost(cost_per_input_token=1.0) == 0.0
-    assert not math.isnan(result["bleu_score"][0])
+def test_a_run_whose_metrics_record_no_usage():
+    usage = TokenUsageCollector(lambda raw: TokenUsage(input_tokens=1, output_tokens=1))
+    exp = metrics_experiment([BleuScore()], usage=usage).run(dataset())
+    assert usage.total_tokens() == TokenUsage(input_tokens=0, output_tokens=0)
+    assert usage.total_cost(cost_per_input_token=1.0) == 0.0
+    assert not math.isnan(exp[0]["bleu_score"])

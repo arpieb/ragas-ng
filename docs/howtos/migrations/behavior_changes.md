@@ -930,3 +930,19 @@ Step 3 of replacing `evaluate()` (#241). Score the results with [`metrics_experi
 - `summarize()` counts the row as missing, and `check()` fails on it unless `allow_missing` permits it.
 - If every query fails, the run still completes, with every row missing. Before, the up-front column check raised.
 - With `raise_exceptions=True`, the first failed query still stops the run.
+
+## `evaluate()`, `aevaluate()` and `EvaluationResult` removed ([#257](https://github.com/arpieb/ragas-ng/issues/257))
+
+Step 5 of replacing `evaluate()` (#241). See [From `evaluate()` to experiments](evaluate_to_experiment.md) for a before/after of every argument and method.
+
+| Removed | Use instead |
+|---|---|
+| `ragas.evaluate()` / `ragas.aevaluate()`, `ragas.evaluation` | `ragas.metrics_experiment(metrics).run(dataset)` / `await ....arun(dataset)` |
+| `ragas.dataset_schema.EvaluationResult` | the returned `Experiment`, with `ragas.summarize()` and `ragas.check()` |
+| `ragas.validation` (`remap_column_names`, `convert_v1_to_v2_dataset`, ...) | `metrics_experiment(..., column_map={...})`; rename v1 columns (`question`, `answer`, `contexts`, `ground_truth`) yourself |
+| `ragas.exceptions.ExceptionInRunner` | nothing: only `evaluate()` raised it |
+| `ragas.embeddings.base.default_embeddings_for_litellm_llm()` | pass `embeddings=` to the metrics that need them, e.g. `embedding_factory("litellm", model="gemini/gemini-embedding-2")` |
+
+- **No default metrics, LLM or embeddings.** `evaluate(metrics=None)` ran four default metrics with a default OpenAI LLM and embeddings matched to your LLM. Build the metrics with the models you want.
+- `default_llm()` stays: testset generation still uses it.
+- `ThresholdError` stays; `ragas.check()` raises it.

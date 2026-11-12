@@ -171,9 +171,9 @@ class InstructorLLM(CachedCopyable, InstructorBaseRagasLLM):
 
     # Set by llm_factory(): calls go through LiteLLM.
     _litellm: bool = False
-    # The OpenAI/Azure client the caller passed to llm_factory(), if any.
-    # evaluate() builds default embeddings from it (same base_url, proxy,
-    # credentials); ``client`` is the instructor wrapper around LiteLLM.
+    # The OpenAI/Azure client the caller passed to llm_factory(), if any (the
+    # DSPy adapter reuses it); ``client`` is the instructor wrapper around
+    # LiteLLM.
     source_client: t.Optional[t.Any] = None
     # The RateLimit llm_factory() paced this LLM's requests with, if any.
     rate_limit: t.Optional["RateLimit"] = None
@@ -219,8 +219,9 @@ class InstructorLLM(CachedCopyable, InstructorBaseRagasLLM):
         # Extract system_prompt separately (not passed to LLM API)
         self.system_prompt = self.model_args.pop("system_prompt", None)
 
-        # A collector you attach yourself. evaluate()/TestsetGenerator no longer
-        # set this: their collector is run-scoped (see _active_usage_collector).
+        # A collector you attach yourself. Scoring runs and TestsetGenerator
+        # don't set this: their collector is run-scoped (see
+        # _active_usage_collector).
         self.usage_collector: t.Optional[t.Any] = None
 
         self.cache = cache

@@ -27,12 +27,12 @@ ALLOWED_LANGCHAIN_PACKAGES: set[str] = set()
 MAX_LANGCHAIN_MODULES = 0
 
 # Modules that must import without pulling in any langchain at all. This started
-# empty -- every ragas import loaded langchain, because ragas/__init__.py imports
-# ragas.evaluation, which imported it at module scope. Now the whole public
-# surface qualifies.
+# empty -- every ragas import loaded langchain, because ragas/__init__.py
+# imported ragas.evaluation (since removed, #257), which imported it at module
+# scope. Now the whole public surface qualifies.
 LANGCHAIN_FREE_MODULES: list[str] = [
     "ragas",
-    "ragas.evaluation",
+    "ragas.scoring",
     "ragas.callbacks",
     "ragas.cost",
     "ragas.llms",

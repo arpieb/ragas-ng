@@ -3,8 +3,8 @@
 Stage 5 of the LangChain removal replaces the run-tree primitive in
 ``ragas.callbacks`` -- previously built on ``langchain_core.callbacks`` -- with a
 native implementation. The risk is not that it breaks loudly; it is that the
-trace tree drifts silently and ``EvaluationResult.traces`` changes shape
-underneath ``optimizers/genetic.py`` and anyone else reading it.
+trace tree drifts silently and the parsed traces change shape underneath
+``optimizers/genetic.py`` and anyone else reading them.
 
 These tests were written and run against the LangChain implementation first, so
 they describe the behaviour that must be preserved rather than the behaviour that
@@ -227,8 +227,8 @@ def test_no_traces_parses_to_nothing():
     """An empty trace tree is not an error.
 
     ``parse_run_traces`` guarded against more than one root but not against
-    none, so ``EvaluationResult(scores=..., dataset=...)`` -- construction with
-    only its required fields -- raised IndexError from __post_init__.
+    none, so parsing a tree with nothing under the parent (e.g. the old
+    ``EvaluationResult`` built with only its required fields) raised IndexError.
     """
     from ragas.callbacks import parse_run_traces
 

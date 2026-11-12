@@ -1,8 +1,8 @@
 """experiment.run(): arun() from synchronous code (#172).
 
 Experiments could only be run with ``await fn.arun(...)``, or by wrapping that
-in ``asyncio.run`` in a script. ``evaluate()`` and ``metric.score()`` have sync
-forms; ``run()`` is the experiments' one. Like them it goes through
+in ``asyncio.run`` in a script. ``metric.score()`` has a sync form; ``run()``
+is the experiments' one. Like it, it goes through
 ``ragas.async_utils.run_sync``, so it also works inside a running event loop
 (Jupyter).
 """

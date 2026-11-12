@@ -1,7 +1,8 @@
-"""metrics_experiment / summarize / check: evaluate() on top of @experiment (#253).
+"""metrics_experiment / summarize / check (#253).
 
-Parity with evaluate() is checked on the same rows and metrics: scores, the
-rows that score NaN, reasons, summary() and check()'s ThresholdError table.
+The expected scores, NaN rows, reasons, summaries and ThresholdError tables
+are the ones evaluate() gave on the same rows and metrics before it was
+removed (#257).
 """
 
 from __future__ import annotations
@@ -10,16 +11,13 @@ import asyncio
 import logging
 import math
 import typing as t
-import warnings
 
 import instructor
 import pytest
 
 from ragas import (
     Dataset,
-    EvaluationDataset,
     check,
-    evaluate,
     metrics_experiment,
     summarize,
 )
@@ -121,17 +119,6 @@ def metrics() -> t.List[t.Any]:
     ]
 
 
-def run_evaluate(rows, metric_list, **kwargs):
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        return evaluate(
-            EvaluationDataset(samples=rows),
-            metrics=metric_list,
-            show_progress=False,
-            **kwargs,
-        )
-
-
 def column(exp, name):
     return [row[name] for row in exp]
 
@@ -140,39 +127,83 @@ def same(a: t.List[float], b: t.List[float]) -> bool:
     return all((math.isnan(x) and math.isnan(y)) or x == y for x, y in zip(a, b))
 
 
-# --- parity with evaluate() -------------------------------------------------------
+# --- scores, reasons, summary and check ----------------------------------------------
+
+NAN = float("nan")
+REASON = "It answers the question."
 
 
-def test_scores_reasons_and_summary_match_evaluate():
-    names = ["exact_match", "non_llm_string_similarity", "recording", "answers"]
-    expected = run_evaluate(samples(), metrics())
-    exp = metrics_experiment(metrics()).run(dataset(), name="parity")
+def test_scores_reasons_and_summary():
+    exp = metrics_experiment(metrics()).run(dataset(), name="scores")
 
-    for name in names:
-        assert same(column(exp, name), expected[name]), name
-    assert math.isnan(column(exp, "recording")[2])  # the metric raised
+    assert column(exp, "exact_match") == [0.0, 1.0, 0.0, 1.0]
+    assert same(
+        column(exp, "non_llm_string_similarity"),
+        [0.33333333333333337, 1.0, 0.33333333333333337, 1.0],
+    )
+    assert same(column(exp, "recording"), [0.5, 0.5, NAN, 0.5])  # q2 raised
+    assert column(exp, "answers") == [1.0] * 4
+    assert column(exp, "exact_match_reason") == [None] * 4
     assert column(exp, "recording_reason") == ["saw r0", "saw ref", None, "saw ref"]
-    assert column(exp, "answers_reason") == expected.reasons["answers"]
-    assert summarize(exp) == expected.summary()
+    assert column(exp, "answers_reason") == [REASON] * 4
+    assert summarize(exp) == {
+        "exact_match": {"mean": 0.5, "count": 4, "missing": 0},
+        "non_llm_string_similarity": {
+            "mean": 0.6666666666666667,
+            "count": 4,
+            "missing": 0,
+        },
+        "recording": {"mean": 0.5, "count": 3, "missing": 1},
+        "answers": {"mean": 1.0, "count": 4, "missing": 0},
+    }
 
 
-@pytest.mark.parametrize(
-    "bounds",
-    [
+CHECK_TABLES = [
+    (
         dict(min_mean=0.9),
-        dict(min_mean={"recording": 0.4}),  # passes the mean, fails on missing
+        "3 of 4 metrics failed their thresholds:\n"
+        "metric                     mean    required  count  missing  result\n"
+        "exact_match                0.5000  >= 0.9    4      0        mean below 0.9\n"
+        "non_llm_string_similarity  0.6667  >= 0.9    4      0        mean below 0.9\n"
+        "recording                  0.5000  >= 0.9    3      1        "
+        "mean below 0.9; 1 row missing (allowed 0)\n"
+        "answers                    1.0000  >= 0.9    4      0        ok",
+        [
+            ("exact_match", "mean below 0.9"),
+            ("non_llm_string_similarity", "mean below 0.9"),
+            ("recording", "mean below 0.9"),
+            ("recording", "1 row missing (allowed 0)"),
+        ],
+    ),
+    (
+        # passes the mean, fails on missing
+        dict(min_mean={"recording": 0.4}),
+        "1 of 4 metrics failed their thresholds:\n"
+        "metric                     mean    required  count  missing  result\n"
+        "exact_match                0.5000            4      0        ok\n"
+        "non_llm_string_similarity  0.6667            4      0        ok\n"
+        "recording                  0.5000  >= 0.4    3      1        "
+        "1 row missing (allowed 0)\n"
+        "answers                    1.0000            4      0        ok",
+        [("recording", "1 row missing (allowed 0)")],
+    ),
+    (
         dict(max_mean={"exact_match": 0.2}, allow_missing=None),
-    ],
-)
-def test_check_raises_the_same_table_as_evaluate(bounds):
-    expected = run_evaluate(samples(), metrics())
+        "1 of 1 metric failed their thresholds:\n"
+        "metric       mean    required  count  missing  result\n"
+        "exact_match  0.5000  <= 0.2    4      0        mean above 0.2",
+        [("exact_match", "mean above 0.2")],
+    ),
+]
+
+
+@pytest.mark.parametrize("bounds, table, failures", CHECK_TABLES)
+def test_check_raises_the_threshold_table(bounds, table, failures):
     exp = metrics_experiment(metrics()).run(dataset())
-    with pytest.raises(ThresholdError) as want:
-        expected.check(**bounds)
     with pytest.raises(ThresholdError) as got:
         check(exp, **bounds)
-    assert str(got.value) == str(want.value)
-    assert got.value.failures == want.value.failures
+    assert str(got.value) == table
+    assert got.value.failures == failures
 
 
 def test_check_passes_and_rejects_unknown_metrics():
@@ -222,7 +253,7 @@ def test_a_per_call_llm_is_passed_to_the_metric():
     with pytest.raises(ValueError, match=r"takes `llm` .* llm=\.\.\."):
         metrics_experiment([metric])
     exp = metrics_experiment([metric], llm=llm).run(dataset(samples(1)))
-    # a discrete label isn't a number: it scores NaN, as under evaluate()
+    # a discrete label isn't a number: it scores NaN
     assert math.isnan(column(exp, "tone")[0])
 
 

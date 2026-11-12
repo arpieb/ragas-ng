@@ -3,13 +3,13 @@
 import math
 import shutil
 import typing as t
-import warnings
 from pathlib import Path
 
 import instructor
 import pytest
 
-from ragas import Dataset, EvaluationDataset, evaluate
+from ragas import Dataset, metrics_experiment
+from ragas.backends import InMemoryBackend
 from ragas.dataset_schema import SingleTurnSample
 from ragas.llms import llm_factory
 from ragas.metrics import DiscreteMetric, NumericMetric, RankingMetric
@@ -111,26 +111,23 @@ def test_missing_prompt_raises_value_error():
         metric.score(llm=AsyncOnlyLLM(0.5), response="hi")
 
 
-def test_out_of_range_is_nan_in_evaluate(monkeypatch):
+def test_out_of_range_is_nan_in_a_scoring_run(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     llm = llm_factory(
         "gpt-6-luna",
         mode=instructor.Mode.JSON,
         mock_response='{"reason": "too high", "value": 7.0}',
     )
-    dataset = EvaluationDataset(samples=[SingleTurnSample(response="r")])
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        result = evaluate(dataset, metrics=[numeric()], llm=llm, show_progress=False)
-        assert math.isnan(result["quality"][0])
-        with pytest.raises(ValueError, match="expected value in range"):
-            evaluate(
-                dataset,
-                metrics=[numeric()],
-                llm=llm,
-                show_progress=False,
-                raise_exceptions=True,
-            )
+    dataset = Dataset(
+        "rows",
+        InMemoryBackend(),
+        data_model=SingleTurnSample,
+        data=[SingleTurnSample(response="r")],
+    )
+    exp = metrics_experiment([numeric()], llm=llm).run(dataset)
+    assert math.isnan(exp[0]["quality"])
+    with pytest.raises(ValueError, match="expected value in range"):
+        metrics_experiment([numeric()], llm=llm, raise_exceptions=True).run(dataset)
 
 
 # --- persistence --------------------------------------------------------------------

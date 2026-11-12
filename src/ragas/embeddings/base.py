@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import inspect
 import typing as t
-import warnings
 from abc import ABC, abstractmethod
 
 from ragas._copying import CachedCopyable
@@ -169,57 +168,6 @@ class BaseRagasEmbedding(CachedCopyable, ABC):
         return cls(**init_kwargs)
 
 
-def _infer_embedding_provider_from_llm(llm: t.Any) -> str:
-    """
-    Infer the embedding provider from an LLM instance.
-
-    This function attempts to extract the provider information from an LLM object
-    to allow intelligent default selection of matching embedding providers.
-
-    Parameters
-    ----------
-    llm : Any
-        The LLM instance to extract provider information from.
-
-    Returns
-    -------
-    str
-        The inferred provider name, defaults to "openai" if unable to determine.
-    """
-    if llm is None:
-        return "openai"
-
-    # Check for InstructorLLM with provider attribute
-    if hasattr(llm, "provider"):
-        provider = getattr(llm, "provider", "").lower()
-        if provider:
-            return provider
-
-    # Check for other LLM types
-    llm_class_name = llm.__class__.__name__.lower()
-
-    # Map common LLM class patterns to providers
-    provider_mapping = {
-        "anthropic": "anthropic",
-        "claude": "anthropic",
-        "gemini": "google",
-        "google": "google",
-        "vertex": "google",
-        "groq": "groq",
-        "mistral": "mistral",
-        "cohere": "cohere",
-        "openai": "openai",
-        "azure": "azure",
-    }
-
-    for pattern, provider_name in provider_mapping.items():
-        if pattern in llm_class_name:
-            return provider_name
-
-    # Default to OpenAI if unable to determine
-    return "openai"
-
-
 def embedding_factory(
     provider: str = "openai",
     model: t.Optional[str] = None,
@@ -317,68 +265,8 @@ def embedding_factory(
     return result
 
 
-# Default embedding models for an llm_factory() LLM with no client, by its
-# LiteLLM prefix (#190). Only providers whose own embedding model is the
-# obvious match are listed; checked 2026-11-09 against Google's model pages
-# (both GA) and scripts/model_registry.toml.
+# embedding_factory("litellm") without a model
 DEFAULT_OPENAI_EMBEDDING_MODEL = "text-embedding-ada-002"
-_LITELLM_EMBEDDING_DEFAULTS = {
-    "gemini": "gemini/gemini-embedding-2",
-    "vertex_ai": "vertex_ai/gemini-embedding-2",
-}
-# llm_factory() arguments that address the provider rather than tune the
-# completion; the default embeddings reuse them (a Vertex project, a key).
-_SHARED_PROVIDER_ARGS = (
-    "api_key",
-    "api_base",
-    "vertex_project",
-    "vertex_location",
-    "vertex_credentials",
-)
-
-
-def _default_embedding_model_for(model: str) -> t.Optional[str]:
-    """The default embedding model for a LiteLLM model string, if there is one.
-
-    Bare names and ``openai/`` are OpenAI models: OpenAI's default. Providers
-    in ``_LITELLM_EMBEDDING_DEFAULTS`` get their own. Anything else (``ollama/``,
-    ``anthropic/``, ...) has no default: ``None``.
-    """
-    prefix, sep, _ = model.partition("/")
-    if not sep or prefix == "openai":
-        return DEFAULT_OPENAI_EMBEDDING_MODEL
-    return _LITELLM_EMBEDDING_DEFAULTS.get(prefix)
-
-
-def default_embeddings_for_litellm_llm(llm: t.Any) -> BaseRagasEmbedding:
-    """Embeddings for ``evaluate()`` to use with a client-less LiteLLM LLM (#190).
-
-    ``llm_factory("gemini/...")`` gets Gemini embeddings and
-    ``llm_factory("vertex_ai/...")`` Vertex ones, with the LLM's key / project
-    arguments, so a Gemini-only setup needs no ``OPENAI_API_KEY``. A provider
-    with no default (Ollama, Anthropic, ...) falls back to OpenAI's model, as
-    before, with a warning to pass ``embeddings=``.
-    """
-    from ragas.embeddings.litellm_provider import LiteLLMEmbeddings
-
-    model = str(getattr(llm, "model", "") or "")
-    embedding_model = _default_embedding_model_for(model)
-    if embedding_model is None:
-        warnings.warn(
-            f"No default embedding model for {model!r}, so evaluate() is using "
-            f"OpenAI's {DEFAULT_OPENAI_EMBEDDING_MODEL}, which needs "
-            "OPENAI_API_KEY. Pass your own: evaluate(..., embeddings="
-            "embedding_factory('litellm', model='<provider>/<embedding model>')).",
-            UserWarning,
-            stacklevel=3,
-        )
-        return LiteLLMEmbeddings(model=DEFAULT_OPENAI_EMBEDDING_MODEL)
-    model_args = getattr(llm, "model_args", None) or {}
-    shared = {k: model_args[k] for k in _SHARED_PROVIDER_ARGS if k in model_args}
-    if embedding_model == DEFAULT_OPENAI_EMBEDDING_MODEL:
-        shared = {}  # as before: OpenAI credentials come from the environment
-    return LiteLLMEmbeddings(model=embedding_model, **shared)
-
 
 # Model name patterns for backward compatibility detection
 _LEGACY_MODEL_PATTERNS = {"text-embedding", "ada", "davinci", "gpt", "curie", "babbage"}

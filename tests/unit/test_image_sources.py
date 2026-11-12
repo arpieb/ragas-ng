@@ -454,28 +454,31 @@ async def test_metrics_read_images_from_their_local_dir(
 
 
 @pytest.mark.parametrize("raise_exceptions", [False, True])
-def test_evaluate_follows_raise_exceptions(image_dir, monkeypatch, raise_exceptions):
-    from ragas import EvaluationDataset, evaluate
+def test_a_scoring_run_follows_raise_exceptions(
+    image_dir, monkeypatch, raise_exceptions
+):
+    from ragas import Dataset, metrics_experiment
+    from ragas.backends import InMemoryBackend
     from ragas.dataset_schema import SingleTurnSample
 
     llm = CapturingLLM(monkeypatch)
-    dataset = EvaluationDataset(
-        samples=[
+    dataset = Dataset(
+        "rows",
+        InMemoryBackend(),
+        data_model=SingleTurnSample,
+        data=[
             SingleTurnSample(
                 response="Red.", retrieved_contexts=[str(image_dir / "ok.png")]
             )
-        ]
+        ],
     )
-    metric = MultiModalFaithfulness(llm=llm.llm)
+    run = metrics_experiment(
+        [MultiModalFaithfulness(llm=llm.llm)], raise_exceptions=raise_exceptions
+    )
     if raise_exceptions:
         with pytest.raises(ImageLoadError):
-            evaluate(
-                dataset,
-                metrics=[metric],
-                raise_exceptions=True,
-                show_progress=False,
-            )
+            run.run(dataset)
     else:
-        result = evaluate(dataset, metrics=[metric], show_progress=False)
-        assert math.isnan(result.to_pandas()["multi_modal_faithfulness"][0])
+        exp = run.run(dataset)
+        assert math.isnan(exp[0]["multi_modal_faithfulness"])
     assert llm.messages == []

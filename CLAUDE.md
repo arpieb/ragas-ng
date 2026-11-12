@@ -10,7 +10,7 @@ This repository is **ragas-ng**, a hard fork of `vibrantlabsai/ragas`. It is pub
 
 The repository contains:
 
-1. **Ragas Library** (`src/ragas/`) - metrics, test data generation, `evaluate()`, datasets, experiments and storage backends
+1. **Ragas Library** (`src/ragas/`) - metrics, test data generation, datasets, experiments (`metrics_experiment()` scores metrics over a dataset) and storage backends
 2. **Examples** (`examples/`, the `ragas-ng-examples` workspace package) - the `ragas quickstart` templates and standalone example scripts
 
 ## Development Environment Setup
@@ -184,6 +184,8 @@ The Ragas core library provides metrics, test data generation and evaluation fun
 The upstream legacy layer was deleted in #215, not deprecated: the old `ragas.metrics._*` metrics, `MetricWithLLM` and friends, `BaseRagasLLM` and its wrappers (Haystack, OCI, LlamaIndex, `LiteLLMStructuredLLM`), `BaseRagasEmbeddings`, and `PydanticPrompt` / `ImageTextPrompt`. Don't reintroduce them or add compatibility shims: `tests/unit/test_legacy_boundary.py` fails if a removed module or name becomes importable again. Record user-facing removals in `docs/howtos/migrations/behavior_changes.md`.
 
 ### Datasets, Experiments and Backends
+
+There is no `evaluate()`: it was removed in #257 (see `docs/howtos/migrations/evaluate_to_experiment.md`). Score metrics over a `Dataset` with `metrics_experiment(metrics).run(dataset)` / `.arun(...)` (`src/ragas/scoring.py`), which returns an `Experiment` with a `<metric>` and `<metric>_reason` column per metric; `summarize(exp)` / `check(exp, min_mean=...)` give the means and the CI gate. Don't reintroduce `evaluate()`; `tests/unit/test_legacy_boundary.py` checks it stays gone.
 
 `Dataset`, the `@experiment` decorator and the storage backends are part of the main package (the former `ragas.experimental` namespace no longer exists):
 

@@ -2,8 +2,7 @@
 
 By default (#117) a row whose function raises is logged and left out, and the
 run goes on. With ``raise_exceptions`` the first failure cancels the remaining
-rows, nothing is saved, and the row's exception is re-raised -- like
-``evaluate(raise_exceptions=True)``.
+rows, nothing is saved, and the row's exception is re-raised.
 """
 
 import asyncio
