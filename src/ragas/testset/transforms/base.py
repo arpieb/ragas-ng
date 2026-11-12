@@ -18,7 +18,7 @@ def default_filter(node: Node) -> bool:
 
 
 def _default_llm_factory() -> InstructorBaseRagasLLM:
-    """The default LLM, shared with ``evaluate()``. See ``ragas.llms.default_llm``."""
+    """The default LLM. See ``ragas.llms.default_llm``."""
     return default_llm()
 
 

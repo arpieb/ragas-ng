@@ -1,20 +1,19 @@
 """The genetic optimizer scores candidates without evaluate() (#254).
 
 ``ragas.optimizers._scoring.ascore_rows`` runs a metric over annotation rows
-inside the optimizer's run tree. Its scores and parsed traces match what
-``evaluate()`` gave, so fitness ranking and feedback mutation are unchanged.
+inside the optimizer's run tree. Its scores and parsed traces are what
+``evaluate()`` gave before it was removed (#257), so fitness ranking and
+feedback mutation are unchanged.
 """
 
 from __future__ import annotations
 
 import json
 import math
-import warnings
 
 import instructor
 import pytest
 
-from ragas import EvaluationDataset, evaluate
 from ragas.callbacks import CallbackGroup, RagasTracer, new_group
 from ragas.llms import llm_factory
 from ragas.metrics import DiscreteMetric
@@ -46,32 +45,18 @@ def critic(verdict: int = 1) -> AspectCritic:
 ROWS = [{"user_input": f"q{i}", "response": f"r{i}"} for i in range(4)]
 
 
-def _evaluate(metric, rows):
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        return evaluate(
-            EvaluationDataset.from_list(rows), metrics=[metric], show_progress=False
-        )
-
-
 @pytest.mark.asyncio
-async def test_scores_and_traces_match_evaluate():
-    metric = critic()
-    old = _evaluate(metric, ROWS)
-    new = await ascore_rows(metric, ROWS)
+async def test_scores_and_trace_shape():
+    result = await ascore_rows(critic(), ROWS)
 
-    assert new.scores == old.to_pandas()["helpfulness"].tolist()
-    assert len(new.traces) == len(old.traces) == len(ROWS)
-    for new_trace, old_trace in zip(new.traces, old.traces):
-        assert list(new_trace) == list(old_trace) == ["helpfulness"]
-        new_calls, old_calls = new_trace["helpfulness"], old_trace["helpfulness"]
-        assert list(new_calls) == list(old_calls)
-        for name in new_calls:
-            assert new_calls[name]["input"] == old_calls[name]["input"]
-            assert (
-                new_calls[name]["output"].model_dump()
-                == old_calls[name]["output"].model_dump()
-            )
+    assert result.scores == [1.0, 1.0, 1.0, 1.0]
+    assert len(result.traces) == len(ROWS)
+    for row, trace in zip(ROWS, result.traces):
+        # one entry per metric, holding its LLM call(s) under the call's name
+        assert list(trace) == ["helpfulness"]
+        (call,) = trace["helpfulness"].values()
+        assert f'"user_input": "{row["user_input"]}"' in call["input"]["prompt"]
+        assert call["output"].model_dump() == {"reason": "r", "verdict": 1}
 
 
 @pytest.mark.asyncio

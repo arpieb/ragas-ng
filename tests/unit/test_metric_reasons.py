@@ -1,4 +1,4 @@
-"""Collections metrics explain their scores, and evaluate() keeps it (#116)."""
+"""Collections metrics explain their scores, and metrics_experiment keeps it (#116)."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from ragas import EvaluationDataset, SingleTurnSample, evaluate
-from ragas.dataset_schema import EvaluationResult
+from ragas import Dataset, SingleTurnSample, metrics_experiment
+from ragas.backends import InMemoryBackend
 from ragas.embeddings.base import BaseRagasEmbedding
 from ragas.llms.base import InstructorLLM
 from ragas.messages import AIMessage, HumanMessage
@@ -26,8 +26,6 @@ from ragas.metrics.collections.faithfulness import util as fa
 from ragas.metrics.collections.summary_score import util as ss
 from ragas.metrics.collections.topic_adherence import util as ta
 from ragas.metrics.result import ScoreWithReason
-
-pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
 
 def scripted(handlers: t.Dict[type, t.Callable[[str], t.Any]]):
@@ -73,48 +71,22 @@ def test_score_with_reason_is_a_float():
     assert back == 0.5 and back.reason == "because"
 
 
-def make_result(rows):
-    ds = EvaluationDataset(
-        samples=[
-            SingleTurnSample(user_input=f"q{i}", response="r") for i in range(len(rows))
-        ]
-    )
-    return EvaluationResult(scores=rows, dataset=ds)
-
-
-def test_evaluation_result_splits_reasons_from_scores():
-    result = make_result(
-        [
-            {"faith": ScoreWithReason(1.0, "all supported"), "bleu": 0.4},
-            {"faith": float("nan"), "bleu": 0.6},
-        ]
-    )
-    assert result.reasons == {"faith": ["all supported", None]}
-    assert type(result.scores[0]["faith"]) is float  # scores stay plain numbers
-    assert repr(result) == "{'faith': 1.0000 (n=1/2), 'bleu': 0.5000}"
-
-
-def test_to_pandas_reason_columns_are_opt_in_and_sit_beside_their_metric():
-    result = make_result([{"faith": ScoreWithReason(1.0, "why"), "bleu": 0.4}])
-    assert "faith_reason" not in result.to_pandas().columns
-    cols = list(result.to_pandas(include_reasons=True).columns)
-    assert cols[-3:] == ["faith", "faith_reason", "bleu"]
-    assert result.to_pandas(include_reasons=True)["faith_reason"][0] == "why"
-
-
-def test_evaluate_keeps_collections_reasons():
-    ds = EvaluationDataset(
-        samples=[
+def test_metrics_experiment_keeps_collections_reasons():
+    dataset = Dataset(
+        "rows",
+        InMemoryBackend(),
+        data_model=SingleTurnSample,
+        data=[
             SingleTurnSample(
                 user_input="q", response="r", retrieved_contexts=["Paris is in France."]
             )
-        ]
+        ],
     )
-    result = evaluate(
-        ds, metrics=[C.Faithfulness(llm=faithfulness_llm())], show_progress=False
-    )
-    assert result["faithfulness"] == [0.5]
-    assert "1 of 2 statements" in result.reasons["faithfulness"][0]
+    exp = metrics_experiment([C.Faithfulness(llm=faithfulness_llm())]).run(dataset)
+    (row,) = list(exp)
+    assert row["faithfulness"] == 0.5
+    assert type(row["faithfulness"]) is float  # scores stay plain numbers
+    assert "1 of 2 statements" in row["faithfulness_reason"]
 
 
 # --- per-metric explanations ---------------------------------------------------

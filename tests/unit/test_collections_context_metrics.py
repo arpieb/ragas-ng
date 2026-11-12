@@ -167,34 +167,31 @@ class TestAveragePrecisionHelper:
         assert average_precision([1, 0, 0]) > average_precision([0, 0, 1])
 
 
-class TestRunsThroughEvaluate:
+def _scores(metric, *samples):
+    from ragas import Dataset, metrics_experiment
+    from ragas.backends import InMemoryBackend
+
+    dataset = Dataset(
+        "d", InMemoryBackend(), data_model=SingleTurnSample, data=list(samples)
+    )
+    exp = metrics_experiment([metric]).run(dataset)
+    return [row[metric.name] for row in exp]
+
+
+class TestRunsThroughMetricsExperiment:
     """The bridge from #25 should carry these with no per-metric work."""
 
-    def test_id_based_metric_runs_in_evaluate(self):
-        from ragas import EvaluationDataset, evaluate
-
-        dataset = EvaluationDataset(
-            samples=[
-                SingleTurnSample(
-                    user_input="q",
-                    retrieved_context_ids=["d1", "d2"],
-                    reference_context_ids=["d1"],
-                )
-            ]
+    def test_id_based_metric_runs_in_metrics_experiment(self):
+        sample = SingleTurnSample(
+            user_input="q",
+            retrieved_context_ids=["d1", "d2"],
+            reference_context_ids=["d1"],
         )
-        result = evaluate(dataset, metrics=[IDBasedContextPrecision()])
-        assert result["id_based_context_precision"] == [0.5]
+        assert _scores(IDBasedContextPrecision(), sample) == [0.5]
 
-    def test_non_llm_metric_runs_in_evaluate(self):
-        from ragas import EvaluationDataset, evaluate
-
+    def test_non_llm_metric_runs_in_metrics_experiment(self):
         ctx = ["Paris is the capital of France."]
-        dataset = EvaluationDataset(
-            samples=[
-                SingleTurnSample(
-                    user_input="q", retrieved_contexts=ctx, reference_contexts=ctx
-                )
-            ]
+        sample = SingleTurnSample(
+            user_input="q", retrieved_contexts=ctx, reference_contexts=ctx
         )
-        result = evaluate(dataset, metrics=[NonLLMContextRecall()])
-        assert result["non_llm_context_recall"] == [1.0]
+        assert _scores(NonLLMContextRecall(), sample) == [1.0]

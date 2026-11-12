@@ -19,14 +19,18 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from ragas import EvaluationDataset, MultiTurnSample, SingleTurnSample, evaluate
+from ragas import Dataset, MultiTurnSample, SingleTurnSample, metrics_experiment
+from ragas.backends import InMemoryBackend
 from ragas.llms.base import InstructorLLM
 from ragas.messages import AIMessage, HumanMessage
 from ragas.metrics.collections import AspectCritic, SimpleCriteriaScore
 from ragas.metrics.collections.aspect_critic.util import AspectCriticOutput
 from ragas.metrics.collections.simple_criteria.util import SimpleCriteriaOutput
 
-pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
+
+def _scores(metric, sample):
+    dataset = Dataset("d", InMemoryBackend(), data_model=type(sample), data=[sample])
+    return [row[metric.name] for row in metrics_experiment([metric]).run(dataset)]
 
 
 def scripted_llm(outputs: t.Sequence[t.Any]):
@@ -133,17 +137,12 @@ class TestSimpleCriteriaScore:
         assert metric.allowed_values == (0.0, 10.0)
 
 
-class TestRunsThroughEvaluate:
+class TestRunsThroughMetricsExperiment:
     def test_single_turn(self):
         llm = scripted_llm([critic(1)])
-        dataset = EvaluationDataset(
-            samples=[SingleTurnSample(user_input="q", response="r")]
-        )
-        result = evaluate(
-            dataset,
-            metrics=[AspectCritic(llm=llm, name="maliciousness", definition="?")],
-        )
-        assert result["maliciousness"] == [1.0]
+        metric = AspectCritic(llm=llm, name="maliciousness", definition="?")
+        sample = SingleTurnSample(user_input="q", response="r")
+        assert _scores(metric, sample) == [1.0]
 
     def test_multi_turn_conversation_is_rendered_for_the_prompt(self):
         """Legacy AspectCritic is a MultiTurnMetric; the port must stay one.
@@ -160,30 +159,19 @@ class TestRunsThroughEvaluate:
 
         llm.agenerate = agenerate
 
-        dataset = EvaluationDataset(
-            samples=[
-                MultiTurnSample(
-                    user_input=[
-                        HumanMessage(content="is this safe?"),
-                        AIMessage(content="yes it is"),
-                    ]
-                )
+        sample = MultiTurnSample(
+            user_input=[
+                HumanMessage(content="is this safe?"),
+                AIMessage(content="yes it is"),
             ]
         )
-        result = evaluate(
-            dataset, metrics=[AspectCritic(llm=llm, name="safety", definition="?")]
-        )
-        assert result["safety"] == [1.0]
+        metric = AspectCritic(llm=llm, name="safety", definition="?")
+        assert _scores(metric, sample) == [1.0]
         assert "Human: is this safe?" in seen["prompt"]
         assert "AI: yes it is" in seen["prompt"]
 
     def test_simple_criteria_single_turn(self):
         llm = scripted_llm([criteria(3)])
-        dataset = EvaluationDataset(
-            samples=[SingleTurnSample(user_input="q", response="r")]
-        )
-        result = evaluate(
-            dataset,
-            metrics=[SimpleCriteriaScore(llm=llm, name="cg", definition="?")],
-        )
-        assert result["cg"] == [3.0]
+        metric = SimpleCriteriaScore(llm=llm, name="cg", definition="?")
+        sample = SingleTurnSample(user_input="q", response="r")
+        assert _scores(metric, sample) == [3.0]

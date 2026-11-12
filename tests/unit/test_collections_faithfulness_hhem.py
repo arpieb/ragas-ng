@@ -20,7 +20,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from ragas import EvaluationDataset, SingleTurnSample, evaluate
+from ragas import Dataset, SingleTurnSample, metrics_experiment
+from ragas.backends import InMemoryBackend
 from ragas.llms.base import InstructorLLM
 from ragas.metrics.collections import FaithfulnesswithHHEM
 from ragas.metrics.collections.faithfulness.util import StatementGeneratorOutput
@@ -234,17 +235,16 @@ class TestPinnedRemoteCode:
         assert fake_transformers[0]["revision"] == "abc123"
 
 
-class TestRunsThroughEvaluate:
-    def test_scores_via_evaluate(self):
+class TestRunsThroughMetricsExperiment:
+    def test_scores_via_metrics_experiment(self):
         metric = FaithfulnesswithHHEM(
             llm=llm_yielding(["a", "b"]), classifier=StubClassifier([1.0, 0.0])
         )
-        dataset = EvaluationDataset(
-            samples=[
-                SingleTurnSample(
-                    user_input="q", response="r", retrieved_contexts=["ctx"]
-                )
-            ]
+        sample = SingleTurnSample(
+            user_input="q", response="r", retrieved_contexts=["ctx"]
         )
-        result = evaluate(dataset, metrics=[metric])
-        assert result["faithfulness_with_hhem"] == [0.5]
+        dataset = Dataset(
+            "d", InMemoryBackend(), data_model=SingleTurnSample, data=[sample]
+        )
+        exp = metrics_experiment([metric]).run(dataset)
+        assert [row["faithfulness_with_hhem"] for row in exp] == [0.5]

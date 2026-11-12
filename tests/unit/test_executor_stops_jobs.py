@@ -1,10 +1,11 @@
 """The executor stops its jobs when it stops (#207).
 
-``Executor`` (behind ``evaluate()``) and ``run_async_tasks`` ran jobs through
+``Executor`` (then behind ``evaluate()``, now testset generation) and
+``run_async_tasks`` ran jobs through
 ``async_utils.as_completed``. Three problems:
 
 1. ``raise_exceptions=True`` re-raised the first error but left the other jobs
-   running in the background -- for ``evaluate()``, LLM calls still being made
+   running in the background -- LLM calls still being made
    and paid for after the error.
 2. ``cancel()`` only took effect when the next job finished.
 3. The cancel path left a coroutine un-awaited (``RuntimeWarning``).
@@ -172,3 +173,24 @@ def test_run_async_tasks_without_fail_fast_still_runs_everything():
     with pytest.raises(Boom):  # raised at the end, as before
         run_async_tasks([job(i) for i in range(4)], show_progress=False)
     assert sorted(i for kind, i in log if kind == "finished") == [1, 2, 3]
+
+
+def test_jobs_keep_the_run_scope_they_were_submitted_in():
+    """Executor jobs run later, outside the scope they were submitted in, as
+    with TestsetGenerator.generate(return_executor=True), and still see it (#76).
+    """
+    from ragas.executor import Executor
+    from ragas.run_config import RunConfig, run_scope, scoped_run_config
+
+    config = RunConfig(timeout=7)
+    seen = []
+
+    async def job():
+        seen.append(scoped_run_config())
+
+    executor = Executor(show_progress=False)
+    with run_scope(run_config=config):
+        executor.submit(job)
+    assert scoped_run_config() is None
+    executor.results()
+    assert seen == [config]

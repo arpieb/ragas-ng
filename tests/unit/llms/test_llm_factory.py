@@ -272,35 +272,12 @@ async def test_generate_and_agenerate_reach_litellm(client):
         assert llm.generate("p", Answer).value == 7
 
 
-# --- what evaluate() reads to pick default embeddings -------------------------
+# --- the provider and caller's client an llm_factory() LLM keeps ------------
 
 
-def test_provider_reported_for_embedding_defaults():
+def test_provider_and_source_client_are_kept():
     assert llm_factory("gemini/gemini-3.6-flash").provider == "litellm"
     client = OpenAI(api_key="sk-test")
     llm = llm_factory("gpt-6-luna", client=client)
     assert llm.provider == "openai"
     assert llm.source_client is client  # the caller's own client, not a copy
-
-
-def test_evaluate_builds_default_embeddings_from_the_callers_client(monkeypatch):
-    # an OpenAI-client LLM's .client is now instructor over LiteLLM; the
-    # embeddings must use the caller's client (base_url, proxy, credentials)
-    import ragas.evaluation as evaluation
-
-    seen = {}
-
-    def fake_embedding_factory(provider=None, client=None, **kw):
-        seen.update(provider=provider, client=client)
-        raise RuntimeError("stop here")
-
-    monkeypatch.setattr(evaluation, "embedding_factory", fake_embedding_factory)
-    client = OpenAI(api_key="sk-test", base_url="http://proxy.local/v1")
-    llm = llm_factory("gpt-6-luna", client=client)
-    from ragas import EvaluationDataset
-
-    ds = EvaluationDataset.from_list([{"user_input": "q", "response": "a"}])
-    with pytest.raises(RuntimeError, match="stop here"):
-        # the default metrics include AnswerRelevancy, which needs embeddings
-        evaluation.evaluate(ds, llm=llm)
-    assert seen == {"provider": "openai", "client": client}

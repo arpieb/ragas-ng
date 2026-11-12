@@ -92,7 +92,8 @@ def traced_call(
     """One LLM run: a span (kind LLM) and a run-tree node.
 
     Nested under the current run -- the metric, prompt or experiment row --
-    so evaluate()'s ``result.traces`` gets each call's prompt and output.
+    so the run tree (and the optimizers' feedback) gets each call's prompt
+    and output.
     ``messages`` builds what is sent, read only when a span is recording.
     """
     name = getattr(response_model, "__name__", "llm")

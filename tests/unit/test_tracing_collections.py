@@ -1,9 +1,8 @@
 """Spans and run-tree nodes for collections metrics, LLM calls and experiments (#196).
 
 Collections metrics, ``llm_factory()`` LLMs and ``@experiment`` take no
-``callbacks``. Before #196 they emitted no spans: an ``evaluate()`` metric span
-had no children, standalone ``ascore()`` and ``arun()`` were invisible, and
-``result.traces`` had no prompt input/output for handed-off metrics.
+``callbacks``. Before #196 they emitted no spans: a scored metric's span had
+no children, and standalone ``ascore()`` and ``arun()`` were invisible.
 
 LiteLLM's ``mock_response`` stands in for the provider, so the LLM calls are
 real ``InstructorLLM`` calls with no network.
@@ -19,7 +18,7 @@ import pytest
 from pydantic import BaseModel
 
 import ragas.callbacks as cb
-from ragas import EvaluationDataset, evaluate
+from ragas import metrics_experiment
 from ragas.dataset import Dataset
 from ragas.experiment import experiment
 from ragas.llms import llm_factory
@@ -203,50 +202,23 @@ def test_metric_nests_under_the_callers_active_span(spans, monkeypatch):
     assert ("answers", "EVALUATOR", "my-app") in kinds(spans)
 
 
-# --- evaluate() ---------------------------------------------------------------
+# --- metrics_experiment ---------------------------------------------------------
 
 
-def dataset():
-    return EvaluationDataset.from_list(
-        [{"user_input": "Capital of France?", "response": "Paris."}]
-    )
-
-
-def test_evaluate_nests_llm_calls_under_the_metric(spans):
+def test_metrics_experiment_nests_llm_calls_under_the_metric(spans):
     llm = make_llm()
-    metric = critic(llm)
+    data = Dataset(name="qa", backend="inmemory")
+    data.append({"user_input": "Capital of France?", "response": "Paris."})
 
-    result = evaluate(dataset(), metrics=[metric], llm=llm, show_progress=False)
+    exp = metrics_experiment([critic(llm)]).run(data, name="scored")
 
-    assert result.scores[0]["answers"] == 1.0
+    assert exp[0]["answers"] == 1.0
     assert kinds(spans) == [
-        ("ragas evaluation", "CHAIN", None),
+        ("experiment scored", "CHAIN", None),
         ("AspectCriticOutput", "LLM", "answers"),
-        ("row 0", "CHAIN", "ragas evaluation"),
+        ("row 0", "CHAIN", "experiment scored"),
         ("answers", "EVALUATOR", "row 0"),
     ]
-
-
-def test_result_traces_have_prompt_input_and_output_again(spans):
-    llm = make_llm()
-    result = evaluate(dataset(), metrics=[critic(llm)], llm=llm, show_progress=False)
-
-    prompts = dict(result.traces[0]["answers"])
-    assert list(prompts) == ["AspectCriticOutput"]
-    assert "Paris." in prompts["AspectCriticOutput"]["input"]["prompt"]
-    output = prompts["AspectCriticOutput"]["output"]
-    assert output.verdict == 1 and output.reason == "It answers the question."
-    assert result.traces[0].scores == {"answers": 1.0}
-
-
-def test_result_traces_work_without_an_otel_sdk(monkeypatch):
-    # the native run tree, not spans, feeds result.traces
-    from opentelemetry.trace import NoOpTracer
-
-    monkeypatch.setattr(cb, "_tracer", NoOpTracer())
-    llm = make_llm()
-    result = evaluate(dataset(), metrics=[critic(llm)], llm=llm, show_progress=False)
-    assert list(dict(result.traces[0]["answers"])) == ["AspectCriticOutput"]
 
 
 # --- prompts --------------------------------------------------------------------

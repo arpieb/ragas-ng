@@ -11,11 +11,10 @@ from __future__ import annotations
 
 import math
 import typing as t
-import warnings
 
 import pytest
 
-from ragas import EvaluationDataset, SingleTurnSample, evaluate
+from ragas import SingleTurnSample, metrics_experiment
 from ragas.backends import InMemoryBackend
 from ragas.dataset import Dataset
 from ragas.experiment import experiment
@@ -92,26 +91,27 @@ def fails(response: str) -> float:
     return 2.0 if response == "high" else 0.5
 
 
-def _evaluate(*responses: str, **kwargs: t.Any):
-    dataset = EvaluationDataset(
-        samples=[SingleTurnSample(response=r) for r in responses]
+def _score(*responses: str, **kwargs: t.Any):
+    dataset = Dataset(
+        name="rows",
+        backend=InMemoryBackend(),
+        data_model=SingleTurnSample,
+        data=[SingleTurnSample(response=r) for r in responses],
     )
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        return evaluate(dataset, metrics=[fails], show_progress=False, **kwargs)
+    return metrics_experiment([fails], **kwargs).run(dataset)
 
 
-def test_evaluate_scores_failed_rows_nan():
-    scores = _evaluate("ok", "bad", "high")["fails"]
+def test_metrics_experiment_scores_failed_rows_nan():
+    scores = [row["fails"] for row in _score("ok", "bad", "high")]
     assert scores[0] == 0.5
     assert math.isnan(scores[1]) and math.isnan(scores[2])
 
 
-def test_evaluate_raise_exceptions_surfaces_the_error():
+def test_metrics_experiment_raise_exceptions_surfaces_the_error():
     with pytest.raises(Boom, match="bad row"):
-        _evaluate("ok", "bad", raise_exceptions=True)
+        _score("ok", "bad", raise_exceptions=True)
     with pytest.raises(ValueError, match="expected value in range"):
-        _evaluate("ok", "high", raise_exceptions=True)
+        _score("ok", "high", raise_exceptions=True)
 
 
 @pytest.mark.asyncio

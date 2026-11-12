@@ -1,7 +1,8 @@
 """Smaller fixes from #216.
 
-1. ``evaluate()`` warned twice: its own DeprecationWarning, then the one from
-   the public ``aevaluate()`` it called, with a stacklevel inside ragas.
+(1, ``evaluate()``'s double deprecation warning, went with ``evaluate()``
+in #257.)
+
 2. ``GoogleEmbeddings(use_vertex=True)`` checked for a client and then never
    used it, loading ``TextEmbeddingModel.from_pretrained`` on every call.
 3. ``LiteLLMEmbeddings`` asked ``get_optimal_batch_size`` about provider
@@ -12,65 +13,9 @@ import asyncio
 import copy
 import sys
 import types
-import warnings
 from unittest.mock import MagicMock
 
 import pytest
-
-from ragas.dataset_schema import EvaluationDataset, SingleTurnSample
-
-# ---------------------------------------------------------------------------
-# 1. evaluate() / aevaluate() deprecation warnings
-# ---------------------------------------------------------------------------
-
-
-def _dataset():
-    return EvaluationDataset(
-        samples=[SingleTurnSample(user_input="q", response="a", reference="a")]
-    )
-
-
-def _metrics():
-    from ragas.metrics.collections import ExactMatch
-
-    return [ExactMatch()]
-
-
-def _evaluate_deprecations(caught):
-    return [
-        w
-        for w in caught
-        if issubclass(w.category, DeprecationWarning)
-        and "evaluate() is deprecated" in str(w.message)
-    ]
-
-
-def test_evaluate_warns_once_at_the_caller():
-    from ragas import evaluate
-
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        evaluate(_dataset(), metrics=_metrics(), show_progress=False)
-
-    found = _evaluate_deprecations(caught)
-    assert [str(w.message).split()[0] for w in found] == ["evaluate()"]
-    assert found[0].filename == __file__
-
-
-def test_aevaluate_still_warns_once_at_the_caller():
-    from ragas import aevaluate
-
-    async def main():
-        return await aevaluate(_dataset(), metrics=_metrics(), show_progress=False)
-
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        asyncio.run(main())
-
-    found = _evaluate_deprecations(caught)
-    assert [str(w.message).split()[0] for w in found] == ["aevaluate()"]
-    assert found[0].filename == __file__
-
 
 # ---------------------------------------------------------------------------
 # 2. GoogleEmbeddings(use_vertex=True) uses its client
@@ -123,7 +68,7 @@ def test_vertex_model_is_loaded_once_and_reused(fake_vertexai):
     assert asyncio.run(emb.aembed_text("abcd")) == [4.0]
 
     fake_vertexai.from_pretrained.assert_called_once_with("text-embedding-005")
-    # a copy (evaluate() copies its embeddings) shares the loaded model
+    # a copy (metrics and runs copy their embeddings) shares the loaded model
     twin = copy.deepcopy(emb)
     assert twin.embed_text("x") == [1.0]
     fake_vertexai.from_pretrained.assert_called_once()

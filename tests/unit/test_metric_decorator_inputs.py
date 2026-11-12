@@ -145,7 +145,7 @@ def test_concurrent_threads_get_their_own_inputs():
     results: t.Dict[float, t.Any] = {}
 
     def call(x: float):
-        # each thread runs its own event loop, as aevaluate() on your loop
+        # each thread runs its own event loop, as arun() on your loop
         # alongside score() on ragas' loop would
         results[x] = asyncio.run(threads.ascore(x=x)).value
 

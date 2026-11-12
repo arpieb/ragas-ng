@@ -1,6 +1,6 @@
 """Score metrics over a ``Dataset`` as an experiment (#253).
 
-``metrics_experiment(metrics)`` is ``evaluate()`` rebuilt on ``@experiment``:
+``metrics_experiment(metrics)`` scores metrics as an ``@experiment``:
 each row's fields go to each metric's ``ascore()`` by name (the mapping from
 ``ragas.metrics.sample_inputs``, #214), and the scores are saved as an
 ordinary ``Experiment``, with a ``<metric>`` and a ``<metric>_reason`` column
@@ -240,7 +240,7 @@ class MetricsExperiment(ExperimentWrapper):
             )
         (sample_type,) = sample_types
         present = {name for s in samples for name in s.get_features()}
-        # All column checks first, then sample types, as evaluate() does.
+        # All column checks first, then sample types.
         for scorer in self.scorers:
             if not scorer.spec.supports(sample_type):
                 continue  # reported below
@@ -457,7 +457,7 @@ def summarize(
     ``mean`` excludes rows without a score (None or NaN): rows whose metric
     raised and rows where the score is undefined, e.g. no claims to judge.
     ``count`` is how many rows the mean covers and ``missing`` how many it
-    doesn't. The same numbers as ``EvaluationResult.summary()``::
+    doesn't::
 
         >>> summarize(exp)
         {'faithfulness': {'mean': 0.86, 'count': 48, 'missing': 2}}

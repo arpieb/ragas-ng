@@ -97,9 +97,9 @@ class Executor:
         callable_with_index = self.wrap_callable_with_index(
             callable, self._jobs_processed
         )
-        # Jobs keep the run scope they were submitted in (evaluate()'s run
-        # config and usage collector), even when results() runs later, outside
-        # it -- as with evaluate(return_executor=True) (#76).
+        # Jobs keep the run scope they were submitted in (its run config and
+        # usage collector), even when results() runs later, outside it -- as
+        # with TestsetGenerator.generate(return_executor=True) (#76).
         enter_scope = capture_run_scope()
 
         async def scoped_job(*args, **kwargs):

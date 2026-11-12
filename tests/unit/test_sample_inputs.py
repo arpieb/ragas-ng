@@ -1,4 +1,4 @@
-"""``evaluate()`` runs ragas.metrics.collections metrics through their signature.
+"""Scoring runs drive ragas.metrics.collections metrics through their signature.
 
 A collections metric is a ``SimpleBaseMetric`` with only ``ascore(**kwargs)``.
 ``ragas.metrics.sample_inputs`` reads that signature and maps sample fields
@@ -14,7 +14,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from ragas import EvaluationDataset, MultiTurnSample, SingleTurnSample, evaluate
+from ragas import Dataset, MultiTurnSample, SingleTurnSample, metrics_experiment
+from ragas.backends import InMemoryBackend
 from ragas.dataset_schema import MultiTurnSample as MTS, SingleTurnSample as STS
 from ragas.llms.base import InstructorLLM
 from ragas.messages import AIMessage, HumanMessage, ToolCall
@@ -50,10 +51,20 @@ def llm():
     return MagicMock(spec=InstructorLLM)
 
 
+def as_dataset(samples):
+    return Dataset(
+        "rows", InMemoryBackend(), data_model=type(samples[0]), data=list(samples)
+    )
+
+
+def scores(exp, name):
+    return [row[name] for row in exp]
+
+
 @pytest.fixture
 def single_turn_dataset():
-    return EvaluationDataset(
-        samples=[
+    return as_dataset(
+        [
             SingleTurnSample(
                 user_input=f"q{i}",
                 retrieved_contexts=["ctx"],
@@ -124,55 +135,31 @@ class TestInputSpec:
             input_spec(Weird(name="weird"))
 
 
-class TestEvaluateAcceptsCollectionsMetrics:
+class TestScoringRunsCollectionsMetrics:
+    """metrics_experiment maps sample fields onto a collections metric's ascore."""
+
     def test_scores_are_produced(self, llm, single_turn_dataset):
         from ragas.metrics.collections import ContextRecall
 
         metric = fixed_score(ContextRecall(llm=llm), 0.8)
-        result = evaluate(single_turn_dataset, metrics=[metric])
-        assert result["context_recall"] == [0.8, 0.8, 0.8]
+        exp = metrics_experiment([metric]).run(single_turn_dataset)
+        assert scores(exp, "context_recall") == [0.8, 0.8, 0.8]
 
     def test_llm_and_non_llm_metrics_together(self, llm, single_turn_dataset):
         from ragas.metrics.collections import BleuScore, ContextRecall
 
         metric = fixed_score(ContextRecall(llm=llm), 0.9)
-        result = evaluate(single_turn_dataset, metrics=[metric, BleuScore()])
-        df = result.to_pandas()
-        assert "context_recall" in df.columns
-        assert "bleu_score" in df.columns
-
-    def test_traces_are_populated(self, llm, single_turn_dataset):
-        """EvaluationResult.traces must not go empty for collections metrics."""
-        metric = fixed_score(
-            __import__(
-                "ragas.metrics.collections", fromlist=["ContextRecall"]
-            ).ContextRecall(llm=llm)
-        )
-        result = evaluate(single_turn_dataset, metrics=[metric])
-        assert len(result.traces) == 3
-        assert "context_recall" in result.traces[0]
-
-    def test_missing_column_is_reported_before_any_llm_call(self, llm):
-        from ragas.metrics.collections import ContextRecall
-
-        dataset = EvaluationDataset(
-            samples=[SingleTurnSample(user_input="q", response="r")]
-        )
-        with pytest.raises(ValueError, match="retrieved_contexts|reference"):
-            evaluate(dataset, metrics=[ContextRecall(llm=llm)])
-
-    def test_sample_type_mismatch_is_rejected(self, single_turn_dataset):
-        from ragas.metrics.collections import ToolCallAccuracy
-
-        with pytest.raises(ValueError, match="does not support the sample type"):
-            evaluate(single_turn_dataset, metrics=[ToolCallAccuracy()])
+        exp = metrics_experiment([metric, BleuScore()]).run(single_turn_dataset)
+        assert scores(exp, "context_recall") == [0.9, 0.9, 0.9]
+        # "resp" vs "ref": no n-gram overlap
+        assert scores(exp, "bleu_score") == [0.0, 0.0, 0.0]
 
     def test_multi_turn_metric_runs_unstubbed(self):
         """ToolCallAccuracy needs no LLM, so this exercises the real scoring path."""
         from ragas.metrics.collections import ToolCallAccuracy
 
-        dataset = EvaluationDataset(
-            samples=[
+        dataset = as_dataset(
+            [
                 MultiTurnSample(
                     user_input=[
                         HumanMessage(content="weather in Paris?"),
@@ -189,13 +176,8 @@ class TestEvaluateAcceptsCollectionsMetrics:
                 )
             ]
         )
-        result = evaluate(dataset, metrics=[ToolCallAccuracy()])
-        assert result["tool_call_accuracy"] == [1.0]
-
-    def test_a_plain_non_metric_is_still_rejected(self, single_turn_dataset):
-        """The wrap must not swallow the existing type guard."""
-        with pytest.raises(TypeError, match="initialised metric objects"):
-            evaluate(single_turn_dataset, metrics=["not a metric"])  # type: ignore[list-item]
+        exp = metrics_experiment([ToolCallAccuracy()]).run(dataset)
+        assert scores(exp, "tool_call_accuracy") == [1.0]
 
 
 class TestScoreConversion:

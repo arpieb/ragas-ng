@@ -13,6 +13,9 @@ import pytest
 
 # Modules that must not exist.
 REMOVED_MODULES = [
+    # evaluate() and its helpers (#257)
+    "ragas.evaluation",
+    "ragas.validation",
     "ragas.metrics._answer_correctness",
     "ragas.metrics._aspect_critic",
     "ragas.metrics._collections_bridge",
@@ -37,6 +40,12 @@ REMOVED_MODULES = [
 
 # (module, name) pairs that must not resolve.
 REMOVED_NAMES = [
+    # #257: metrics_experiment / summarize / check replace them
+    ("ragas", "evaluate"),
+    ("ragas", "aevaluate"),
+    ("ragas.dataset_schema", "EvaluationResult"),
+    ("ragas.exceptions", "ExceptionInRunner"),
+    ("ragas.embeddings.base", "default_embeddings_for_litellm_llm"),
     # moved to ragas.optimizers.annotations (#254)
     ("ragas.dataset_schema", "PromptAnnotation"),
     ("ragas.dataset_schema", "SampleAnnotation"),
@@ -72,8 +81,6 @@ REMOVED_NAMES = [
     ("ragas.prompt", "ImageTextPrompt"),
     ("ragas.prompt", "FewShotPydanticPrompt"),
     ("ragas.prompt", "InMemoryExampleStore"),
-    ("ragas.validation", "validate_required_columns"),
-    ("ragas.validation", "validate_supported_metrics"),
     ("ragas.utils", "DeprecationHelper"),
     ("ragas.testset._modern", "TestsetPromptMixin"),
     ("ragas.cost", "CostCallbackHandler"),

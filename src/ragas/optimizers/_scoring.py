@@ -3,8 +3,8 @@
 The genetic optimizer scores each candidate prompt by running a copy of the
 metric over the annotated rows. Feedback mutation then reads the prompts the
 metric actually sent, so scoring must record the run tree: a scoring run,
-one run per row and the metric's run, whose LLM calls nest under it. That is
-the tree ``evaluate()`` built, so ``parse_run_traces`` reads it unchanged.
+one run per row and the metric's run, whose LLM calls nest under it, the tree
+``parse_run_traces`` reads.
 
 Rows go to the metric's ``ascore()`` by name, as in ``metrics_experiment``
 (``ragas.metrics.sample_inputs``). A row that fails scores NaN, unless

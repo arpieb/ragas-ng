@@ -203,7 +203,7 @@ def test_default_run_config_is_per_instance():
 
 
 def test_a_runs_config_applies_inside_the_run_only():
-    # evaluate() passes its RunConfig through a run scope (#76). It used to
+    # A scoring run passes its RunConfig through a run scope (#76). It used to
     # set it on the (possibly shared) LLM, where it stuck after the run.
     from ragas.run_config import run_scope
 
