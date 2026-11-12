@@ -71,14 +71,13 @@ This repository is organized as a single project with integrated experimental fe
 
 ### Project Components
 - **Ragas Core**: The main evaluation toolkit for LLM applications (in `src/ragas/`)
-- **Ragas Experimental**: Advanced features integrated at `src/ragas/experimental/`
 - **Infrastructure**: Single CI/CD, documentation, and build system
 
-### Examples Package (ragas-examples)
-- Lives under `examples/` as an installable package `ragas-examples`
-- Published independently to PyPI via GitHub Actions workflow `publish-examples.yml`
-- Versioning via Git tags with prefix `examples-v` (e.g., `examples-v0.1.0`)
-- Local development: `uv sync --locked` (the workspace installs both `ragas` and `ragas-examples` in editable mode)
+### Examples Package (ragas-ng-examples)
+- Lives under `examples/` as an installable package `ragas-ng-examples` (import name `ragas_examples`)
+- Published to PyPI together with `ragas-ng` by `.github/workflows/publish.yml` when a GitHub release is published, using PyPI trusted publishing
+- Both packages take their version from the same Git tag (`vX.Y.Z`) via setuptools_scm
+- Local development: `uv sync --locked` (the workspace installs both `ragas-ng` and `ragas-ng-examples` in editable mode)
 - Run examples: `python -m ragas_examples.benchmark_llm.prompt`
 
 ## Development Environment Setup

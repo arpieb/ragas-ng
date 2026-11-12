@@ -38,9 +38,9 @@ def version_experiment(
     """Version control the current state of the codebase for an experiment.
 
     This function requires GitPython to be installed. You can install it with:
-        pip install ragas[git]
+        pip install ragas-ng[git]
         # or
-        uv pip install ragas[git]
+        uv pip install ragas-ng[git]
 
     Args:
         experiment_name: Name for the experiment (used in branch name)
@@ -57,13 +57,13 @@ def version_experiment(
     except ImportError as e:
         raise ImportError(
             "version_experiment() requires GitPython. Install it with:\n"
-            "  pip install ragas[git]\n"
+            "  pip install ragas-ng[git]\n"
             "  # or\n"
-            "  uv pip install ragas[git]\n\n"
+            "  uv pip install ragas-ng[git]\n\n"
             "Or install with full features:\n"
-            "  pip install ragas[all]\n"
+            "  pip install ragas-ng[all]\n"
             "  # or\n"
-            "  uv pip install ragas[all]"
+            "  uv pip install ragas-ng[all]"
         ) from e
 
     # Default to current directory if no repo path is provided

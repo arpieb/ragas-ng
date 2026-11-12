@@ -4,17 +4,23 @@ Example projects for evaluating different kinds of LLM applications with Ragas: 
 
 ## Installation
 
-The examples are the `ragas-examples` package, a member of this repository's uv workspace. Neither package is published to PyPI from this fork, so install from a clone:
+The examples are the `ragas-ng-examples` package (import name `ragas_examples`), a member of this repository's uv workspace, published to PyPI alongside `ragas-ng`:
+
+```bash
+pip install ragas-ng-examples
+```
+
+To work on them, install from a clone:
 
 ```bash
 git clone https://github.com/arpieb/ragas-ng.git
 cd ragas-ng
-uv sync --package ragas-examples
+uv sync --package ragas-ng-examples
 # or, with pip, in editable mode:
 pip install -e . -e ./examples
 ```
 
-Some examples need extra dependencies, available as extras of `ragas-examples`:
+Some examples need extra dependencies, available as extras of `ragas-ng-examples`:
 
 | Extra | For |
 |---|---|
@@ -24,7 +30,7 @@ Some examples need extra dependencies, available as extras of `ragas-examples`:
 | `gdrive` | the Google Drive scripts below |
 
 ```bash
-uv sync --package ragas-examples --extra text2sql
+uv sync --package ragas-ng-examples --extra text2sql
 # or: pip install -e "./examples[text2sql]"
 ```
 

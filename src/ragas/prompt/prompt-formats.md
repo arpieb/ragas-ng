@@ -208,8 +208,7 @@ Both prompt types use JSON format with optional gzip compression (.json.gz) for 
 ### Basic Loading
 
 ```python
-from ragas.experimental.prompt.base import Prompt
-from ragas.experimental.prompt.dynamic_few_shot import DynamicFewShotPrompt
+from ragas.prompt import DynamicFewShotPrompt, Prompt
 
 # Load base prompt
 prompt = Prompt.load("my_prompt.json")
@@ -527,4 +526,4 @@ When extending formats:
 
 ---
 
-*This documentation is maintained alongside the codebase in `ragas_experimental/prompt/`. Please update when modifying save/load functionality.*
+*This documentation is maintained alongside the codebase in `src/ragas/prompt/`. Please update when modifying save/load functionality.*

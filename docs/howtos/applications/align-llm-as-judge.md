@@ -22,7 +22,7 @@ Before running evaluation experiments, it is important to align your LLM judge t
 We've created a simple module you can install and run so that you can focus on understanding the evaluation process instead of creating the application.
 
 ```bash
-uv pip install "ragas[examples]"
+uv pip install ragas-ng-examples
 export OPENAI_API_KEY="your-api-key-here"
 ```
 

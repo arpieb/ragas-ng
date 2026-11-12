@@ -6,12 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Ragas is an evaluation toolkit for Large Language Model (LLM) applications. It provides objective metrics for evaluating LLM applications, test data generation capabilities, and integrations with popular LLM frameworks.
 
-This repository is **ragas-ng**, a hard fork of `vibrantlabsai/ragas`. The package and import name are still `ragas`. The fork removes vendor lock-in (no LangChain; `openai` is not a core dependency, and `llm_factory()` routes through LiteLLM) and fixes upstream's reported bugs. Changes that affect users are recorded in `docs/howtos/migrations/`: `behavior_changes.md` for API and behavior, and `score_changes.md` for metric scores.
+This repository is **ragas-ng**, a hard fork of `vibrantlabsai/ragas`. It is published to PyPI as `ragas-ng` (examples: `ragas-ng-examples`); the import name is still `ragas`. The fork removes vendor lock-in (no LangChain; `openai` is not a core dependency, and `llm_factory()` routes through LiteLLM) and fixes upstream's reported bugs. Changes that affect users are recorded in `docs/howtos/migrations/`: `behavior_changes.md` for API and behavior, and `score_changes.md` for metric scores.
 
 The repository contains:
 
 1. **Ragas Library** (`src/ragas/`) - metrics, test data generation, `evaluate()`, datasets, experiments and storage backends
-2. **Examples** (`examples/`, the `ragas-examples` workspace package) - the `ragas quickstart` templates and standalone example scripts
+2. **Examples** (`examples/`, the `ragas-ng-examples` workspace package) - the `ragas quickstart` templates and standalone example scripts
 
 ## Development Environment Setup
 
@@ -66,15 +66,15 @@ The project uses a UV workspace configuration for managing multiple packages:
 uv sync
 
 # Install examples separately
-uv sync --package ragas-examples
+uv sync --package ragas-ng-examples
 
 # Build specific workspace package
-uv build --package ragas-examples
+uv build --package ragas-ng-examples
 ```
 
 **Workspace Members:**
-- `ragas` (main package) - Located in `src/ragas/`
-- `ragas-examples` (examples package) - Located in `examples/`
+- `ragas-ng` (main package, import name `ragas`) - Located in `src/ragas/`
+- `ragas-ng-examples` (examples package) - Located in `examples/`
 
 The workspace ensures consistent dependency versions across packages and enables editable installs of workspace members.
 

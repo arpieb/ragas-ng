@@ -18,8 +18,8 @@ resolution-markers = [
 
 [manifest]
 members = [
-    "ragas",
-    "ragas-examples",
+    "ragas-ng",
+    "ragas-ng-examples",
 ]
 
 [[package]]
@@ -6510,7 +6510,7 @@ wheels = [
 ]
 
 [[package]]
-name = "ragas"
+name = "ragas-ng"
 source = { editable = "." }
 dependencies = [
     { name = "datasets" },
@@ -6576,7 +6576,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-xdist", extra = ["psutil"] },
-    { name = "ragas", extra = ["all", "gdrive", "tracing"] },
+    { name = "ragas-ng", extra = ["all", "gdrive", "tracing"] },
     { name = "rapidfuzz" },
     { name = "ruff" },
     { name = "sacrebleu" },
@@ -6680,7 +6680,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-xdist", extras = ["psutil"] },
-    { name = "ragas", extras = ["all", "tracing", "gdrive"] },
+    { name = "ragas-ng", extras = ["all", "tracing", "gdrive"] },
     { name = "rapidfuzz" },
     { name = "ruff", specifier = ">=0.16" },
     { name = "sacrebleu" },
@@ -6732,17 +6732,17 @@ test = [
 ]
 
 [[package]]
-name = "ragas-examples"
+name = "ragas-ng-examples"
 source = { editable = "examples" }
 dependencies = [
     { name = "openai" },
     { name = "pandas" },
-    { name = "ragas" },
+    { name = "ragas-ng" },
 ]
 
 [package.optional-dependencies]
 gdrive = [
-    { name = "ragas", extra = ["gdrive"] },
+    { name = "ragas-ng", extra = ["gdrive"] },
 ]
 improverag = [
     { name = "datasets" },
@@ -6777,8 +6777,8 @@ requires-dist = [
     { name = "pandas" },
     { name = "python-dotenv", marker = "extra == 'improverag'", specifier = ">=1.0.0" },
     { name = "python-dotenv", marker = "extra == 'text2sql'", specifier = ">=1.0.0" },
-    { name = "ragas", editable = "." },
-    { name = "ragas", extras = ["gdrive"], marker = "extra == 'gdrive'", editable = "." },
+    { name = "ragas-ng", editable = "." },
+    { name = "ragas-ng", extras = ["gdrive"], marker = "extra == 'gdrive'", editable = "." },
     { name = "rank-bm25", marker = "extra == 'improverag'" },
     { name = "tqdm", marker = "extra == 'improverag'" },
 ]

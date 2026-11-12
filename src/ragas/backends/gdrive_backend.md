@@ -15,7 +15,7 @@ The Google Drive backend allows you to store Ragas datasets and experiments in G
 
 ```bash
 # Install with Google Drive dependencies
-pip install "ragas[gdrive]"
+pip install "ragas-ng[gdrive]"
 ```
 
 ## Setup
@@ -254,7 +254,7 @@ for record in records:
    - Check Google Drive sharing settings
 
 4. **Import errors**
-   - Install dependencies: `pip install "ragas[gdrive]"`
+   - Install dependencies: `pip install "ragas-ng[gdrive]"`
    - Verify all required packages are installed
 
 ### Getting Help

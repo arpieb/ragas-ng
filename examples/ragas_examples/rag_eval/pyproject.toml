@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "RAG evaluation example using Ragas"
 requires-python = ">=3.11"
 dependencies = [
-    "ragas[all]>=0.3.0",
+    "ragas-ng[all]",
     "openai>=1.0.0",
 ]
 
@@ -23,4 +23,4 @@ py-modules = []
 [tool.uv]
 managed = true
 # Note: When developing locally, use:
-# uv sync --override ragas@path/to/ragas
+# uv sync --override ragas-ng@path/to/ragas-ng

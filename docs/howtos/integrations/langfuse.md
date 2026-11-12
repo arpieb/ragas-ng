@@ -10,7 +10,7 @@ Neither path needs anything from ragas beyond its metrics. The old `ragas.integr
 This guide was checked against Langfuse Python SDK 4.15. Install what you need:
 
 ```bash
-pip install ragas langfuse openai
+pip install ragas-ng langfuse openai
 # for path 1 without the Langfuse SDK:
 pip install opentelemetry-sdk opentelemetry-exporter-otlp
 ```

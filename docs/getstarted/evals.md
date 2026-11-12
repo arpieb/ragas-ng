@@ -14,7 +14,7 @@ The purpose of this guide is to illustrate a simple workflow for testing and eva
 
     === "Install Ragas First"
         ```sh
-        pip install ragas
+        pip install ragas-ng
         ragas quickstart rag_eval
         cd rag_eval
         uv sync

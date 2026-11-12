@@ -1,0 +1,89 @@
+# Publishes ragas-ng and ragas-ng-examples to PyPI when a GitHub release is
+# published (#242).
+#
+# Uses PyPI trusted publishing (OIDC): no API token is stored in this
+# repository. Each PyPI project must list this workflow (`publish.yml`) and the
+# `pypi-release` environment as a trusted publisher.
+#
+# The build runs in a job with no secrets and no OIDC token; only the publish
+# jobs, which run nothing but the pinned PyPA action, can mint the token.
+# Third-party actions are pinned to full commit SHAs.
+
+name: Publish to PyPI
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0 # setuptools_scm needs full history + tags to derive the version
+          persist-credentials: false
+      - name: Install uv
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        with:
+          enable-cache: false # no shared cache in a release build (cache poisoning)
+      - name: Check the version matches the release tag
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version=$(uv run --no-project --with "setuptools_scm[toml]>=8" python -m setuptools_scm)
+          echo "setuptools_scm version: $version"
+          if [ "$version" != "${TAG#v}" ]; then
+            echo "::error::Version $version does not match release tag $TAG (expected a vX.Y.Z tag on the released commit)"
+            exit 1
+          fi
+      - name: Build ragas-ng
+        run: uv build --package ragas-ng --out-dir dist/ragas-ng
+      - name: Build ragas-ng-examples
+        run: uv build --package ragas-ng-examples --out-dir dist/ragas-ng-examples
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish-ragas-ng:
+    name: Publish ragas-ng
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi-release
+      url: https://pypi.org/project/ragas-ng/
+    permissions:
+      id-token: write # trusted publishing
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          packages-dir: dist/ragas-ng/
+
+  publish-ragas-ng-examples:
+    name: Publish ragas-ng-examples
+    # The examples depend on ragas-ng, so publish it first.
+    needs: publish-ragas-ng
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi-release
+      url: https://pypi.org/project/ragas-ng-examples/
+    permissions:
+      id-token: write # trusted publishing
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          packages-dir: dist/ragas-ng-examples/

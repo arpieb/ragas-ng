@@ -1,7 +1,21 @@
 # Installation
 
-ragas-ng is not published to PyPI (`pip install ragas` installs the upstream
-project), so install it from GitHub:
+ragas-ng is published to PyPI as `ragas-ng`. The import name is still `ragas`:
+
+```bash
+pip install ragas-ng
+# or
+uv add ragas-ng
+```
+
+Optional features ship as extras, for example `ragas-ng[all]`, `ragas-ng[tracing]` or `ragas-ng[dspy]`.
+
+!!! warning "Don't install alongside upstream `ragas`"
+    `ragas-ng` and upstream's `ragas` both provide the `ragas` import package,
+    so installing both in one environment makes one overwrite the other.
+    `pip install ragas` installs the upstream project, not this fork.
+
+To install the latest unreleased code from GitHub:
 
 ```bash
 pip install git+https://github.com/arpieb/ragas-ng.git

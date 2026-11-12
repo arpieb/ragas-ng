@@ -14,7 +14,7 @@ We will start by testing a simple prompt that classifies movie reviews as positi
 First, make sure you have installed ragas examples and setup your OpenAI API key:
 
 ```bash
-pip install ragas[examples]
+pip install ragas-ng-examples
 export OPENAI_API_KEY = "your_openai_api_key"
 ```
 

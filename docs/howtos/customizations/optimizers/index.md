@@ -20,10 +20,10 @@ DSPy is an optional dependency. Install it with:
 
 ```bash
 # Using uv (recommended)
-uv add "ragas[dspy]"
+uv add "ragas-ng[dspy]"
 
 # Using pip
-pip install "ragas[dspy]"
+pip install "ragas-ng[dspy]"
 ```
 
 The extra installs DSPy 3 with `optuna`, which MIPROv2 needs.
@@ -272,9 +272,9 @@ If you get `ImportError: DSPy optimizer requires dspy`:
 
 ```bash
 # Install the DSPy extra
-uv add "ragas[dspy]"
+uv add "ragas-ng[dspy]"
 # or
-pip install "ragas[dspy]"
+pip install "ragas-ng[dspy]"
 ```
 
 ### Optimization Takes Too Long

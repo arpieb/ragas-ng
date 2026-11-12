@@ -9,7 +9,7 @@ This guide assumes you already have an AG-UI compatible agent running (for examp
 The AG-UI helpers live behind an optional extra. Install it together with the dependencies required by your evaluator LLM.
 
 ```bash
-pip install "ragas[ag-ui]" python-dotenv
+pip install "ragas-ng[ag-ui]" python-dotenv
 ```
 
 Configure your evaluator LLM credentials. For example, if you are using OpenAI models:

@@ -833,3 +833,11 @@ The private methods `_calculate_average_precision` (ContextPrecision), `_format_
 
 - `MLFLOW_HOST` must be an http(s) URL with a host, with no query string or fragment; anything else raises `ValueError`. A port and a path prefix (`https://example.com/mlflow`) still work, and the URL for a valid host is unchanged.
 - The experiment ID and trace ID are percent-encoded, so an ID containing `/`, `?`, `&` or `#` can no longer add path segments or query parameters to the URL.
+
+## Published to PyPI as `ragas-ng` ([#242](https://github.com/arpieb/ragas-ng/issues/242))
+
+- The distributions are renamed: `ragas` → **`ragas-ng`**, and `ragas-examples` → **`ragas-ng-examples`**. The import names are unchanged: `import ragas` and `import ragas_examples`. Extras keep their names: `pip install "ragas-ng[all]"`.
+- `pip install ragas` still installs **upstream** ragas. Both distributions provide the `ragas` import package, so don't install both in one environment.
+- The quickstart templates' `pyproject.toml` files depend on `ragas-ng[all]` (they had `ragas[all]>=0.3.0`, which resolved to upstream).
+- Install hints in error messages and the docs say `ragas-ng[...]`. The `ragas[examples]` hint, an extra that never existed here, is now the `ragas-ng-examples` package.
+- `ragas.experimental` no longer lazily imports upstream's separate `ragas_experimental` package. It raises `AttributeError`, like any other missing attribute.

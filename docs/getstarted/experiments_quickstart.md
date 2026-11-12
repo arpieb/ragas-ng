@@ -14,7 +14,7 @@ This tutorial walks you through running your first experiment with Ragas using t
 ### 1. Install (if you haven’t already)
 
 ```bash
-pip install ragas
+pip install ragas-ng
 ```
 
 ### 2. Create `hello_world.py`

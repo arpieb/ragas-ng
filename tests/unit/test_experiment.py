@@ -192,7 +192,9 @@ class TestVersionExperiment:
         """Test that version_experiment provides helpful error when GitPython is not installed."""
         with patch("ragas.utils.find_git_root", return_value=temp_dir):
             with patch.dict("sys.modules", {"git": None}):
-                with pytest.raises(ImportError, match="uv pip install ragas\\[git\\]"):
+                with pytest.raises(
+                    ImportError, match="uv pip install ragas-ng\\[git\\]"
+                ):
                     version_experiment("test_experiment")
 
 

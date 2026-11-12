@@ -29,7 +29,7 @@ flowchart LR
 To run this, install the dependencies:
 
 ```bash
-uv pip install "ragas-examples[improverag]"
+uv pip install "ragas-ng-examples[improverag]"
 ```
 
 Then run the RAG app:

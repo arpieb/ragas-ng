@@ -18,7 +18,7 @@ The `ragas-haystack` package's `RagasEvaluator` component is built for upstream 
 
 
 ```python
-%pip install ragas haystack-ai
+%pip install ragas-ng haystack-ai
 ```
 
 #### Getting the data

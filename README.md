@@ -29,26 +29,30 @@ Changes so far:
 - **No LangChain.** `import ragas` loads no LangChain modules, and nothing LangChain-related is installed as a dependency. The LangChain, LangSmith, LangGraph and Opik integrations are gone. See the [LangChain migration guide](docs/howtos/migrations/migrate_off_langchain.md).
 - **Provider-neutral by default.** `openai` is no longer a declared dependency. Every `llm_factory()` call goes through [LiteLLM](https://github.com/BerriAI/litellm), addressed by model name (`"anthropic/claude-sonnet-5-5"`, `"gemini/gemini-3.6-flash"`, `"ollama/..."`), so any provider LiteLLM supports works without its SDK. `embedding_factory()` works without a client too.
 - **Native tracing.** The LangChain callback system has been replaced by a native run tree plus the OpenTelemetry API. Spans cost nothing until you configure an OpenTelemetry SDK.
-- **Collections metrics everywhere.** Metrics have been ported to `ragas.metrics.collections`, including the non-LLM context metrics, AspectCritic, SimpleCriteriaScore and FaithfulnesswithHHEM, and `evaluate()` accepts them directly. The legacy metric singletons in `ragas.metrics` still work, but they are deprecated.
+- **Collections metrics everywhere.** Metrics have been ported to `ragas.metrics.collections`, including the non-LLM context metrics, AspectCritic, SimpleCriteriaScore and FaithfulnesswithHHEM, and `evaluate()` accepts them directly. The legacy metrics are removed; `ragas.metrics` keeps only the base classes and the `DiscreteMetric` / `NumericMetric` / `RankingMetric` family.
 - **Upstream bugs fixed, with migration notes.** Fixes that change behavior or scores are listed in [Behavior changes](docs/howtos/migrations/behavior_changes.md) and [Score changes](docs/howtos/migrations/score_changes.md), so you can see what differs from upstream before upgrading.
 - **Modern toolchain.** Requires Python 3.11+. Uses uv with a committed lockfile, and the docs build in CI with `mkdocs --strict`.
 
-The Python package and import name are still `ragas`, so existing code keeps importing the same way.
+The distribution is published as **`ragas-ng`**; the import name is still `ragas`, so existing code keeps importing the same way.
 
 ## :shield: Installation
 
-This fork is not published to PyPI: `pip install ragas` installs the **upstream** package. Install from GitHub instead:
+```bash
+pip install ragas-ng
+# or
+uv add ragas-ng
+```
+
+Optional features ship as extras, for example `tracing`, `gdrive`, `ag-ui`, `dspy`, or `all`:
+
+```bash
+pip install "ragas-ng[all]"
+```
+
+`ragas-ng` and upstream's `ragas` both install the `ragas` import package, so install one or the other, not both. To install the latest unreleased code from GitHub:
 
 ```bash
 pip install git+https://github.com/arpieb/ragas-ng
-# or
-uv add git+https://github.com/arpieb/ragas-ng
-```
-
-Optional features ship as extras, for example `tracing`, `gdrive`, `oci`, `ag-ui`, `dspy`, or `all`:
-
-```bash
-pip install "ragas[all] @ git+https://github.com/arpieb/ragas-ng"
 ```
 
 ## :fire: Quickstart

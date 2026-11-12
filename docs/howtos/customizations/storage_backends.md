@@ -9,7 +9,7 @@ A `Dataset` and the results of an `@experiment` are saved through a **backend**:
 | `local/csv` | `LocalCSVBackend` | `.csv` files | `root_dir` | Files you open in a spreadsheet or review in git. |
 | `local/jsonl` | `LocalJSONLBackend` | `.jsonl` files | `root_dir` | Keeping numbers, lists and nested values without a data model. |
 | `inmemory` | `InMemoryBackend` | Python objects | none | Tests, notebooks and intermediate splits. Nothing persists. |
-| `gdrive` | `GDriveBackend` | Google Sheets | `folder_id`, plus credentials | Sharing datasets and results with a team. Needs `pip install "ragas[gdrive]"`. |
+| `gdrive` | `GDriveBackend` | Google Sheets | `folder_id`, plus credentials | Sharing datasets and results with a team. Needs `pip install "ragas-ng[gdrive]"`. |
 
 List what's registered in your environment:
 
@@ -182,7 +182,7 @@ print(Dataset.load(name="scratch", backend=mem)[0])
 
 `GDriveBackend` stores each dataset and experiment as a Google Sheet in a Drive folder you choose. It creates `datasets/` and `experiments/` subfolders there.
 
-1. Install the extra: `pip install "ragas[gdrive]"`.
+1. Install the extra: `pip install "ragas-ng[gdrive]"`.
 2. In a Google Cloud project, enable the **Google Drive API** and **Google Sheets API**.
 3. Create credentials. Either:
     - **a service account** (recommended for scripts and CI): download its JSON key, and share the Drive folder with the service account's email address as an editor; or

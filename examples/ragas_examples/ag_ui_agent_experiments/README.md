@@ -36,7 +36,7 @@ Install the required dependencies:
 uv pip install -e ".[dev]"
 
 # Or install specific dependencies
-pip install ragas openai
+pip install ragas-ng openai
 ```
 
 ## Evaluation Scenarios
@@ -239,7 +239,7 @@ ImportError: No module named 'ragas'
 
 **Solution**: Install ragas and its dependencies:
 ```bash
-pip install ragas langchain-openai
+pip install ragas-ng langchain-openai
 ```
 
 ### API Key Errors

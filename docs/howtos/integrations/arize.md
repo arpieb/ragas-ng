@@ -8,7 +8,7 @@
 This guide was checked against Phoenix 21.0, `arize-phoenix-otel` 0.17 and `arize-phoenix-client` 3.5. Install what you need:
 
 ```bash
-pip install ragas arize-phoenix-otel arize-phoenix-client openai
+pip install ragas-ng arize-phoenix-otel arize-phoenix-client openai
 # to run Phoenix locally (UI and collector on http://localhost:6006):
 pip install arize-phoenix
 phoenix serve

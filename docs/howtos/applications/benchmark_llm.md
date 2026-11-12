@@ -25,10 +25,10 @@ We'll use discount calculation as our test case: given a customer profile, calcu
 
 ## Set up your environment and API access
 
-First, install the ragas-examples package which contains the benchmark LLM example code:
+First, install the ragas-ng-examples package which contains the benchmark LLM example code:
 
 ```bash
-pip install ragas[examples]
+pip install ragas-ng-examples
 ```
 
 Next, ensure you have your API credentials configured:
