@@ -1,4 +1,8 @@
-"""Faithfulness prompt classes and models."""
+"""Statement generation and NLI verdict prompts.
+
+Shared by Faithfulness, FaithfulnesswithHHEM, AnswerCorrectness (statement
+generation), FactualCorrectness (NLI verification) and NoiseSensitivity (both).
+"""
 
 import typing as t
 

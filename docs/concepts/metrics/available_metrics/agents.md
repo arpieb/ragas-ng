@@ -24,6 +24,8 @@ $$
 \text{F1 Score } = {2 \times \text{Precision} \times \text{Recall} \over \text{Precision} + \text{Recall}}
 $$
 
+If every topic was out of scope and refused, precision, recall and F1 are all 1.0. Otherwise a zero denominator gives 0.0.
+
 ### Example
 
 ```python
@@ -105,7 +107,7 @@ if __name__ == "__main__":
 ```
 Output
 ```
-Topic Adherence (precision): 0.6666666666444444
+Topic Adherence (precision): 0.6666666666666666
 ```
 
 To change the mode to recall, set the `mode` parameter to `recall`.
@@ -286,6 +288,8 @@ $$
 $$
 \text{F1} = \frac{2 \cdot \text{Precision} \cdot \text{Recall}}{\text{Precision} + \text{Recall}}
 $$
+
+No expected calls and no calls made scores 1.0. Calls made when none were expected, or none made when some were, score 0.0.
 
 ### How is it different from Topic Adherence?
 

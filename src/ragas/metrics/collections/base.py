@@ -82,6 +82,11 @@ def _guard_list_inputs(ascore: t.Callable) -> t.Callable:
     return wrapper
 
 
+# "Not passed", so an explicit ``llm=None`` still reaches validation and fails
+# there with the helpful message.
+_UNSET: t.Any = object()
+
+
 class BaseMetric(SimpleBaseMetric, NumericValidator):
     """
     Base class for metrics collections with modern component validation.
@@ -97,8 +102,11 @@ class BaseMetric(SimpleBaseMetric, NumericValidator):
         name: The metric name
         allowed_values: Score range for numeric validation (tuple of min, max)
 
-    Note: Subclasses define llm and/or embeddings fields only if they need them.
-    The base classes handle all the core metric functionality - we just add modern component validation.
+    Components: a metric that needs an LLM and/or embeddings lists them in
+    ``required_components`` (one it can do without, such as AnswerCorrectness's
+    embeddings, in ``optional_components``) and passes them on with
+    ``super().__init__(llm=..., embeddings=...)``. The base stores each one
+    and validates it, so attributes can be set in any order around that call.
 
     Prompts: every ``BasePrompt`` the metric holds as an attribute is listed
     by ``get_prompts()`` under its attribute name and replaced with
@@ -109,6 +117,11 @@ class BaseMetric(SimpleBaseMetric, NumericValidator):
     #: accuracy, a continuous or discrete score for squared error.
     output_type: t.Optional[MetricOutputType] = MetricOutputType.CONTINUOUS
 
+    #: Components the metric can't score without: any of "llm", "embeddings".
+    required_components: t.ClassVar[t.Tuple[str, ...]] = ()
+    #: Components the metric accepts but can do without (given as ``None``).
+    optional_components: t.ClassVar[t.Tuple[str, ...]] = ()
+
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         if "ascore" in cls.__dict__:
@@ -118,16 +131,37 @@ class BaseMetric(SimpleBaseMetric, NumericValidator):
         self,
         name: str = "base_metric",
         allowed_values: t.Tuple[float, float] = (0.0, 1.0),
+        *,
+        llm: t.Any = _UNSET,
+        embeddings: t.Any = _UNSET,
         **kwargs,
     ):
         """Initialize the base metric with validation.
 
+        Args:
+            name: The metric name.
+            allowed_values: Score range for numeric validation.
+            llm: The metric's LLM, if it declares ``"llm"`` in
+                ``required_components`` or ``optional_components``.
+            embeddings: The metric's embeddings, likewise.
+
         Raises:
             TypeError: for any keyword argument no constructor in the class
-                chain consumed. They used to be dropped silently, so a typo
-                such as ``AspectCritic(..., strictnes=3)`` built a metric with
-                the default strictness.
+                chain consumed, including a component the metric doesn't
+                declare. They used to be dropped silently, so a typo such as
+                ``AspectCritic(..., strictnes=3)`` built a metric with the
+                default strictness.
+            ValueError: for a required component that isn't a modern LLM /
+                embedding, or an optional one that is neither that nor None.
         """
+        declared = (*self.required_components, *self.optional_components)
+        for component, value in (("llm", llm), ("embeddings", embeddings)):
+            if value is _UNSET:
+                continue
+            if component in declared:
+                setattr(self, component, value)
+            else:
+                kwargs[component] = value
         if kwargs:
             unknown = ", ".join(repr(k) for k in sorted(kwargs))
             raise TypeError(
@@ -135,12 +169,15 @@ class BaseMetric(SimpleBaseMetric, NumericValidator):
             )
         super().__init__(name=name, allowed_values=allowed_values)
 
-        # Validate components only if the metric defines them
-        # Check if this instance has these attributes after initialization
-        if hasattr(self, "llm"):
-            self._validate_llm()
-        if hasattr(self, "embeddings"):
-            self._validate_embeddings()
+        validators = {
+            "llm": self._validate_llm,
+            "embeddings": self._validate_embeddings,
+        }
+        for component in self.required_components:
+            validators[component]()
+        for component in self.optional_components:
+            if getattr(self, component, None) is not None:
+                validators[component]()
 
     def score(self, **kwargs) -> MetricResult:
         """

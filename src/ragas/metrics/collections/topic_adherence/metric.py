@@ -7,9 +7,11 @@ import numpy as np
 
 from ragas.messages import AIMessage, HumanMessage, ToolMessage
 from ragas.metrics.collections._concurrency import gather_bounded
+from ragas.metrics.collections._conversation import format_conversation
 from ragas.metrics.collections._verdicts import judge_each
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
+from ragas.metrics.utils import fbeta_from_precision_recall, precision_recall
 
 from .util import (
     TopicClassificationInput,
@@ -72,6 +74,8 @@ class TopicAdherence(BaseMetric):
         name: The metric name
     """
 
+    required_components = ("llm",)
+
     llm: "InstructorBaseRagasLLM"
 
     def __init__(
@@ -81,13 +85,12 @@ class TopicAdherence(BaseMetric):
         name: str = "topic_adherence",
         **kwargs,
     ):
-        self.llm = llm
         self.mode = mode
         self.topic_extraction_prompt = TopicExtractionPrompt()
         self.topic_refused_prompt = TopicRefusedPrompt()
         self.topic_classification_prompt = TopicClassificationPrompt()
 
-        super().__init__(name=name, **kwargs)
+        super().__init__(llm=llm, name=name, **kwargs)
 
     async def ascore(
         self,
@@ -110,7 +113,7 @@ class TopicAdherence(BaseMetric):
             raise ValueError("reference_topics must be a non-empty list of topics")
 
         # Format conversation as pretty string
-        conversation = self._format_conversation(user_input)
+        conversation = format_conversation(user_input)
 
         # Step 1: Extract topics from the conversation
         topics = await self._extract_topics(conversation)
@@ -140,15 +143,6 @@ class TopicAdherence(BaseMetric):
                 f"{'in scope' if in_scope else 'out of scope'}"
             )
         return MetricResult(value=float(score), reason="\n".join(lines))
-
-    def _format_conversation(
-        self, messages: List[Union[HumanMessage, AIMessage, ToolMessage]]
-    ) -> str:
-        """Format messages into a readable conversation string."""
-        lines = []
-        for msg in messages:
-            lines.append(msg.pretty_repr())
-        return "\n".join(lines)
 
     async def _extract_topics(self, conversation: str) -> List[str]:
         """Extract topics from the conversation."""
@@ -225,13 +219,11 @@ class TopicAdherence(BaseMetric):
         false_positives = np.sum(topic_answered & ~topic_classifications)
         false_negatives = np.sum(~topic_answered & topic_classifications)
 
-        eps = 1e-10
-
+        precision, recall = precision_recall(
+            int(true_positives), int(false_positives), int(false_negatives)
+        )
         if self.mode == "precision":
-            return true_positives / (true_positives + false_positives + eps)
-        elif self.mode == "recall":
-            return true_positives / (true_positives + false_negatives + eps)
-        else:  # f1
-            precision = true_positives / (true_positives + false_positives + eps)
-            recall = true_positives / (true_positives + false_negatives + eps)
-            return 2 * (precision * recall) / (precision + recall + eps)
+            return precision
+        if self.mode == "recall":
+            return recall
+        return fbeta_from_precision_recall(precision, recall)

@@ -793,3 +793,38 @@ These metrics, and `SimpleLLMMetric` (`LLMMetric`) subclasses, were refactored. 
 - `KnowledgeGraph.find_n_indirect_clusters()` and `KnowledgeGraph.find_two_nodes_single_rel()` moved to `ragas.testset.graph_queries` as functions that take the graph first: `find_n_indirect_clusters(kg, n, ...)` and `find_two_nodes_single_rel(kg, ...)`. The methods are removed. The results are unchanged.
 - `Optimizer.optimize()`, `GeneticOptimizer.optimize()` and `DSPyOptimizer.optimize()` are now `optimize(dataset, loss, config=None, *, run_config=None, batch_size=None, callbacks=None, raise_exceptions=True)`. `config` is optional, and the run options are keyword-only. The `with_debugging_logs` argument, which no optimizer read, is removed. `metric.train()` is unchanged.
 - `GeneticOptimizer` checks its `metric` and `llm` once, when `optimize()` starts. Its steps no longer check them again.
+
+## Shared metric helpers ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+The collections metrics now share helpers instead of carrying copies. Metric class names, constructor arguments and `ascore()` signatures are unchanged. Score effects are in [Metric score changes](score_changes.md#one-f-score-edge-case-policy-217).
+
+**Custom metrics declare their components.** `ragas.metrics.collections.BaseMetric` validates the components a metric lists in `required_components` (and, if not `None`, those in `optional_components`), and takes them as keyword arguments:
+
+```python
+class MyMetric(BaseMetric):
+    required_components = ("llm",)
+
+    def __init__(self, llm, name="my_metric", **kwargs):
+        super().__init__(llm=llm, name=name, **kwargs)
+```
+
+- It used to validate any `llm` / `embeddings` attribute that happened to be set before `super().__init__()`. A subclass that still sets `self.llm` and doesn't declare it is no longer validated. Declare it.
+- Passing `llm=` or `embeddings=` to a metric that doesn't declare it raises `TypeError`, like any other unknown keyword argument.
+
+**One wording for a missing input.** Every collections metric raises `ValueError("<field> is missing. Please add <field> to the test sample.")` for a missing or empty required input. Before, some said `"<field> cannot be empty"` (ContextPrecision, ContextRecall, AnswerRelevancy), `"Please provide ..."` (the multimodal metrics), `"reference must be provided for AgentGoalAccuracyWithReference"` or `"rubrics must be provided for instance-specific evaluation"`. Code matching the old messages must match the new one. Type checks (e.g. `"user_input must be a list of messages"`) and whitespace checks are unchanged.
+
+**The NVIDIA dual-judge metrics run both judges at once.** `AnswerAccuracy`, `ResponseGroundedness` and `ContextRelevance` send their two judge requests concurrently, so a sample has two LLM calls in flight. When the provider raises, both calls have been made. A retry after an off-scale rating uses temperature 0.3 and its own `sample_index` (see [score changes](score_changes.md#answeraccuracy-responsegroundedness-contextrelevance-retries-can-change-the-rating-217)).
+
+**`FaithfulnesswithHHEM` inherits `ascore()`.** `Faithfulness.ascore()` checks inputs, extracts statements, then calls `_verify_statements(statements, context_str)`. HHEM overrides only that hook. A subclass of either that verifies statements differently should override the hook too.
+
+**Moved or removed names:**
+
+| Removed | Use instead |
+|---|---|
+| `StatementGeneratorInput` / `Output` / `Prompt` in `collections.answer_correctness.util` | the same names in `ragas.metrics.collections.faithfulness.util` |
+| `NLIStatementInput` / `Output` / `Prompt`, `StatementFaithfulnessAnswer` in `collections.factual_correctness.util` | the same names in `ragas.metrics.collections.faithfulness.util` |
+| the module `collections.noise_sensitivity.util` (`StatementFaithfulnessInput` / `Output` / `Prompt` aliases) | `NLIStatementInput` / `Output` / `Prompt` in `ragas.metrics.collections.faithfulness.util` |
+| `collections.tool_call_f1.util.calculate_f1_score` | `ragas.metrics.utils.fbeta_score` |
+| `ragas.testset.transforms.relationship_builders.cosine.cosine_similarity_matrix` | `ragas.similarity.cosine_matrix` |
+
+The private methods `_calculate_average_precision` (ContextPrecision), `_format_conversation` (AgentGoalAccuracy, TopicAdherence), `_compare_outcomes` (AgentGoalAccuracy) and `_get_judge_rating` / `_average_scores` (the dual-judge metrics) are gone. ContextPrecision no longer logs `"Invalid response format ..."`: the warning could not fire.

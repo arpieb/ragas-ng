@@ -3,6 +3,7 @@
 import typing as t
 from typing import List
 
+from ragas.metrics.collections._inputs import require
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.collections.image_sources import ImageSourcePolicy
 from ragas.metrics.result import MetricResult
@@ -63,6 +64,8 @@ class MultiModalFaithfulness(BaseMetric):
         contexts. Check the model's page on your provider's site.
     """
 
+    required_components = ("llm",)
+
     # Type hints for linter (attributes are set in __init__)
     llm: "InstructorBaseRagasLLM"
     image_policy: ImageSourcePolicy
@@ -85,9 +88,8 @@ class MultiModalFaithfulness(BaseMetric):
                 local files; pass ``ImageSourcePolicy(local_dir=...)`` to read
                 images from a directory. See ``ImageSourcePolicy``.
         """
-        self.llm = llm
         self.image_policy = image_policy or ImageSourcePolicy()
-        super().__init__(name=name, **kwargs)
+        super().__init__(llm=llm, name=name, **kwargs)
 
     async def ascore(
         self,
@@ -108,15 +110,7 @@ class MultiModalFaithfulness(BaseMetric):
         Raises:
             ValueError: If response or retrieved_contexts is missing
         """
-        # Input validation
-        if not response:
-            raise ValueError(
-                "response is missing. Please provide a response to evaluate."
-            )
-        if not retrieved_contexts:
-            raise ValueError(
-                "retrieved_contexts is missing. Please provide contexts to check against."
-            )
+        require(response=response, retrieved_contexts=retrieved_contexts)
 
         # Build multimodal message content
         message_content = build_multimodal_message_content(

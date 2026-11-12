@@ -153,7 +153,7 @@ async def test_factual_correctness_reason_covers_both_directions():
         who = "resp" if "RESPONSE" in prompt.split("Now perform")[-1] else "ref"
         return fc.ClaimDecompositionOutput(claims=[f"{who} claim 0", f"{who} claim 1"])
 
-    llm = scripted({fc.ClaimDecompositionOutput: decompose, fc.NLIStatementOutput: nli})
+    llm = scripted({fc.ClaimDecompositionOutput: decompose, fa.NLIStatementOutput: nli})
     r = await C.FactualCorrectness(llm=llm).ascore(response="RESPONSE", reference="REF")
     assert r.value == 1.0
     assert "Precision: 2 of 2 claims in the response are supported" in r.reason
@@ -233,7 +233,7 @@ async def test_answer_correctness_reason_lists_tp_fp_fn():
     s = lambda text: ac.StatementsWithReason(statement=text, reason=f"r-{text}")  # noqa: E731
     llm = scripted(
         {
-            ac.StatementGeneratorOutput: lambda p: ac.StatementGeneratorOutput(
+            fa.StatementGeneratorOutput: lambda p: fa.StatementGeneratorOutput(
                 statements=["x"]
             ),
             ac.ClassificationWithReason: lambda p: ac.ClassificationWithReason(

@@ -3,6 +3,7 @@
 import typing as t
 from typing import List
 
+from ragas.metrics.collections._inputs import require
 from ragas.metrics.collections._reasons import (
     UNMATCHED_VERDICTS,
     count_phrase,
@@ -69,6 +70,8 @@ class Faithfulness(BaseMetric):
         allowed_values: Score range (0.0 to 1.0, higher is better)
     """
 
+    required_components = ("llm",)
+
     # Type hints for linter (attributes are set in __init__)
     llm: "InstructorBaseRagasLLM"
 
@@ -85,13 +88,10 @@ class Faithfulness(BaseMetric):
             llm: Modern instructor-based LLM for statement generation and NLI evaluation
             name: The metric name
         """
-        # Set attributes explicitly before calling super()
-        self.llm = llm
         self.statement_generator_prompt = StatementGeneratorPrompt()
         self.nli_statement_prompt = NLIStatementPrompt()
 
-        # Call super() for validation (without passing llm in kwargs)
-        super().__init__(name=name, **kwargs)
+        super().__init__(llm=llm, name=name, **kwargs)
 
     async def ascore(
         self, user_input: str, response: str, retrieved_contexts: List[str]
@@ -107,21 +107,13 @@ class Faithfulness(BaseMetric):
         Returns:
             MetricResult with faithfulness score (0.0-1.0, higher is better)
         """
-        # Input validation
-        if not response:
-            raise ValueError(
-                "response is missing. Please add response to the test sample."
-            )
-        if not user_input:
-            raise ValueError(
-                "user_input is missing. Please add user_input to the test sample."
-            )
-        if not retrieved_contexts:
-            raise ValueError(
-                "retrieved_contexts is missing. Please add retrieved_contexts to the test sample."
-            )
+        require(
+            response=response,
+            user_input=user_input,
+            retrieved_contexts=retrieved_contexts,
+        )
 
-        # Step 1: Break response into atomic statements
+        # Step 1 (extract): break the response into atomic statements.
         statements = await self._create_statements(user_input, response)
 
         if not statements:
@@ -132,10 +124,19 @@ class Faithfulness(BaseMetric):
                 "faithfulness is undefined.",
             )
 
-        # Step 2: Join all contexts and evaluate statements against them.
+        # Step 2 (verify): check each statement against the joined contexts.
+        return await self._verify_statements(statements, "\n".join(retrieved_contexts))
+
+    async def _verify_statements(
+        self, statements: List[str], context_str: str
+    ) -> MetricResult:
+        """Score the statements against the context: the fraction supported.
+
+        The hook FaithfulnesswithHHEM overrides to verify with a local NLI
+        model instead of the LLM judge.
+        """
         # One verdict per statement or no score: scoring over whatever subset
         # the judge returned shifts the denominator (#52).
-        context_str = "\n".join(retrieved_contexts)
 
         async def ask() -> List[StatementFaithfulnessAnswer]:
             return (await self._create_verdicts(statements, context_str)).statements
@@ -153,7 +154,6 @@ class Faithfulness(BaseMetric):
                 reason=UNMATCHED_VERDICTS.format(what="statements"),
             )
 
-        # Step 3: Compute faithfulness score
         score = self._compute_score(NLIStatementOutput(statements=aligned))
         supported = sum(1 for v in aligned if v.verdict)
         reason = itemized(

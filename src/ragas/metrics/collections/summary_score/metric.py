@@ -72,6 +72,8 @@ class SummaryScore(BaseMetric):
         allowed_values: Score range (0.0 to 1.0)
     """
 
+    required_components = ("llm",)
+
     # Type hints for linter (attributes are set in __init__)
     llm: "InstructorBaseRagasLLM"
 
@@ -92,8 +94,6 @@ class SummaryScore(BaseMetric):
             length_penalty: Whether to apply conciseness penalty for long summaries
             coeff: Weight for conciseness score (0.0=only QA, 1.0=only conciseness)
         """
-        # Set attributes explicitly before calling super()
-        self.llm = llm
         self.length_penalty = length_penalty
         self.coeff = coeff
         self.extract_keyphrases_prompt = ExtractKeyphrasesPrompt()
@@ -104,8 +104,7 @@ class SummaryScore(BaseMetric):
         if not (0.0 <= coeff <= 1.0):
             raise ValueError(f"Coefficient must be between 0.0 and 1.0, got {coeff}")
 
-        # Call super() for validation (without passing llm in kwargs)
-        super().__init__(name=name, **kwargs)
+        super().__init__(llm=llm, name=name, **kwargs)
 
     async def ascore(
         self, reference_contexts: List[str], response: str

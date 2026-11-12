@@ -68,10 +68,8 @@ running_async.md
 
 ```python
 from ragas.metrics.collections import FactualCorrectness
-from ragas.metrics.collections.factual_correctness.util import (
-    ClaimDecompositionPrompt,
-    NLIStatementPrompt,
-)
+from ragas.metrics.collections.factual_correctness.util import ClaimDecompositionPrompt
+from ragas.metrics.collections.faithfulness.util import NLIStatementPrompt
 
 
 # Create a custom claim decomposition prompt by subclassing

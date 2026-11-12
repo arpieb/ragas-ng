@@ -9,11 +9,9 @@ from pydantic import BaseModel
 from ragas.executor import run_async_batch
 from ragas.prompt import StringIO
 from ragas.prompt.metrics.base_prompt import BasePrompt
+from ragas.similarity import cosine_matrix
 from ragas.testset._modern import require_llm
 from ragas.testset.graph import KnowledgeGraph, Node
-from ragas.testset.transforms.relationship_builders.cosine import (
-    cosine_similarity_matrix,
-)
 
 if t.TYPE_CHECKING:
     from ragas.callbacks import Callbacks
@@ -155,9 +153,7 @@ def generate_personas_from_kg(
     groups = []
     if summaries:
         embedding_matrix = np.asarray(embeddings, dtype=float)
-        cosine_similarities = cosine_similarity_matrix(
-            embedding_matrix, embedding_matrix
-        )
+        cosine_similarities = cosine_matrix(embedding_matrix, embedding_matrix)
         visited = set()
         threshold = 0.75
 

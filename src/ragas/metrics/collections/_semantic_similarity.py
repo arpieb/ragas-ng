@@ -6,6 +6,7 @@ import numpy as np
 
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
+from ragas.similarity import cosine
 
 if t.TYPE_CHECKING:
     from ragas.embeddings.base import BaseRagasEmbedding
@@ -51,6 +52,8 @@ class SemanticSimilarity(BaseMetric):
         allowed_values: Score range (0.0 to 1.0)
     """
 
+    required_components = ("embeddings",)
+
     embeddings: "BaseRagasEmbedding"
 
     def __init__(
@@ -61,10 +64,9 @@ class SemanticSimilarity(BaseMetric):
         **kwargs,
     ):
         """Initialize SemanticSimilarity metric with required embeddings."""
-        self.embeddings = embeddings
         self.threshold = threshold
 
-        super().__init__(name=name, **kwargs)
+        super().__init__(embeddings=embeddings, name=name, **kwargs)
 
     async def ascore(self, reference: str, response: str) -> MetricResult:
         """
@@ -86,11 +88,7 @@ class SemanticSimilarity(BaseMetric):
         embedding_1 = np.array(await self.embeddings.aembed_text(reference))
         embedding_2 = np.array(await self.embeddings.aembed_text(response))
 
-        norms_1 = np.linalg.norm(embedding_1)
-        norms_2 = np.linalg.norm(embedding_2)
-        embedding_1_normalized = embedding_1 / norms_1
-        embedding_2_normalized = embedding_2 / norms_2
-        similarity = embedding_1_normalized @ embedding_2_normalized.T
+        similarity = np.array([cosine(embedding_1, embedding_2)])
         # Cosine similarity spans [-1, 1]; the metric is defined on [0, 1], and
         # unrelated texts can come out slightly negative with some embedding
         # models (#107). Same treatment as AnswerRelevancy (#56).

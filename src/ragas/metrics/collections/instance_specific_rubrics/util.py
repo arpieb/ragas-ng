@@ -4,27 +4,13 @@ import typing as t
 
 from pydantic import BaseModel, Field
 
+from ragas.metrics.collections._inputs import SampleFieldsInput
 from ragas.prompt.metrics.base_prompt import BasePrompt
 
 
-class InstanceRubricScoreInput(BaseModel):
+class InstanceRubricScoreInput(SampleFieldsInput):
     """Input model for instance-specific rubric scoring."""
 
-    user_input: t.Optional[str] = Field(
-        default=None, description="The input/question provided to the system"
-    )
-    response: t.Optional[str] = Field(
-        default=None, description="The response from the system"
-    )
-    retrieved_contexts: t.Optional[t.List[str]] = Field(
-        default=None, description="The contexts retrieved for generating the response"
-    )
-    reference_contexts: t.Optional[t.List[str]] = Field(
-        default=None, description="The reference contexts for evaluation"
-    )
-    reference: t.Optional[str] = Field(
-        default=None, description="The reference/ground truth answer"
-    )
     rubrics: t.Dict[str, str] = Field(
         ..., description="The scoring rubrics for this specific instance"
     )

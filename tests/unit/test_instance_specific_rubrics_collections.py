@@ -190,7 +190,7 @@ class TestInstanceSpecificRubricsCollections:
         """Test that rubrics parameter is required."""
         metric = InstanceSpecificRubrics(llm=mock_llm)
 
-        with pytest.raises(ValueError, match="rubrics must be provided"):
+        with pytest.raises(ValueError, match="rubrics is missing"):
             await metric.ascore(
                 user_input="Test question",
                 response="Test response",

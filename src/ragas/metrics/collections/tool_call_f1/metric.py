@@ -5,8 +5,9 @@ import typing as t
 from ragas.messages import AIMessage
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
+from ragas.metrics.utils import fbeta_score
 
-from .util import calculate_f1_score, tool_call_to_hashable
+from .util import tool_call_to_hashable
 
 if t.TYPE_CHECKING:
     from ragas.messages import HumanMessage, ToolCall, ToolMessage
@@ -104,7 +105,7 @@ class ToolCallF1(BaseMetric):
         false_positives = len(actual - expected)
         false_negatives = len(expected - actual)
 
-        # Calculate F1 score
-        f1_score = calculate_f1_score(true_positives, false_positives, false_negatives)
+        # No expected and no actual calls is a perfect 1.0 (metrics.utils policy).
+        f1_score = fbeta_score(true_positives, false_positives, false_negatives)
 
         return MetricResult(value=round(f1_score, 4))

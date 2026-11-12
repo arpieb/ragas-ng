@@ -23,6 +23,8 @@ from ragas.llms.base import InstructorLLM
 from ragas.metrics.collections import FactualCorrectness
 from ragas.metrics.collections.factual_correctness.util import (
     ClaimDecompositionOutput,
+)
+from ragas.metrics.collections.faithfulness.util import (
     NLIStatementOutput,
     StatementFaithfulnessAnswer,
 )

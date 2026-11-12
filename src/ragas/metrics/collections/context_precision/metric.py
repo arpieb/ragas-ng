@@ -3,10 +3,9 @@
 import typing as t
 from typing import List
 
-import numpy as np
-
 from ragas.metrics.collections._average_precision import average_precision
 from ragas.metrics.collections._concurrency import gather_bounded
+from ragas.metrics.collections._inputs import require
 from ragas.metrics.collections._reasons import count_phrase, itemized
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
@@ -21,7 +20,43 @@ if t.TYPE_CHECKING:
     from ragas.llms.base import InstructorBaseRagasLLM
 
 
-class ContextPrecisionWithReference(BaseMetric):
+class _ContextPrecisionBase(BaseMetric):
+    """Judge each retrieved context against an answer; score average precision.
+
+    The with- and without-reference variants differ only in which answer the
+    judge sees (the reference or the response).
+    """
+
+    required_components = ("llm",)
+
+    llm: "InstructorBaseRagasLLM"
+
+    def __init__(self, llm: "InstructorBaseRagasLLM", name: str, **kwargs):
+        self.prompt = ContextPrecisionPrompt()
+        super().__init__(llm=llm, name=name, **kwargs)
+
+    async def _score(
+        self, user_input: str, answer: str, retrieved_contexts: List[str]
+    ) -> MetricResult:
+        # One independent judgement per context, run concurrently (#58).
+        results = await gather_bounded(
+            self.llm.agenerate(
+                self.prompt.to_string(
+                    ContextPrecisionInput(
+                        question=user_input, context=context, answer=answer
+                    )
+                ),
+                ContextPrecisionOutput,
+            )
+            for context in retrieved_contexts
+        )
+        score = average_precision([result.verdict for result in results])
+        return MetricResult(
+            value=float(score), reason=_ranking_reason(retrieved_contexts, results)
+        )
+
+
+class ContextPrecisionWithReference(_ContextPrecisionBase):
     """
     Modern v2 implementation of context precision with reference.
 
@@ -58,9 +93,6 @@ class ContextPrecisionWithReference(BaseMetric):
         allowed_values: Score range (0.0 to 1.0, higher is better)
     """
 
-    # Type hints for linter (attributes are set in __init__)
-    llm: "InstructorBaseRagasLLM"
-
     def __init__(
         self,
         llm: "InstructorBaseRagasLLM",
@@ -74,12 +106,7 @@ class ContextPrecisionWithReference(BaseMetric):
             llm: Modern instructor-based LLM for context evaluation
             name: The metric name
         """
-        # Set attributes explicitly before calling super()
-        self.llm = llm
-        self.prompt = ContextPrecisionPrompt()  # Initialize prompt class once
-
-        # Call super() for validation (without passing llm in kwargs)
-        super().__init__(name=name, **kwargs)
+        super().__init__(llm=llm, name=name, **kwargs)
 
     async def ascore(
         self, user_input: str, reference: str, retrieved_contexts: List[str]
@@ -95,51 +122,15 @@ class ContextPrecisionWithReference(BaseMetric):
         Returns:
             MetricResult with context precision score (0.0-1.0, higher is better)
         """
-        # Input validation
-        if not user_input:
-            raise ValueError("user_input cannot be empty")
-        if not reference:
-            raise ValueError("reference cannot be empty")
-        if not retrieved_contexts:
-            raise ValueError("retrieved_contexts cannot be empty")
-
-        # Evaluate each retrieved context
-        # One independent judgement per context, run concurrently (#58).
-        results = await gather_bounded(
-            self.llm.agenerate(
-                self.prompt.to_string(
-                    ContextPrecisionInput(
-                        question=user_input, context=context, answer=reference
-                    )
-                ),
-                ContextPrecisionOutput,
-            )
-            for context in retrieved_contexts
+        require(
+            user_input=user_input,
+            reference=reference,
+            retrieved_contexts=retrieved_contexts,
         )
-        verdicts = [result.verdict for result in results]
-
-        # Calculate average precision
-        score = self._calculate_average_precision(verdicts)
-        return MetricResult(
-            value=float(score), reason=_ranking_reason(retrieved_contexts, results)
-        )
-
-    def _calculate_average_precision(self, verdicts: List[int]) -> float:
-        """Calculate average precision from binary verdicts."""
-        score = average_precision(verdicts)
-
-        if np.isnan(score):
-            # Match legacy warning behavior
-            import logging
-
-            logging.warning(
-                "Invalid response format. Expected a list of dictionaries with keys 'verdict'"
-            )
-
-        return score
+        return await self._score(user_input, reference, retrieved_contexts)
 
 
-class ContextPrecisionWithoutReference(BaseMetric):
+class ContextPrecisionWithoutReference(_ContextPrecisionBase):
     """
     Modern v2 implementation of context precision without reference.
 
@@ -176,9 +167,6 @@ class ContextPrecisionWithoutReference(BaseMetric):
         allowed_values: Score range (0.0 to 1.0, higher is better)
     """
 
-    # Type hints for linter (attributes are set in __init__)
-    llm: "InstructorBaseRagasLLM"
-
     def __init__(
         self,
         llm: "InstructorBaseRagasLLM",
@@ -192,12 +180,7 @@ class ContextPrecisionWithoutReference(BaseMetric):
             llm: Modern instructor-based LLM for context evaluation
             name: The metric name
         """
-        # Set attributes explicitly before calling super()
-        self.llm = llm
-        self.prompt = ContextPrecisionPrompt()  # Initialize prompt class once
-
-        # Call super() for validation (without passing llm in kwargs)
-        super().__init__(name=name, **kwargs)
+        super().__init__(llm=llm, name=name, **kwargs)
 
     async def ascore(
         self, user_input: str, response: str, retrieved_contexts: List[str]
@@ -213,48 +196,12 @@ class ContextPrecisionWithoutReference(BaseMetric):
         Returns:
             MetricResult with context precision score (0.0-1.0, higher is better)
         """
-        # Input validation
-        if not user_input:
-            raise ValueError("user_input cannot be empty")
-        if not response:
-            raise ValueError("response cannot be empty")
-        if not retrieved_contexts:
-            raise ValueError("retrieved_contexts cannot be empty")
-
-        # Evaluate each retrieved context
-        # One independent judgement per context, run concurrently (#58).
-        results = await gather_bounded(
-            self.llm.agenerate(
-                self.prompt.to_string(
-                    ContextPrecisionInput(
-                        question=user_input, context=context, answer=response
-                    )
-                ),
-                ContextPrecisionOutput,
-            )
-            for context in retrieved_contexts
+        require(
+            user_input=user_input,
+            response=response,
+            retrieved_contexts=retrieved_contexts,
         )
-        verdicts = [result.verdict for result in results]
-
-        # Calculate average precision
-        score = self._calculate_average_precision(verdicts)
-        return MetricResult(
-            value=float(score), reason=_ranking_reason(retrieved_contexts, results)
-        )
-
-    def _calculate_average_precision(self, verdicts: List[int]) -> float:
-        """Calculate average precision from binary verdicts."""
-        score = average_precision(verdicts)
-
-        if np.isnan(score):
-            # Match legacy warning behavior
-            import logging
-
-            logging.warning(
-                "Invalid response format. Expected a list of dictionaries with keys 'verdict'"
-            )
-
-        return score
+        return await self._score(user_input, response, retrieved_contexts)
 
 
 class ContextPrecision(ContextPrecisionWithReference):

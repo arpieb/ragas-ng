@@ -4,9 +4,11 @@ import typing as t
 
 import numpy as np
 
+from ragas.metrics.collections._inputs import require
 from ragas.metrics.collections._sampling import sample_n
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
+from ragas.similarity import cosine_matrix
 
 from .util import (
     AnswerRelevanceInput,
@@ -60,6 +62,11 @@ class AnswerRelevancy(BaseMetric):
         allowed_values: Score range (0.0 to 1.0, higher is better)
     """
 
+    required_components = (
+        "llm",
+        "embeddings",
+    )
+
     # Type hints for linter (attributes are set in __init__)
     llm: "InstructorBaseRagasLLM"
     embeddings: "BaseRagasEmbedding"
@@ -82,14 +89,10 @@ class AnswerRelevancy(BaseMetric):
             strictness: Number of questions to generate (default: 3)
             **kwargs: Additional arguments passed to BaseMetric
         """
-        # Set attributes explicitly before calling super()
-        self.llm = llm
-        self.embeddings = embeddings
         self.strictness = strictness
         self.prompt = AnswerRelevancePrompt()  # Initialize prompt class once
 
-        # Call super() for validation
-        super().__init__(name=name, **kwargs)
+        super().__init__(llm=llm, embeddings=embeddings, name=name, **kwargs)
 
     async def ascore(self, user_input: str, response: str) -> MetricResult:
         """
@@ -104,11 +107,7 @@ class AnswerRelevancy(BaseMetric):
         Returns:
             MetricResult with relevancy score (0.0-1.0, higher is better)
         """
-        # Input validation
-        if not user_input:
-            raise ValueError("user_input cannot be empty")
-        if not response:
-            raise ValueError("response cannot be empty")
+        require(user_input=user_input, response=response)
 
         # Generate multiple questions from response
         generated_questions = []
@@ -143,16 +142,7 @@ class AnswerRelevancy(BaseMetric):
             await self.embeddings.aembed_texts(generated_questions)
         ).reshape(len(generated_questions), -1)
 
-        # Calculate cosine similarity
-        norm = np.linalg.norm(gen_question_vec, axis=1) * np.linalg.norm(
-            question_vec, axis=1
-        )
-        cosine_sim = (
-            np.dot(gen_question_vec, question_vec.T).reshape(
-                -1,
-            )
-            / norm
-        )
+        cosine_sim = cosine_matrix(gen_question_vec, question_vec).reshape(-1)
 
         # Score is average cosine similarity, reduced to 0 if response is noncommittal.
         # Cosine similarity can be slightly negative for unrelated embeddings;

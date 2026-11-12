@@ -6,15 +6,19 @@ from typing import List
 import numpy as np
 
 from ragas.metrics.collections.base import BaseMetric
+from ragas.metrics.collections.faithfulness.util import (
+    StatementGeneratorInput,
+    StatementGeneratorOutput,
+    StatementGeneratorPrompt,
+)
 from ragas.metrics.result import MetricResult
+from ragas.metrics.utils import fbeta_score
+from ragas.similarity import cosine
 
 from .util import (
     ClassificationWithReason,
     CorrectnessClassifierInput,
     CorrectnessClassifierPrompt,
-    StatementGeneratorInput,
-    StatementGeneratorOutput,
-    StatementGeneratorPrompt,
 )
 
 if t.TYPE_CHECKING:
@@ -71,6 +75,11 @@ class AnswerCorrectness(BaseMetric):
         allowed_values: Score range (0.0 to 1.0)
     """
 
+    required_components = ("llm",)
+    # None is allowed for pure factuality (weights=[1.0, 0.0]); __init__
+    # requires embeddings when the similarity weight is > 0.
+    optional_components = ("embeddings",)
+
     # Type hints for linter (attributes are set in __init__)
     llm: "InstructorBaseRagasLLM"
     embeddings: t.Optional["BaseRagasEmbedding"]
@@ -105,9 +114,6 @@ class AnswerCorrectness(BaseMetric):
             Factuality + Similarity (embeddings required):
                 >>> metric = AnswerCorrectness(llm=llm, embeddings=embeddings, weights=[0.75, 0.25])
         """
-        # Set attributes explicitly before calling super()
-        self.llm = llm
-        self.embeddings = embeddings
         self.weights = weights
         self.beta = beta
         self.statement_generator_prompt = StatementGeneratorPrompt()
@@ -137,19 +143,7 @@ class AnswerCorrectness(BaseMetric):
                 "Beta must be a float. A beta > 1 gives more weight to recall, while beta < 1 favors precision."
             )
 
-        # Call super() for validation (without passing llm/embeddings in kwargs)
-        super().__init__(name=name, **kwargs)
-
-    def _validate_embeddings(self) -> None:
-        """Validate embeddings when given; None is allowed.
-
-        AnswerCorrectness allows ``embeddings=None`` for pure factuality
-        evaluation (weights=[1.0, 0.0]); __init__ already requires embeddings
-        when the similarity weight is > 0. Anything else passed as embeddings
-        must be a modern embedding, as for every collections metric.
-        """
-        if self.embeddings is not None:
-            super()._validate_embeddings()
+        super().__init__(llm=llm, embeddings=embeddings, name=name, **kwargs)
 
     async def ascore(
         self, user_input: str, response: str, reference: str
@@ -239,33 +233,12 @@ class AnswerCorrectness(BaseMetric):
 
     def _compute_f1_score(self, classification: ClassificationWithReason) -> float:
         """Compute F1 score from TP/FP/FN classification."""
-        tp = len(classification.TP)
-        fp = len(classification.FP)
-        fn = len(classification.FN)
-
-        # Calculate precision and recall
-        if tp + fp == 0:
-            precision = 1.0 if fn == 0 else 0.0
-        else:
-            precision = tp / (tp + fp)
-
-        if tp + fn == 0:
-            recall = 1.0 if fp == 0 else 0.0
-        else:
-            recall = tp / (tp + fn)
-
-        # Calculate F-beta score
-        if precision + recall == 0:
-            return 0.0
-
-        beta_squared = self.beta**2
-        f_score = (
-            (1 + beta_squared)
-            * (precision * recall)
-            / (beta_squared * precision + recall)
+        return fbeta_score(
+            len(classification.TP),
+            len(classification.FP),
+            len(classification.FN),
+            beta=self.beta,
         )
-
-        return float(f_score)
 
     async def _calculate_similarity(self, response: str, reference: str) -> float:
         """Calculate semantic similarity between response and reference using embeddings."""
@@ -273,26 +246,11 @@ class AnswerCorrectness(BaseMetric):
         if self.embeddings is None:
             raise RuntimeError("Embeddings required for similarity calculation")
 
-        # Get embeddings for both texts
-        response_embedding = np.asarray(
-            await self.embeddings.aembed_text(response)
-        ).reshape(1, -1)
-        reference_embedding = np.asarray(
-            await self.embeddings.aembed_text(reference)
-        ).reshape(1, -1)
-
-        # Calculate cosine similarity
-        norm_response = np.linalg.norm(response_embedding, axis=1)
-        norm_reference = np.linalg.norm(reference_embedding, axis=1)
-
-        if norm_response == 0 or norm_reference == 0:
-            return 0.0
-
-        cosine_similarity = np.dot(response_embedding, reference_embedding.T)[0, 0] / (
-            norm_response[0] * norm_reference[0]
+        similarity = cosine(
+            await self.embeddings.aembed_text(response),
+            await self.embeddings.aembed_text(reference),
         )
-
         # Cosine similarity spans [-1, 1]; the similarity term is defined on
         # [0, 1]. Unclipped, a negative cosine pulled the final score below 0.
         # Same clipping as SemanticSimilarity (#107).
-        return float(np.clip(cosine_similarity, 0.0, 1.0))
+        return max(similarity, 0.0)

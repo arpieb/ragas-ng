@@ -5,6 +5,7 @@ from typing import List
 
 import numpy as np
 
+from ragas.metrics.collections._inputs import require
 from ragas.metrics.collections._reasons import (
     UNMATCHED_VERDICTS,
     count_phrase,
@@ -13,6 +14,12 @@ from ragas.metrics.collections._reasons import (
 )
 from ragas.metrics.collections._verdicts import judge_each
 from ragas.metrics.collections.base import BaseMetric
+from ragas.metrics.collections.faithfulness.util import (
+    NLIStatementInput,
+    NLIStatementOutput,
+    NLIStatementPrompt,
+    StatementFaithfulnessAnswer,
+)
 from ragas.metrics.result import MetricResult
 from ragas.metrics.utils import fbeta_from_precision_recall
 
@@ -20,10 +27,6 @@ from .util import (
     ClaimDecompositionInput,
     ClaimDecompositionOutput,
     ClaimDecompositionPrompt,
-    NLIStatementInput,
-    NLIStatementOutput,
-    NLIStatementPrompt,
-    StatementFaithfulnessAnswer,
 )
 
 if t.TYPE_CHECKING:
@@ -77,6 +80,8 @@ class FactualCorrectness(BaseMetric):
         allowed_values: Score range (0.0 to 1.0, higher is better)
     """
 
+    required_components = ("llm",)
+
     # Type hints for linter (attributes are set in __init__)
     llm: "InstructorBaseRagasLLM"
 
@@ -101,8 +106,6 @@ class FactualCorrectness(BaseMetric):
             coverage: Claim decomposition coverage ("low" or "high")
             name: The metric name
         """
-        # Set attributes explicitly before calling super()
-        self.llm = llm
         self.mode = mode
         self.beta = beta
         self.atomicity = atomicity
@@ -116,8 +119,7 @@ class FactualCorrectness(BaseMetric):
                 "Beta must be a float. A beta > 1 gives more weight to recall, while beta < 1 favors precision."
             )
 
-        # Call super() for validation (without passing llm in kwargs)
-        super().__init__(name=name, **kwargs)
+        super().__init__(llm=llm, name=name, **kwargs)
 
     async def ascore(self, response: str, reference: str) -> MetricResult:
         """
@@ -130,15 +132,7 @@ class FactualCorrectness(BaseMetric):
         Returns:
             MetricResult with factual correctness score (0.0-1.0, higher is better)
         """
-        # Input validation
-        if not response:
-            raise ValueError(
-                "response is missing. Please add response to the test sample."
-            )
-        if not reference:
-            raise ValueError(
-                "reference is missing. Please add reference to the test sample."
-            )
+        require(response=response, reference=reference)
 
         # Precision: what fraction of the RESPONSE's claims the reference
         # supports. Recall: what fraction of the REFERENCE's claims the response

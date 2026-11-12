@@ -130,46 +130,12 @@ class FaithfulnesswithHHEM(Faithfulness):
         for start in range(0, len(pairs), self.batch_size):
             yield pairs[start : start + self.batch_size]
 
-    async def ascore(
-        self,
-        user_input: str,
-        response: str,
-        retrieved_contexts: t.List[str],
+    async def _verify_statements(
+        self, statements: t.List[str], context_str: str
     ) -> MetricResult:
-        """
-        Args:
-            user_input: The original question
-            response: The response to check for faithfulness
-            retrieved_contexts: The contexts the response should be grounded in
-
-        Returns:
-            MetricResult with the proportion of statements the NLI model finds
-            entailed by the contexts, or NaN when no statements were generated.
-        """
-        if not response:
-            raise ValueError(
-                "response is missing. Please add response to the test sample."
-            )
-        if not user_input:
-            raise ValueError(
-                "user_input is missing. Please add user_input to the test sample."
-            )
-        if not retrieved_contexts:
-            raise ValueError(
-                "retrieved_contexts is missing. Please add retrieved_contexts to "
-                "the test sample."
-            )
-
-        statements = await self._create_statements(user_input, response)
-        if not statements:
-            return MetricResult(
-                value=float("nan"),
-                reason="No statements could be extracted from the response, so "
-                "faithfulness is undefined.",
-            )
-
-        premise = "\n".join(retrieved_contexts)
-        pairs = [(premise, statement) for statement in statements]
+        """The proportion of statements the NLI model finds entailed by the
+        joined contexts. Extraction and input checks are Faithfulness's."""
+        pairs = [(context_str, statement) for statement in statements]
 
         scores: t.List[float] = []
         for batch in self._batches(pairs):

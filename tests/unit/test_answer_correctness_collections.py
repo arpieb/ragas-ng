@@ -13,9 +13,9 @@ from ragas.llms.base import InstructorLLM
 from ragas.metrics.collections import AnswerCorrectness
 from ragas.metrics.collections.answer_correctness.util import (
     ClassificationWithReason,
-    StatementGeneratorOutput,
     StatementsWithReason,
 )
+from ragas.metrics.collections.faithfulness.util import StatementGeneratorOutput
 
 
 def scripted_llm(response_statements: t.List[str], reference_statements: t.List[str]):

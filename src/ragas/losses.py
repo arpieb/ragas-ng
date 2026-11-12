@@ -4,6 +4,8 @@ from abc import ABC, abstractmethod
 from pydantic import GetCoreSchemaHandler
 from pydantic_core import CoreSchema, core_schema
 
+from ragas.metrics.utils import fbeta_score
+
 
 class Loss(ABC):
     """
@@ -130,17 +132,11 @@ class BinaryMetricLoss(Loss):
         Returns
         -------
         float
-            The F1-score.
+            The F1-score, with ``ragas.metrics.utils``' edge-case policy:
+            1.0 when there are no positives in either list.
         """
         tp = sum(p == 1 and a == 1 for p, a in zip(predicted, actual))
         fp = sum(p == 1 and a == 0 for p, a in zip(predicted, actual))
         fn = sum(p == 0 and a == 1 for p, a in zip(predicted, actual))
 
-        precision = tp / (tp + fp) if tp + fp > 0 else 0
-        recall = tp / (tp + fn) if tp + fn > 0 else 0
-        f1 = (
-            (2 * precision * recall) / (precision + recall)
-            if precision + recall > 0
-            else 0
-        )
-        return f1
+        return fbeta_score(tp, fp, fn)

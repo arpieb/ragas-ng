@@ -3,15 +3,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from ragas.similarity import cosine_matrix
 from ragas.testset.graph import KnowledgeGraph, NodeType, Relationship
 from ragas.testset.transforms.base import RelationshipBuilder
-
-
-def cosine_similarity_matrix(i: np.ndarray, j: np.ndarray) -> np.ndarray:
-    """Cosine similarity matrix between the rows of ``i`` and the rows of ``j``."""
-    i_norm = i / np.linalg.norm(i, axis=1, keepdims=True)
-    j_norm = j / np.linalg.norm(j, axis=1, keepdims=True)
-    return np.dot(i_norm, j_norm.T)
 
 
 @dataclass
@@ -23,7 +17,7 @@ class CosineSimilarityBuilder(RelationshipBuilder):
 
     def _block_cosine_similarity(self, i: np.ndarray, j: np.ndarray):
         """Calculate cosine similarity matrix between two sets of embeddings."""
-        return cosine_similarity_matrix(i, j)
+        return cosine_matrix(i, j)
 
     def _find_similar_embedding_pairs(
         self, embeddings: np.ndarray, threshold: float

@@ -42,35 +42,3 @@ def tool_call_to_hashable(tc: ToolCall) -> t.Tuple[str, t.FrozenSet]:
         Tuple of (tool_name, frozenset of args)
     """
     return (tc.name, make_hashable(tc.args))
-
-
-def calculate_f1_score(
-    true_positives: int, false_positives: int, false_negatives: int
-) -> float:
-    """
-    Calculate F1 score from TP, FP, and FN counts.
-
-    Args:
-        true_positives: Number of true positive predictions
-        false_positives: Number of false positive predictions
-        false_negatives: Number of false negative predictions
-
-    Returns:
-        F1 score (0.0 to 1.0)
-    """
-    precision = (
-        true_positives / (true_positives + false_positives)
-        if (true_positives + false_positives) > 0
-        else 0.0
-    )
-    recall = (
-        true_positives / (true_positives + false_negatives)
-        if (true_positives + false_negatives) > 0
-        else 0.0
-    )
-    f1 = (
-        2 * precision * recall / (precision + recall)
-        if (precision + recall) > 0
-        else 0.0
-    )
-    return f1

@@ -3,6 +3,7 @@
 import typing as t
 
 from ragas.metrics.base import MetricOutputType
+from ragas.metrics.collections._inputs import require
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
 
@@ -62,6 +63,8 @@ class InstanceSpecificRubrics(BaseMetric):
         name: The metric name (default: "instance_specific_rubrics")
     """
 
+    required_components = ("llm",)
+
     llm: "InstructorBaseRagasLLM"
     output_type = MetricOutputType.DISCRETE
 
@@ -71,10 +74,9 @@ class InstanceSpecificRubrics(BaseMetric):
         name: str = "instance_specific_rubrics",
         **kwargs,
     ):
-        self.llm = llm
         self.scoring_prompt = InstanceRubricScorePrompt()
 
-        super().__init__(name=name, allowed_values=(1.0, 5.0), **kwargs)
+        super().__init__(llm=llm, name=name, allowed_values=(1.0, 5.0), **kwargs)
 
     async def ascore(
         self,
@@ -102,10 +104,7 @@ class InstanceSpecificRubrics(BaseMetric):
         Raises:
             ValueError: If rubrics is not provided
         """
-        if not rubrics:
-            raise ValueError(
-                "rubrics must be provided for instance-specific evaluation"
-            )
+        require(rubrics=rubrics)
 
         prompt_input = InstanceRubricScoreInput(
             user_input=user_input,
