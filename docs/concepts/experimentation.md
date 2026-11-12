@@ -295,7 +295,7 @@ from ragas.metrics.collections import Faithfulness, FactualCorrectness
 
 llm = llm_factory("gpt-6-luna")
 dataset = Dataset(
-    "rag_runs", "local/csv", root_dir="./data", data_model=SingleTurnSample
+    "rag_runs", "local/jsonl", root_dir="./data", data_model=SingleTurnSample
 )
 
 run = metrics_experiment([Faithfulness(llm=llm), FactualCorrectness(llm=llm)])
@@ -308,6 +308,7 @@ check(exp, min_mean={"faithfulness": 0.8})  # raises ThresholdError for CI
 
 - **Rows:** `SingleTurnSample` / `MultiTurnSample` objects, or dicts with the same field names. A dict is multi-turn when its `user_input` is a list of messages. Use `column_map={"user_input": "question"}` when your columns are named differently. All rows must be the same sample type.
 - **Up-front checks:** a required input that no row has, or a metric that can't score the sample type, raises `ValueError` before any row runs.
+- **Blank strings count as values.** A field set to `""` is passed to the metric and scored; only `None` counts as missing. CSV and Google Sheets load a missing text value as `""`, so a row without a `reference` that went through CSV is scored against an empty reference instead of raising. Keep datasets you'll score in `local/jsonl` or `inmemory`; see [What each backend keeps](../howtos/customizations/storage_backends.md#what-each-backend-keeps).
 - **Errors:** a metric that raises on a row scores NaN there, the error is logged, and the row is kept. `summarize()` counts it as missing, and `check()` fails on it unless `allow_missing` allows it. With `raise_exceptions=True` the run stops on the first error.
 - **Models:** collections metrics take their LLM and embeddings at construction. A metric whose `ascore()` takes `llm` per call, such as `DiscreteMetric`, gets `metrics_experiment(..., llm=llm)`. There are no default models.
 - **Token usage:** pass `usage=TokenUsageCollector()` and read `usage.total_tokens()` / `usage.total_cost(...)` after the run.

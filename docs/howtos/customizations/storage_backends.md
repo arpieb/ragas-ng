@@ -160,6 +160,13 @@ question='What is ragas?' tags=['eval', 'llm'] expected=''
 | Rows with different columns | Header is the union of all rows' keys, in first-seen order | Yes | Yes | Header is the union of all rows' keys, sorted |
 | `None` vs `""` | Both load as `""` | Kept | Kept | Both load as `""` |
 
+!!! warning "A missing text value comes back from CSV as a blank string"
+    CSV and Google Sheets store `None` and `""` the same way, as an empty cell. When you load with a `data_model`, an empty cell in an optional text field such as `reference` comes back as `""`, not `None`.
+
+    For scoring, that matters: `metrics_experiment` treats `""` as a value. A row whose `reference` was missing is scored against an empty reference, usually a low score, instead of raising the missing-column error a `None` gives. `summarize()` doesn't count it as missing either.
+
+    Save datasets you'll score, such as `Testset.to_dataset(...)` output, with `local/jsonl` or `inmemory`, which keep `None`. If you must use CSV, check for blank required fields before scoring, e.g. `[i for i, row in enumerate(dataset) if row.reference == ""]`.
+
 Backends don't guess types: a string that looks like a number or a date stays a string unless your model says otherwise. See [Behavior changes](../migrations/behavior_changes.md#csv-files-every-rows-columns-json-cells-typed-loads-100) for what changed from ragas.
 
 ## In-memory

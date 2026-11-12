@@ -896,6 +896,7 @@ Step 3 of replacing `evaluate()` (#241). Score the results with [`metrics_experi
 | `Testset.to_hf_dataset()` / `Testset.from_hf_dataset()` | `to_list()` / `from_list()`, or `to_jsonl()` / `from_jsonl()` |
 | `ragas.integrations.llama_index.evaluate(query_engine, dataset, metrics, ...)` | `evaluate_query_engine(query_engine, dataset, metrics, ...)` (`aevaluate_query_engine` in async code) |
 
+- **Save a testset you'll score as JSONL, not CSV.** CSV loads a missing text value, such as a sample with no `reference`, as `""`. `metrics_experiment` scores `""` as a value instead of reporting the column missing. See [What each backend keeps](../customizations/storage_backends.md#what-each-backend-keeps).
 - **`Testset` is no longer a `RagasDataset`.** It keeps `to_list`, `from_list`, `to_pandas`, `to_csv`, `to_jsonl`, `from_jsonl`, `from_annotated`, `total_tokens` and `total_cost`, and iterates and has a length as before. `from_pandas`, `from_dict`, `features()` and `get_sample_type()` are gone.
 - **griptape and r2r: `transform_to_ragas_dataset()` returns a `Dataset`** of `SingleTurnSample` rows, not an `EvaluationDataset`. It's in memory by default; the new keyword arguments `name`, `backend` and the backend's own arguments choose where it lives.
 - **`evaluate_query_engine()`** takes a `Dataset` of single-turn rows (samples or dicts) and leaves it unchanged. It runs the engine, then scores the answered rows with `metrics_experiment` and returns the `Experiment`: use `ragas.summarize()` / `ragas.check()` on it, not `EvaluationResult` methods.

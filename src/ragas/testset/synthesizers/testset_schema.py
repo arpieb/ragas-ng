@@ -96,9 +96,14 @@ class Testset:
         synthesizer names are left out; ``to_list()`` keeps them. Nothing is
         written until you call ``save()``::
 
-            dataset = testset.to_dataset("testset", "local/csv", root_dir="data")
+            dataset = testset.to_dataset("testset", "local/jsonl", root_dir="data")
             dataset.save()
             exp = metrics_experiment([Faithfulness(llm=llm)]).run(dataset)
+
+        Prefer ``local/jsonl`` to ``local/csv`` for a testset you'll score.
+        CSV loads a missing text value (a sample with no ``reference``) as
+        ``""``, which ``metrics_experiment`` scores as an empty reference
+        instead of reporting the column missing.
 
         Args:
             name: The dataset's name.
