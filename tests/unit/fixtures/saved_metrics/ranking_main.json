@@ -1,0 +1,41 @@
+{
+  "format_version": "1.0",
+  "metric_type": "RankingMetric",
+  "name": "ranking",
+  "prompt": {
+    "type": "Prompt",
+    "instruction": "Rank {responses}.",
+    "examples": []
+  },
+  "config": {
+    "allowed_values": 3
+  },
+  "response_model_info": {
+    "class_name": "RankingResponseModel",
+    "module": "ragas.metrics.base",
+    "schema": {
+      "properties": {
+        "reason": {
+          "description": "Reasoning for the ranking",
+          "title": "Reason",
+          "type": "string"
+        },
+        "value": {
+          "description": "List of ranked items",
+          "items": {
+            "type": "string"
+          },
+          "title": "Value",
+          "type": "array"
+        }
+      },
+      "required": [
+        "reason",
+        "value"
+      ],
+      "title": "RankingResponseModel",
+      "type": "object"
+    },
+    "note": "You must provide this model when loading"
+  }
+}
