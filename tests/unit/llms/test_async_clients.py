@@ -110,6 +110,16 @@ async def test_instructor_llm_with_sync_client_runs_off_the_event_loop():
     assert client.chat.completions.threads[0] != threading.get_ident()
 
 
+def test_is_async_is_explicit_when_given():
+    # llm_factory() says whether its client is async (#217); detection from
+    # chat.completions.create is only for a client constructed by hand.
+    client = SyncClient()
+    assert InstructorLLM(
+        client=client, model="m", provider="openai", is_async=True
+    ).is_async
+    assert not InstructorLLM(client=client, model="m", provider="openai").is_async
+
+
 @pytest.mark.asyncio
 async def test_sync_client_metric_scores_under_ascore():
     class EntitiesCompletions:
