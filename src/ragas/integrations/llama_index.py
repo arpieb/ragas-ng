@@ -12,7 +12,7 @@ from ragas.dataset_schema import SingleTurnSample
 from ragas.executor import Executor
 from ragas.messages import AIMessage, HumanMessage, Message, ToolCall, ToolMessage
 from ragas.run_config import RunConfig
-from ragas.scoring import metrics_experiment
+from ragas.scoring import REASON_SUFFIX, MetricsExperiment, _row_dict
 
 if t.TYPE_CHECKING:
     from llama_index.core.base.response.schema import Response as LlamaIndexResponse
@@ -27,6 +27,43 @@ if t.TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+
+
+class _QueryEngineScoring(MetricsExperiment):
+    """Scores the answered rows; a row whose query failed scores missing.
+
+    ``failures`` maps ``id(sample)`` to why its query failed. Those rows get
+    NaN for every metric, with the failure as the reason, so ``summarize()``
+    counts them as missing whatever a metric would make of a ``None``
+    response (#264).
+    """
+
+    def __init__(self, metrics, *, failures: t.Dict[int, str], **kwargs: t.Any):
+        super().__init__(metrics, **kwargs)
+        self.failures = failures
+
+    def _check(self, dataset: t.Any) -> None:
+        # Failed rows have no response; check only the rows that get scored.
+        answered = [row for row in dataset if id(row) not in self.failures]
+        if answered:
+            super()._check(
+                Dataset(
+                    dataset.name,
+                    "inmemory",
+                    data_model=dataset.data_model,
+                    data=answered,
+                )
+            )
+
+    async def _score_row(self, item: t.Any) -> t.Dict[str, t.Any]:
+        reason = self.failures.get(id(item))
+        if reason is None:
+            return await super()._score_row(item)
+        row = _row_dict(item)
+        for name in self.metric_names:
+            row[name] = math.nan
+            row[name + REASON_SUFFIX] = reason
+        return row
 
 
 async def aevaluate_query_engine(
@@ -69,8 +106,11 @@ async def aevaluate_query_engine(
         column_map: ``{sample_field: dataset_column}``, for a dataset whose
             columns are named differently, e.g. ``{"user_input": "question"}``.
         raise_exceptions: Stop at the first failed query or metric. Otherwise
-            a failed query leaves the row's response empty (None) and a failed
-            metric scores NaN; both are logged.
+            a failed query leaves the row's response empty (None) and the row
+            scores NaN for every metric, with ``query engine failed: ...`` as
+            each reason, so ``summarize()`` counts it as missing and
+            ``check()`` fails on it unless ``allow_missing`` permits it. A
+            failed metric scores NaN on its own. Both are logged.
         show_progress: Show the query progress bar.
         name, backend, backend_kwargs: The experiment's name, and where to
             save it (default: in memory).
@@ -112,16 +152,36 @@ async def aevaluate_query_engine(
         run_config=run_config,
         batch_size=batch_size,
     )
+
+    async def query(q: t.Optional[str]) -> t.Any:
+        try:
+            return await query_engine.aquery(q)
+        except Exception as e:
+            if raise_exceptions:
+                raise
+            return e
+
     queries = [sample.user_input for sample in samples]
     for i, q in enumerate(queries):
-        exec.submit(query_engine.aquery, q, name=f"query-{i}")
+        exec.submit(query, q, name=f"query-{i}")
 
+    failures: t.Dict[int, str] = {}
     for i, (sample, r) in enumerate(zip(samples, await exec.aresults())):
-        # A failed query is recorded as NaN by the executor
-        if isinstance(r, float) and math.isnan(r):
-            logger.warning(f"Query engine failed for query {i}: '{queries[i]}'")
+        if isinstance(r, Exception) or (isinstance(r, float) and math.isnan(r)):
+            reason = (
+                f"query engine failed: {type(r).__name__}: {r}"
+                if isinstance(r, Exception)
+                else "query engine failed"
+            )
+            logger.warning(
+                "Query %d (%r) failed; the row scores missing for every metric. %s",
+                i,
+                queries[i],
+                reason,
+            )
             sample.response = None
             sample.retrieved_contexts = None
+            failures[id(sample)] = reason
             continue
         response: LlamaIndexResponse = t.cast("LlamaIndexResponse", r)
         sample.response = response.response if response.response is not None else ""
@@ -133,8 +193,9 @@ async def aevaluate_query_engine(
         data_model=SingleTurnSample,
         data=samples,
     )
-    run = metrics_experiment(
+    run = _QueryEngineScoring(
         metrics,
+        failures=failures,
         llm=llm,
         embeddings=embeddings,
         run_config=run_config,
