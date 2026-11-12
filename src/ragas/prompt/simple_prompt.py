@@ -2,11 +2,10 @@ from __future__ import annotations
 
 __all__ = ["Prompt"]
 
-import gzip
-import json
 import typing as t
 import warnings
-from pathlib import Path
+
+from .utils import read_json_file, write_json_file
 
 if t.TYPE_CHECKING:
     from pydantic import BaseModel
@@ -173,16 +172,7 @@ class Prompt:
             "response_model_info": self._serialize_response_model_info(),
         }
 
-        file_path = Path(path)
-        try:
-            if file_path.suffix == ".gz":
-                with gzip.open(file_path, "wt", encoding="utf-8") as f:
-                    json.dump(data, f, indent=2)
-            else:
-                with open(file_path, "w", encoding="utf-8") as f:
-                    json.dump(data, f, indent=2)
-        except (OSError, IOError) as e:
-            raise ValueError(f"Cannot save prompt to {path}: {e}")
+        write_json_file(path, data, "prompt")
 
     @classmethod
     def load(
@@ -209,18 +199,7 @@ class Prompt:
         ValueError
             If file cannot be loaded, is invalid, or missing required response_model
         """
-        file_path = Path(path)
-
-        # Load JSON data
-        try:
-            if file_path.suffix == ".gz":
-                with gzip.open(file_path, "rt", encoding="utf-8") as f:
-                    data = json.load(f)
-            else:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError, OSError) as e:
-            raise ValueError(f"Cannot load prompt from {path}: {e}")
+        data = read_json_file(path, "prompt")
 
         # Validate format
         if data.get("type") != "Prompt":

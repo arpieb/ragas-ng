@@ -62,11 +62,11 @@ def test_metric_score_single(mock_llm):
     """Test scoring with a single input."""
     metric = CustomMetric(name="test_metric", prompt="What is the result of {input}?")
 
-    # Mock the LLM to return a valid response
-    def mock_generate(prompt, response_model):
+    # score() runs ascore(), so it is the async method that gets called (#217)
+    async def mock_agenerate(prompt, response_model):
         return response_model(value=1, reason="test reason")
 
-    mock_llm.generate = mock_generate
+    mock_llm.agenerate = mock_agenerate
 
     result = metric.score(llm=mock_llm, input="test")
 
