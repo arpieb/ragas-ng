@@ -3,9 +3,8 @@
 import typing as t
 from typing import List
 
-import numpy as np
-
-from ragas.metrics.collections.base import BaseMetric
+from ragas.metrics.collections._dual_judge import DualJudgeMetric
+from ragas.metrics.collections._inputs import require
 from ragas.metrics.result import MetricResult
 
 from .util import (
@@ -19,7 +18,7 @@ if t.TYPE_CHECKING:
     from ragas.llms.base import InstructorBaseRagasLLM
 
 
-class ContextRelevance(BaseMetric):
+class ContextRelevance(DualJudgeMetric):
     """
     Context Relevance metric using dual-judge evaluation.
 
@@ -59,13 +58,13 @@ class ContextRelevance(BaseMetric):
         llm: Modern instructor-based LLM for dual-judge evaluation
         name: The metric name
         allowed_values: Score range (0.0 to 1.0, higher is better)
-        max_retries: Maximum retry attempts for invalid ratings
+        max_retries: Attempts per judge; a retry after an off-scale rating is
+            a fresh sample, not a resend of the same request
     """
 
-    required_components = ("llm",)
-
-    # Type hints for linter (attributes are set in __init__)
-    llm: "InstructorBaseRagasLLM"
+    judge_prompts = (ContextRelevanceJudge1Prompt, ContextRelevanceJudge2Prompt)
+    output_model = ContextRelevanceOutput
+    ratings = (0, 1, 2)
 
     def __init__(
         self,
@@ -75,18 +74,12 @@ class ContextRelevance(BaseMetric):
         **kwargs,
     ):
         """
-        Initialize ContextRelevance metric with required components.
-
         Args:
             llm: Modern instructor-based LLM for dual-judge evaluation
             name: The metric name
-            max_retries: Maximum retry attempts for invalid ratings
+            max_retries: Attempts per judge (see ``DualJudgeMetric``)
         """
-        self.max_retries = max_retries
-        self.judge1_prompt = ContextRelevanceJudge1Prompt()
-        self.judge2_prompt = ContextRelevanceJudge2Prompt()
-
-        super().__init__(llm=llm, name=name, **kwargs)
+        super().__init__(llm=llm, name=name, max_retries=max_retries, **kwargs)
 
     async def ascore(
         self, user_input: str, retrieved_contexts: List[str]
@@ -101,68 +94,13 @@ class ContextRelevance(BaseMetric):
         Returns:
             MetricResult with context relevance score (0.0-1.0, higher is better)
         """
-        # Input validation
-        if not user_input:
-            raise ValueError(
-                "user_input is missing. Please add user_input to the test sample."
-            )
-        if not retrieved_contexts:
-            raise ValueError(
-                "retrieved_contexts is missing. Please add retrieved_contexts to the test sample."
-            )
+        require(user_input=user_input, retrieved_contexts=retrieved_contexts)
 
-        # Handle edge cases like legacy
         context_str = "\n".join(retrieved_contexts)
-
-        if not user_input.strip() or not context_str.strip():
+        question, context = user_input.strip(), context_str.strip()
+        # Empty input, or a context that only repeats (part of) the question.
+        if not question or not context or context in question:
             return MetricResult(value=0.0)
 
-        # Edge case: if user input matches context exactly
-        if user_input.strip() == context_str.strip():
-            return MetricResult(value=0.0)
-
-        # Edge case: if context is contained in user input
-        if context_str.strip() in user_input.strip():
-            return MetricResult(value=0.0)
-
-        # Get ratings from both judges
-        judge1_rating = await self._get_judge_rating(
-            self.judge1_prompt, user_input, context_str
-        )
-        judge2_rating = await self._get_judge_rating(
-            self.judge2_prompt, user_input, context_str
-        )
-
-        # Average the scores (convert from 0,1,2 scale to 0.0-1.0)
-        score = self._average_scores(judge1_rating / 2.0, judge2_rating / 2.0)
-
-        return MetricResult(value=float(score))
-
-    async def _get_judge_rating(
-        self, prompt_obj, user_input: str, context: str
-    ) -> float:
-        """Get rating from judge.
-
-        Provider/transport errors from the LLM call propagate to the caller.
-        Only an invalid rating (after retries) yields NaN.
-        """
-        input_data = ContextRelevanceInput(user_input=user_input, context=context)
-        prompt_str = prompt_obj.to_string(input_data)
-        for _ in range(self.max_retries):
-            result = await self.llm.agenerate(prompt_str, ContextRelevanceOutput)
-            rating = result.rating
-            if rating in [0, 1, 2]:
-                return float(rating)
-
-        return float("nan")
-
-    def _average_scores(self, score1: float, score2: float) -> float:
-        """Average two judge scores, handling NaN values."""
-        if not np.isnan(score1) and not np.isnan(score2):
-            return (score1 + score2) / 2.0
-        elif not np.isnan(score1):
-            return score1
-        elif not np.isnan(score2):
-            return score2
-        else:
-            return float("nan")
+        judge_input = ContextRelevanceInput(user_input=user_input, context=context_str)
+        return await self._judge_both(judge_input, judge_input)

@@ -2,9 +2,8 @@
 
 import typing as t
 
-import numpy as np
-
-from ragas.metrics.collections.base import BaseMetric
+from ragas.metrics.collections._dual_judge import DualJudgeMetric
+from ragas.metrics.collections._inputs import require
 from ragas.metrics.result import MetricResult
 
 from .util import (
@@ -18,7 +17,7 @@ if t.TYPE_CHECKING:
     from ragas.llms.base import InstructorBaseRagasLLM
 
 
-class AnswerAccuracy(BaseMetric):
+class AnswerAccuracy(DualJudgeMetric):
     """
     Answer Accuracy metric using dual-judge evaluation.
 
@@ -58,13 +57,13 @@ class AnswerAccuracy(BaseMetric):
         llm: Modern instructor-based LLM for dual-judge evaluation
         name: The metric name
         allowed_values: Score range (0.0 to 1.0, higher is better)
-        max_retries: Maximum retry attempts for invalid ratings
+        max_retries: Attempts per judge; a retry after an off-scale rating is
+            a fresh sample, not a resend of the same request
     """
 
-    required_components = ("llm",)
-
-    # Type hints for linter (attributes are set in __init__)
-    llm: "InstructorBaseRagasLLM"
+    judge_prompts = (AnswerAccuracyJudge1Prompt, AnswerAccuracyJudge2Prompt)
+    output_model = AnswerAccuracyOutput
+    ratings = (0, 2, 4)
 
     def __init__(
         self,
@@ -74,18 +73,12 @@ class AnswerAccuracy(BaseMetric):
         **kwargs,
     ):
         """
-        Initialize AnswerAccuracy metric with required components.
-
         Args:
             llm: Modern instructor-based LLM for dual-judge evaluation
             name: The metric name
-            max_retries: Maximum retry attempts for invalid ratings
+            max_retries: Attempts per judge (see ``DualJudgeMetric``)
         """
-        self.max_retries = max_retries
-        self.judge1_prompt = AnswerAccuracyJudge1Prompt()
-        self.judge2_prompt = AnswerAccuracyJudge2Prompt()
-
-        super().__init__(llm=llm, name=name, **kwargs)
+        super().__init__(llm=llm, name=name, max_retries=max_retries, **kwargs)
 
     async def ascore(
         self, user_input: str, response: str, reference: str
@@ -101,62 +94,14 @@ class AnswerAccuracy(BaseMetric):
         Returns:
             MetricResult with answer accuracy score (0.0-1.0, higher is better)
         """
-        # Input validation
-        if not user_input:
-            raise ValueError(
-                "user_input is missing. Please add user_input to the test sample."
-            )
-        if not response:
-            raise ValueError(
-                "response is missing. Please add response to the test sample."
-            )
-        if not reference:
-            raise ValueError(
-                "reference is missing. Please add reference to the test sample."
-            )
+        require(user_input=user_input, response=response, reference=reference)
 
-        # Get ratings from both judges
-        judge1_rating = await self._get_judge_rating(
-            self.judge1_prompt, user_input, response, reference
+        # Judge 2 sees the answers swapped, for fairness.
+        return await self._judge_both(
+            AnswerAccuracyInput(
+                query=user_input, user_answer=response, reference_answer=reference
+            ),
+            AnswerAccuracyInput(
+                query=user_input, user_answer=reference, reference_answer=response
+            ),
         )
-        judge2_rating = await self._get_judge_rating(
-            self.judge2_prompt, user_input, reference, response
-        )  # Note: swapped order for judge 2
-
-        # Average the scores (convert from 0,2,4 scale to 0.0-1.0)
-        score = self._average_scores(judge1_rating / 4.0, judge2_rating / 4.0)
-
-        return MetricResult(value=float(score))
-
-    async def _get_judge_rating(
-        self, prompt_obj, query: str, user_answer: str, reference_answer: str
-    ) -> float:
-        """Get rating from judge.
-
-        Provider/transport errors from the LLM call propagate to the caller.
-        Only an invalid rating (after retries) yields NaN.
-        """
-        input_data = AnswerAccuracyInput(
-            query=query,
-            user_answer=user_answer,
-            reference_answer=reference_answer,
-        )
-        prompt_str = prompt_obj.to_string(input_data)
-        for _ in range(self.max_retries):
-            result = await self.llm.agenerate(prompt_str, AnswerAccuracyOutput)
-            rating = result.rating
-            if rating in [0, 2, 4]:
-                return float(rating)
-
-        return float("nan")
-
-    def _average_scores(self, score1: float, score2: float) -> float:
-        """Average two judge scores, handling NaN values."""
-        if not np.isnan(score1) and not np.isnan(score2):
-            return (score1 + score2) / 2.0
-        elif not np.isnan(score1):
-            return score1
-        elif not np.isnan(score2):
-            return score2
-        else:
-            return float("nan")

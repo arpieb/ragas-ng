@@ -3,9 +3,8 @@
 import typing as t
 from typing import List
 
-import numpy as np
-
-from ragas.metrics.collections.base import BaseMetric
+from ragas.metrics.collections._dual_judge import DualJudgeMetric
+from ragas.metrics.collections._inputs import require
 from ragas.metrics.result import MetricResult
 
 from .util import (
@@ -19,7 +18,7 @@ if t.TYPE_CHECKING:
     from ragas.llms.base import InstructorBaseRagasLLM
 
 
-class ResponseGroundedness(BaseMetric):
+class ResponseGroundedness(DualJudgeMetric):
     """
     Response Groundedness metric using dual-judge evaluation.
 
@@ -59,13 +58,13 @@ class ResponseGroundedness(BaseMetric):
         llm: Modern instructor-based LLM for dual-judge evaluation
         name: The metric name
         allowed_values: Score range (0.0 to 1.0, higher is better)
-        max_retries: Maximum retry attempts for invalid ratings
+        max_retries: Attempts per judge; a retry after an off-scale rating is
+            a fresh sample, not a resend of the same request
     """
 
-    required_components = ("llm",)
-
-    # Type hints for linter (attributes are set in __init__)
-    llm: "InstructorBaseRagasLLM"
+    judge_prompts = (ResponseGroundednessJudge1Prompt, ResponseGroundednessJudge2Prompt)
+    output_model = ResponseGroundednessOutput
+    ratings = (0, 1, 2)
 
     def __init__(
         self,
@@ -75,18 +74,12 @@ class ResponseGroundedness(BaseMetric):
         **kwargs,
     ):
         """
-        Initialize ResponseGroundedness metric with required components.
-
         Args:
             llm: Modern instructor-based LLM for dual-judge evaluation
             name: The metric name
-            max_retries: Maximum retry attempts for invalid ratings
+            max_retries: Attempts per judge (see ``DualJudgeMetric``)
         """
-        self.max_retries = max_retries
-        self.judge1_prompt = ResponseGroundednessJudge1Prompt()
-        self.judge2_prompt = ResponseGroundednessJudge2Prompt()
-
-        super().__init__(llm=llm, name=name, **kwargs)
+        super().__init__(llm=llm, name=name, max_retries=max_retries, **kwargs)
 
     async def ascore(
         self, response: str, retrieved_contexts: List[str]
@@ -101,58 +94,11 @@ class ResponseGroundedness(BaseMetric):
         Returns:
             MetricResult with response groundedness score (0.0-1.0, higher is better)
         """
-        # Input validation
-        if not response:
-            raise ValueError(
-                "response is missing. Please add response to the test sample."
-            )
-        if not retrieved_contexts:
-            raise ValueError(
-                "retrieved_contexts is missing. Please add retrieved_contexts to the test sample."
-            )
+        require(response=response, retrieved_contexts=retrieved_contexts)
 
-        # Handle edge cases like legacy
         context_str = "\n".join(retrieved_contexts)
-
         if not response.strip() or not context_str.strip():
             return MetricResult(value=0.0)
 
-        # Get ratings from both judges
-        judge1_rating = await self._get_judge_rating(
-            self.judge1_prompt, response, context_str
-        )
-        judge2_rating = await self._get_judge_rating(
-            self.judge2_prompt, response, context_str
-        )
-
-        # Average the scores (convert from 0,1,2 scale to 0.0-1.0)
-        score = self._average_scores(judge1_rating / 2.0, judge2_rating / 2.0)
-
-        return MetricResult(value=float(score))
-
-    async def _get_judge_rating(self, prompt_obj, response: str, context: str) -> float:
-        """Get rating from judge.
-
-        Provider/transport errors from the LLM call propagate to the caller.
-        Only an invalid rating (after retries) yields NaN.
-        """
-        input_data = ResponseGroundednessInput(response=response, context=context)
-        prompt_str = prompt_obj.to_string(input_data)
-        for _ in range(self.max_retries):
-            result = await self.llm.agenerate(prompt_str, ResponseGroundednessOutput)
-            rating = result.rating
-            if rating in [0, 1, 2]:
-                return float(rating)
-
-        return float("nan")
-
-    def _average_scores(self, score1: float, score2: float) -> float:
-        """Average two judge scores, handling NaN values."""
-        if not np.isnan(score1) and not np.isnan(score2):
-            return (score1 + score2) / 2.0
-        elif not np.isnan(score1):
-            return score1
-        elif not np.isnan(score2):
-            return score2
-        else:
-            return float("nan")
+        judge_input = ResponseGroundednessInput(response=response, context=context_str)
+        return await self._judge_both(judge_input, judge_input)
