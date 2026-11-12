@@ -13,6 +13,7 @@ from ragas.losses import Loss
 if t.TYPE_CHECKING:
     from ragas.llms.base import InstructorBaseRagasLLM
     from ragas.prompt.metrics.base_prompt import BasePrompt
+    from ragas.run_config import RunConfig
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,11 @@ def _router_of(llm: t.Any) -> t.Optional[t.Any]:
     return None
 
 
-def dspy_lm_from_llm(dspy: t.Any, llm: "InstructorBaseRagasLLM") -> t.Any:
+def dspy_lm_from_llm(
+    dspy: t.Any,
+    llm: "InstructorBaseRagasLLM",
+    run_config: t.Optional["RunConfig"] = None,
+) -> t.Any:
     """A ``dspy.LM`` calling the same LiteLLM model as ``llm``.
 
     DSPy calls models through LiteLLM itself, and every ``llm_factory()`` LLM
@@ -51,7 +56,9 @@ def dspy_lm_from_llm(dspy: t.Any, llm: "InstructorBaseRagasLLM") -> t.Any:
     those: the model, the arguments you passed to ``llm_factory`` (such as
     ``api_key``, ``api_base``, ``temperature``) and, for an ``OpenAI`` client,
     its API key and base URL. DSPy's own cache and retries apply to its calls,
-    not ragas' (nor ``rate_limit``).
+    not ragas' (nor ``rate_limit``). With ``run_config``, its ``max_retries``
+    and ``timeout`` become the LM's ``num_retries`` and ``timeout``, unless
+    the LLM's own arguments already set them. A DSPy LM is returned as it is.
 
     Raises:
         ValueError: for an LLM this can't express as a ``dspy.LM`` (one not
@@ -90,15 +97,21 @@ def dspy_lm_from_llm(dspy: t.Any, llm: "InstructorBaseRagasLLM") -> t.Any:
         if getattr(client, "base_url", None):
             kwargs.setdefault("api_base", str(client.base_url))
 
+    if run_config is not None:
+        kwargs.setdefault("num_retries", run_config.max_retries)
+        kwargs.setdefault("timeout", run_config.timeout)
+
     return dspy.LM(llm.model, **kwargs)  # type: ignore[attr-defined]
 
 
-def setup_dspy_llm(dspy: t.Any, llm: t.Any) -> None:
+def setup_dspy_llm(
+    dspy: t.Any, llm: t.Any, run_config: t.Optional["RunConfig"] = None
+) -> None:
     """Configure DSPy to call the model ``llm`` calls (see ``dspy_lm_from_llm``).
 
     ``llm`` may also be a DSPy LM, used as it is.
     """
-    dspy.settings.configure(lm=dspy_lm_from_llm(dspy, llm))
+    dspy.settings.configure(lm=dspy_lm_from_llm(dspy, llm, run_config))
 
 
 def prompt_to_dspy_signature(prompt: "BasePrompt") -> t.Type[t.Any]:

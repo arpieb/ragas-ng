@@ -255,7 +255,7 @@ class TestDSPyOptimizer:
         assert "test_prompt" in result
         assert result["test_prompt"].instruction == "Optimized instruction"
 
-        mock_setup_llm.assert_called_once_with(mock_dspy, fake_llm)
+        mock_setup_llm.assert_called_once_with(mock_dspy, fake_llm, None)
         mock_metric.get_prompts.assert_called_once()
         mock_to_signature.assert_called_once()
         mock_to_examples.assert_called_once()
@@ -270,7 +270,7 @@ class TestDSPyOptimizer:
             init_temperature=1.0,
             auto="light",
             num_threads=None,
-            max_errors=None,
+            max_errors=1,  # raise_exceptions defaults to True
             seed=9,
             verbose=False,
             track_stats=True,

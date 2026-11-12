@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import logging
+import random
 import re
 import typing as t
 from uuid import UUID
@@ -42,6 +43,11 @@ example_type = t.TypeVar(
 # and examples.
 _INPUT_MARKER = "Now perform the same with the following input\n"
 _REPEAT_SUFFIX = re.compile(r" \(\d+\)$")
+
+
+def _seed(run_config: t.Optional[RunConfig]) -> t.Optional[int]:
+    """The seed for sampling annotations: ``run_config.seed``, if given."""
+    return run_config.seed if run_config is not None else None
 
 
 class FormattedExamples(BaseModel):
@@ -340,6 +346,7 @@ class GeneticOptimizer(Optimizer):
             stratify_key="metric_output",
             replace=False,
             drop_last_batch=False,
+            seed=_seed(run_config),
         )
         for batch in batches[:population_size]:
             exec.submit(
@@ -436,8 +443,12 @@ class GeneticOptimizer(Optimizer):
             pbar=parent_pbar,
         )
 
+        # one reproducible sample per candidate, drawn from run_config.seed
+        seeds = random.Random(_seed(run_config))
         for candidate in candidates:
-            dataset_sample = dataset.sample(sample_size, stratify_key="metric_output")
+            dataset_sample = dataset.sample(
+                sample_size, stratify_key="metric_output", seed=seeds.getrandbits(64)
+            )
             exec.submit(
                 self._feedback_mutation,
                 candidate=candidate,

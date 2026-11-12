@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import sys
 import typing as t
 from dataclasses import dataclass, field
 
@@ -69,7 +70,9 @@ class DSPyOptimizer(Optimizer):
     num_threads : int, optional
         Number of parallel threads for optimization.
     max_errors : int, optional
-        Maximum errors tolerated during optimization before stopping.
+        Maximum errors tolerated during optimization before stopping. When
+        unset, ``optimize()``'s ``raise_exceptions`` decides: stop at the
+        first error (True), or never stop on errors (False).
     seed : int
         Random seed for reproducibility.
     verbose : bool
@@ -172,9 +175,20 @@ class DSPyOptimizer(Optimizer):
             Loss function to optimize.
         config : Mapping[str, Any], optional
             Additional settings: ``num_trials`` (without ``auto``).
-        run_config, batch_size, callbacks, raise_exceptions
-            Unused: DSPy runs and traces its own calls, and ``max_errors``
-            sets how many failures it tolerates.
+        run_config : RunConfig, optional
+            ``max_retries`` and ``timeout`` for the ``dspy.LM`` built from
+            ``llm`` (its ``num_retries`` and ``timeout``). A DSPy LM passed as
+            ``lm`` keeps its own settings.
+        batch_size : None
+            DSPy sizes its own minibatches; any other value raises
+            ``NotImplementedError``.
+        callbacks : None
+            DSPy traces its own calls; ragas callbacks raise
+            ``NotImplementedError``.
+        raise_exceptions : bool
+            Without ``max_errors``, stop MIPROv2 at its first failed call
+            (True, the default) or never stop on errors (False). DSPy logs
+            each error; at the limit it raises.
 
         Returns
         -------
@@ -191,10 +205,26 @@ class DSPyOptimizer(Optimizer):
         if self._dspy is None:
             raise RuntimeError("DSPy module not loaded.")
 
+        if batch_size is not None:
+            raise NotImplementedError(
+                "DSPyOptimizer can't honor batch_size: MIPROv2 sizes its own "
+                "minibatches. Leave it unset."
+            )
+        if callbacks:
+            raise NotImplementedError(
+                "DSPyOptimizer can't honor ragas callbacks: DSPy runs and "
+                "traces its own calls. Leave callbacks unset."
+            )
+        max_errors = self.max_errors
+        if max_errors is None:
+            max_errors = 1 if raise_exceptions else sys.maxsize
+
         metric = self.metric
         config = dict(config or {})
         if self.cache is not None:
-            cache_key = self._generate_cache_key(dataset, loss, config)
+            cache_key = self._generate_cache_key(
+                dataset, loss, config, max_errors=max_errors
+            )
             if self.cache.has_key(cache_key):
                 logger.info(f"Cache hit for DSPy optimization of metric: {metric.name}")
                 return self._from_cacheable(self.cache.get(cache_key))
@@ -209,7 +239,9 @@ class DSPyOptimizer(Optimizer):
             setup_dspy_llm,
         )
 
-        setup_dspy_llm(self._dspy, self.lm if self.lm is not None else self.llm)
+        setup_dspy_llm(
+            self._dspy, self.lm if self.lm is not None else self.llm, run_config
+        )
 
         prompts = metric.get_prompts()  # copies
         optimized_prompts: t.Dict[str, BasePrompt] = {}
@@ -237,7 +269,7 @@ class DSPyOptimizer(Optimizer):
                 init_temperature=self.init_temperature,
                 auto=self.auto,
                 num_threads=self.num_threads,
-                max_errors=self.max_errors,
+                max_errors=max_errors,
                 seed=self.seed,
                 verbose=self.verbose,
                 track_stats=self.track_stats,
@@ -269,7 +301,9 @@ class DSPyOptimizer(Optimizer):
             )
 
         if self.cache is not None:
-            cache_key = self._generate_cache_key(dataset, loss, config)
+            cache_key = self._generate_cache_key(
+                dataset, loss, config, max_errors=max_errors
+            )
             self.cache.set(cache_key, self._to_cacheable(optimized_prompts))
             logger.info("Cached optimization results")
 
@@ -335,6 +369,7 @@ class DSPyOptimizer(Optimizer):
         dataset: SingleMetricAnnotation,
         loss: Loss,
         config: t.Dict[t.Any, t.Any],
+        max_errors: t.Optional[int] = None,
     ) -> str:
         """
         Generate a unique cache key for optimization results.
@@ -347,6 +382,8 @@ class DSPyOptimizer(Optimizer):
             Loss function to optimize.
         config : Dict[Any, Any]
             Additional configuration parameters.
+        max_errors : int, optional
+            The error limit the run uses (default: the optimizer's).
 
         Returns
         -------
@@ -374,7 +411,7 @@ class DSPyOptimizer(Optimizer):
             "init_temperature": self.init_temperature,
             "auto": self.auto,
             "num_threads": self.num_threads,
-            "max_errors": self.max_errors,
+            "max_errors": self.max_errors if max_errors is None else max_errors,
             "seed": self.seed,
             "verbose": self.verbose,
             "track_stats": self.track_stats,

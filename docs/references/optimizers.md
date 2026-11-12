@@ -98,6 +98,7 @@ Advanced optimizer using DSPy's [MIPROv2](https://dspy.ai/api/optimizers/MIPROv2
 | `max_bootstrapped_demos` | `int` | 5 | Max auto-generated examples |
 | `max_labeled_demos` | `int` | 5 | Max human-annotated examples |
 | `init_temperature` | `float` | 1.0 | Exploration temperature (0.0-2.0) |
+| `max_errors` | `int` | `None` | Failed calls MIPROv2 tolerates; when `None`, `train(raise_exceptions=...)` decides (see below) |
 | `lm` | DSPy LM | `None` | The LM DSPy uses, instead of one built from the LLM |
 
 ### Usage
@@ -125,6 +126,12 @@ metric.train(dataset=dataset, instruction_config=config)
 5. Returns, per annotated prompt, a copy with the best instruction and its demonstrations as examples
 
 DSPy calls the model the `llm_factory()` LLM calls, through a `dspy.LM` over the same LiteLLM model name and credentials. Pass `lm=` for an LLM over a `litellm.Router` or Azure client.
+
+`train()`'s options apply as follows:
+
+- `run_config`: its `max_retries` and `timeout` become the `dspy.LM`'s `num_retries` and `timeout`, unless your `llm_factory()` arguments set them. A DSPy LM passed as `lm=` keeps its own settings.
+- `raise_exceptions`: with `max_errors=None`, `True` (the default) stops MIPROv2 at its first failed call, and `False` never stops on errors. DSPy logs each error.
+- `batch_size`: not supported. MIPROv2 sizes its own minibatches, and any value raises `NotImplementedError`.
 
 Learn more about DSPy concepts:
 - [Signatures](https://dspy.ai/learn/programming/signatures/) - DSPy's approach to defining input/output specifications

@@ -166,7 +166,7 @@ its export filter).
 
 `TokenUsageParser` now receives the provider's **raw completion object** rather
 than a LangChain `LLMResult`/`ChatResult`. `CostCallbackHandler` is renamed
-`TokenUsageCollector` (the old name remains as an alias for one release).
+`TokenUsageCollector`; the old name is removed.
 
 === "Before"
     ```python
@@ -207,7 +207,7 @@ generator = TestsetGenerator(llm=generator_llm, embedding_model=generator_embedd
 ```
 
 `generate_with_langchain_docs()` is renamed **`generate_with_docs()`**. The old
-name still works and emits a `DeprecationWarning`.
+name is removed.
 
 **Your documents do not need to change.** The parameter is typed as a structural
 protocol requiring only `page_content` and `metadata`, which LangChain
@@ -241,8 +241,8 @@ A custom `BaseRagasLLM` and the result and prompt types it used (`ragas.llms.out
 | `evaluate(callbacks=...)` | OpenTelemetry |
 | `ragas.integrations.{langchain,langsmith,langgraph,opik}` | OTel ingestion |
 | `TestsetGenerator.from_langchain()` | `TestsetGenerator(...)` |
-| `generate_with_langchain_docs()` | `generate_with_docs()` (alias kept) |
-| `CostCallbackHandler` | `TokenUsageCollector` (alias kept) |
+| `generate_with_langchain_docs()` | `generate_with_docs()` |
+| `CostCallbackHandler` | `TokenUsageCollector` |
 | `LANGCHAIN_TRACING_V2` auto-tracing | configure an OTel SDK |
 
 !!! note "`openai` is no longer a declared dependency"

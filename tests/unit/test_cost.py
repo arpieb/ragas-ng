@@ -203,10 +203,3 @@ class TestTokenUsageCollector:
         collector = TokenUsageCollector(token_usage_parser=broken)
         collector.record(completion(model="m", usage={"prompt_tokens": 1}))
         assert collector.usage_data == []
-
-
-def test_cost_callback_handler_alias_still_resolves():
-    """Kept for one release: `cost_cb` is a public attribute name."""
-    from ragas.cost import CostCallbackHandler
-
-    assert CostCallbackHandler is TokenUsageCollector

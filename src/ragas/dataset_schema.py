@@ -13,7 +13,7 @@ import numpy as np
 from pydantic import BaseModel, field_validator
 
 from ragas.callbacks import parse_run_traces
-from ragas.cost import CostCallbackHandler
+from ragas.cost import TokenUsageCollector
 from ragas.messages import AIMessage, HumanMessage, ToolCall, ToolMessage
 from ragas.utils import safe_nanmean
 
@@ -477,13 +477,13 @@ class EvaluationResult:
         The dataset containing the scores of the evaluation.
     dataset : Dataset, optional
         The original dataset used for the evaluation. Default is None.
-    cost_cb : CostCallbackHandler, optional
+    cost_cb : TokenUsageCollector, optional
         The callback handler for cost computation. Default is None.
     """
 
     scores: t.List[t.Dict[str, t.Any]]
     dataset: EvaluationDataset
-    cost_cb: t.Optional[CostCallbackHandler] = None
+    cost_cb: t.Optional[TokenUsageCollector] = None
     traces: t.List[t.Dict[str, t.Any]] = field(default_factory=list)
     ragas_traces: t.Dict[str, ChainRun] = field(default_factory=dict, repr=False)
     run_id: t.Optional[UUID] = None
@@ -906,24 +906,11 @@ class SingleMetricAnnotation(BaseModel):
     def __len__(self):
         return len(self.samples)
 
-    def train_test_split(
-        self,
-        test_size: float = 0.2,
-        seed: int = 42,
-        stratify: t.Optional[t.List[t.Any]] = None,
-    ) -> t.Tuple["SingleMetricAnnotation", "SingleMetricAnnotation"]:
-        """
-        Split the dataset into training and testing sets.
-
-        Parameters:
-            test_size (float): The proportion of the dataset to include in the test split.
-            seed (int): Random seed for reproducibility.
-            stratify (list): The column values to stratify the split on.
-        """
-        raise NotImplementedError
-
     def sample(
-        self, n: int, stratify_key: t.Optional[str] = None
+        self,
+        n: int,
+        stratify_key: t.Optional[str] = None,
+        seed: t.Optional[int] = None,
     ) -> "SingleMetricAnnotation":
         """
         Create a subset of the dataset.
@@ -931,6 +918,9 @@ class SingleMetricAnnotation(BaseModel):
         Parameters:
             n (int): The number of samples to include in the subset.
             stratify_key (str): The column to stratify the subset on.
+            seed (int, optional): Seed for a private ``random.Random``, so the
+                same seed gives the same subset. The global ``random`` state
+                is never used or changed.
 
         Returns:
             SingleMetricAnnotation: A subset of the dataset with `n` samples.
@@ -940,9 +930,10 @@ class SingleMetricAnnotation(BaseModel):
                 "Requested sample size exceeds the number of available samples."
             )
 
+        rng = random.Random(seed)
         if stratify_key is None:
             # Simple random sampling
-            sampled_indices = random.sample(range(len(self.samples)), n)
+            sampled_indices = rng.sample(range(len(self.samples)), n)
             sampled_samples = [self.samples[i] for i in sampled_indices]
         else:
             # Stratified sampling
@@ -964,14 +955,14 @@ class SingleMetricAnnotation(BaseModel):
                 cls_sample_count = min(
                     cls_sample_count, len(indices)
                 )  # Don't oversample
-                sampled_indices.extend(random.sample(indices, cls_sample_count))
+                sampled_indices.extend(rng.sample(indices, cls_sample_count))
 
             # Handle any rounding discrepancies to ensure exactly `n` samples
             while len(sampled_indices) < n:
                 remaining_indices = set(range(len(self.samples))) - set(sampled_indices)
                 if not remaining_indices:
                     break
-                sampled_indices.append(random.choice(list(remaining_indices)))
+                sampled_indices.append(rng.choice(sorted(remaining_indices)))
 
             sampled_samples = [self.samples[i] for i in sampled_indices]
 
@@ -981,18 +972,21 @@ class SingleMetricAnnotation(BaseModel):
         self,
         batch_size: int,
         drop_last_batch: bool = False,
+        seed: t.Optional[int] = None,
     ):
         """
-        Create a batch iterator.
+        Split the shuffled samples into batches.
 
         Parameters:
             batch_size (int): The number of samples in each batch.
-            stratify (str): The column to stratify the batches on.
             drop_last_batch (bool): Whether to drop the last batch if it is smaller than the specified batch size.
+            seed (int, optional): Seed for a private ``random.Random``, so the
+                same seed gives the same batches. The global ``random`` state
+                is never used or changed.
         """
 
         samples = self.samples[:]
-        random.shuffle(samples)
+        random.Random(seed).shuffle(samples)
 
         all_batches = [
             samples[i : i + batch_size]
@@ -1008,6 +1002,7 @@ class SingleMetricAnnotation(BaseModel):
         stratify_key: str,
         drop_last_batch: bool = False,
         replace: bool = False,
+        seed: t.Optional[int] = None,
     ) -> t.List[t.List[SampleAnnotation]]:
         """
         Create stratified batches based on a specified key, ensuring proportional representation.
@@ -1017,6 +1012,9 @@ class SingleMetricAnnotation(BaseModel):
             stratify_key (str): Key in `metric_input` used for stratification (e.g., class labels).
             drop_last_batch (bool): If True, drops the last batch if it has fewer samples than `batch_size`.
             replace (bool): If True, allows reusing samples from the same class to fill a batch if necessary.
+            seed (int, optional): Seed for a private ``random.Random``, so the
+                same seed gives the same batches. The global ``random`` state
+                is never used or changed.
 
         Returns:
             List[List[SampleAnnotation]]: A list of stratified batches, each batch being a list of SampleAnnotation objects.
@@ -1027,9 +1025,10 @@ class SingleMetricAnnotation(BaseModel):
             key = sample[stratify_key]
             class_groups[key].append(sample)
 
+        rng = random.Random(seed)
         # Shuffle each class group for randomness
         for group in class_groups.values():
-            random.shuffle(group)
+            rng.shuffle(group)
 
         # Determine the number of batches required
         total_samples = len(self.samples)
@@ -1060,10 +1059,10 @@ class SingleMetricAnnotation(BaseModel):
                     class_groups[cls] = samples[count:]  # Remove used samples
                 elif replace and len(batch) < batch_size:
                     # Reuse samples if `replace` is True
-                    batch.extend(random.choices(samples, k=batch_size - len(batch)))
+                    batch.extend(rng.choices(samples, k=batch_size - len(batch)))
 
             # Shuffle the batch to mix classes
-            random.shuffle(batch)
+            rng.shuffle(batch)
             if len(batch) == batch_size or not drop_last_batch:
                 all_batches.append(batch)
 

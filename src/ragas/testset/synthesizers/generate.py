@@ -180,23 +180,6 @@ class TestsetGenerator:
             return_executor=return_executor,
         )
 
-    def generate_with_langchain_docs(self, *args: t.Any, **kwargs: t.Any) -> t.Any:
-        """Deprecated alias for :meth:`generate_with_docs`.
-
-        The method no longer has anything to do with LangChain -- it accepts any
-        object exposing ``page_content`` and ``metadata``, which LangChain
-        ``Document`` objects still satisfy.
-        """
-        warnings.warn(
-            "generate_with_langchain_docs() is deprecated and will be removed in a "
-            "future version. Use generate_with_docs(), which accepts any object "
-            "with `page_content` and `metadata` attributes -- including LangChain "
-            "Document objects.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.generate_with_docs(*args, **kwargs)
-
     def generate_with_chunks(
         self,
         chunks: t.Sequence[t.Any],

@@ -315,5 +315,5 @@ class TestSetupDSPyLLM:
 
         setup_dspy_llm(mock_dspy, llm)
 
-        mock_lm_from_llm.assert_called_once_with(mock_dspy, llm)
+        mock_lm_from_llm.assert_called_once_with(mock_dspy, llm, None)
         mock_dspy.settings.configure.assert_called_once_with(lm=mock_lm)
