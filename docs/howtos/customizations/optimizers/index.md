@@ -79,7 +79,7 @@ for name, prompt in metric.get_prompts().items():
 
 `metric.train()` accepts the annotations either as an object (`dataset=`) or as a JSON file (`metric.train("annotations.json", instruction_config=config)`). For each annotated prompt, the result is a copy of the metric's prompt with MIPROv2's instruction and its chosen demonstrations as examples.
 
-DSPy calls the model your LLM calls: `DSPyOptimizer` builds a `dspy.LM` from the `llm_factory()` LLM's LiteLLM model name, the arguments you gave `llm_factory` (`api_key`, `api_base`, ...) and an `OpenAI` client's key and base URL. DSPy's own cache and retries apply to those calls. For an LLM over a `litellm.Router` or an Azure client, pass a DSPy LM yourself: `DSPyOptimizer(lm=dspy.LM("azure/my-deployment", api_key=..., api_base=...))`.
+DSPy calls the model your LLM calls: `DSPyOptimizer` builds a `dspy.LM` from the `llm_factory()` LLM's LiteLLM model name, the arguments you gave `llm_factory` (`api_key`, `api_base`, ...) and an `OpenAI` client's key and base URL. DSPy's own cache and retries apply to those calls; `train(run_config=...)` sets their `num_retries` and `timeout` from its `max_retries` and `timeout`. With `train(raise_exceptions=True)`, the default, MIPROv2 stops at its first failed call; pass `raise_exceptions=False`, or `DSPyOptimizer(max_errors=N)`, to let it continue past failures. For an LLM over a `litellm.Router` or an Azure client, pass a DSPy LM yourself: `DSPyOptimizer(lm=dspy.LM("azure/my-deployment", api_key=..., api_base=...))`.
 
 ### Annotated Dataset Format
 

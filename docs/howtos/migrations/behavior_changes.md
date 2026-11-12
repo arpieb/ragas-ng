@@ -851,3 +851,25 @@ Metrics built with `@discrete_metric`, `@numeric_metric` and `@ranking_metric` n
 - **⚠ silent: `result.value is None` no longer detects a failure.** Code that checked for it, or that read `result.reason` for the error, now gets the exception instead. If a failure should count as a score, catch it inside the function and return that score; for example, return `"incorrect"` when the model's output can't be parsed.
 - Under `evaluate()` and `@experiment` these errors follow `raise_exceptions`, like any other metric error: raised, or the row gets no score (`evaluate()`) or is left out (`@experiment`) and the error is logged. Before, `raise_exceptions=True` could never surface them.
 - The private `_validate_result_value()` method is gone; use `validate_result_value()`, which returns the error message or `None`.
+
+## Leftover aliases removed; DSPy run options; seeded annotation sampling ([#240](https://github.com/arpieb/ragas-ng/issues/240))
+
+**Removed aliases:**
+
+| Removed | Use instead |
+|---|---|
+| `ragas.cost.CostCallbackHandler` | `ragas.cost.TokenUsageCollector` (the same class) |
+| `TestsetGenerator.generate_with_langchain_docs()` | `TestsetGenerator.generate_with_docs()` (the same arguments) |
+| `SingleMetricAnnotation.train_test_split()` | none: it only raised `NotImplementedError` |
+
+**`DSPyOptimizer` uses `train()`'s run options.** It used to accept them and ignore them.
+
+- `run_config`: its `max_retries` and `timeout` become the `dspy.LM`'s `num_retries` and `timeout`, unless the `llm_factory()` arguments set them. `train()` always passes a `RunConfig`, so by default DSPy's calls now retry up to 10 times (DSPy's default was 3), with a 180-second timeout. A DSPy LM passed as `DSPyOptimizer(lm=...)` keeps its own settings.
+- **⚠ silent: `raise_exceptions` sets MIPROv2's error limit** when `DSPyOptimizer(max_errors=...)` is unset. With `True`, `train()`'s default, MIPROv2 stops at its first failed call. Before, it tolerated DSPy's default of 10. `False` never stops on errors. An explicit `max_errors` still wins.
+- `batch_size` and `callbacks` raise `NotImplementedError` instead of being ignored. MIPROv2 sizes its own minibatches and traces its own calls.
+
+**`SingleMetricAnnotation.sample()`, `batch()` and `stratified_batches()` take `seed`.**
+
+- They draw from a private `random.Random(seed)` and never use or change the global `random` state.
+- **⚠ silent:** `random.seed(...)` no longer makes them reproducible; pass `seed=` instead. Without a seed, each call draws fresh.
+- **⚠ silent:** `GeneticOptimizer` passes seeds derived from `run_config.seed`, which `train()` defaults to 42. The annotations it samples are now the same on every run with the same seed. Before, they followed the global `random` state.

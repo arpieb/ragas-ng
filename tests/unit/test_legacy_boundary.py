@@ -69,6 +69,7 @@ REMOVED_NAMES = [
     ("ragas.validation", "validate_supported_metrics"),
     ("ragas.utils", "DeprecationHelper"),
     ("ragas.testset._modern", "TestsetPromptMixin"),
+    ("ragas.cost", "CostCallbackHandler"),
 ]
 
 # Every name ``from ragas.metrics import X`` used to resolve to a legacy metric,
@@ -143,6 +144,19 @@ def test_removed_name_is_gone(module, name):
     mod = importlib.import_module(module)
     with pytest.raises((AttributeError, ImportError)):
         getattr(mod, name)
+
+
+# (class, attribute) pairs that must not exist (#240).
+REMOVED_ATTRIBUTES = [
+    ("ragas.testset.TestsetGenerator", "generate_with_langchain_docs"),
+    ("ragas.dataset_schema.SingleMetricAnnotation", "train_test_split"),
+]
+
+
+@pytest.mark.parametrize("path, name", REMOVED_ATTRIBUTES)
+def test_removed_attribute_is_gone(path, name):
+    module, _, cls = path.rpartition(".")
+    assert not hasattr(getattr(importlib.import_module(module), cls), name)
 
 
 @pytest.mark.parametrize("old, new", sorted(OLD_METRIC_NAMES.items()))

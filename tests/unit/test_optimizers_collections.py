@@ -340,6 +340,46 @@ def test_train_optimizes_instruction_on_a_copy_and_applies_it():
     assert any("be stricter" in str(p) for p in optimizer_llm.prompts)
 
 
+def test_genetic_sampling_is_seeded_from_run_config(monkeypatch):
+    """The annotations the genetic optimizer samples follow run_config.seed (#240)."""
+    from ragas.run_config import RunConfig
+
+    seen: t.Dict[str, t.List[t.Any]] = {"batches": [], "samples": []}
+    batches, sample = (
+        SingleMetricAnnotation.stratified_batches,
+        SingleMetricAnnotation.sample,
+    )
+
+    def spy_batches(self, *args, **kwargs):
+        seen["batches"].append(kwargs["seed"])
+        return batches(self, *args, **kwargs)
+
+    def spy_sample(self, *args, **kwargs):
+        seen["samples"].append(kwargs["seed"])
+        return sample(self, *args, **kwargs)
+
+    monkeypatch.setattr(SingleMetricAnnotation, "stratified_batches", spy_batches)
+    monkeypatch.setattr(SingleMetricAnnotation, "sample", spy_sample)
+
+    def run(seed):
+        metric = AspectCritic(name="helpfulness", llm=metric_llm(), definition="d")
+        metric.train(
+            dataset=dataset(),
+            instruction_config=InstructionConfig(llm=StubLLM()),
+            run_config=RunConfig(seed=seed),
+        )
+        result = {k: list(v) for k, v in seen.items()}
+        for v in seen.values():
+            v.clear()
+        return result
+
+    first = run(7)
+    assert first["batches"] == [7]
+    assert len(set(first["samples"])) == len(first["samples"]) > 1  # per candidate
+    assert run(7) == first
+    assert run(8)["samples"] != first["samples"]
+
+
 def test_train_from_path_then_demonstrations(tmp_path):
     path = tmp_path / "annotated.json"
     data = dataset()

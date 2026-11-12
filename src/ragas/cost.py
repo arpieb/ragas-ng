@@ -239,9 +239,3 @@ class TokenUsageCollector:
             return list(total_table.values())[0]
         else:
             return list(total_table.values())
-
-
-# Deprecated alias. `cost_cb` remains the attribute name on EvaluationResult and
-# Testset, so this keeps `isinstance` checks and type annotations working for one
-# release. It is no longer a callback handler of any kind.
-CostCallbackHandler = TokenUsageCollector
