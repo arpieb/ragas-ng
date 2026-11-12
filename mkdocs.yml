@@ -157,6 +157,7 @@ nav:
           - From v0.1 to v0.2: howtos/migrations/migrate_from_v01_to_v02.md
           - From v0.3 to v0.4: howtos/migrations/migrate_from_v03_to_v04.md
           - Off LangChain: howtos/migrations/migrate_off_langchain.md
+          - From evaluate() to experiments: howtos/migrations/evaluate_to_experiment.md
           - Metric score changes: howtos/migrations/score_changes.md
           - Behavior changes: howtos/migrations/behavior_changes.md
   - 📖 References:
@@ -174,8 +175,8 @@ nav:
     - Evaluation:
       - Schemas: references/evaluation_schema.md
       - Metrics: references/metrics.md
-      - evaluate(): references/evaluate.md
-      - aevaluate(): references/aevaluate.md
+      - metrics_experiment(): references/evaluate.md
+      - Sync and async runs: references/aevaluate.md
     - Testset Generation:
       - Schemas: references/testset_schema.md
       - Graph: references/graph.md

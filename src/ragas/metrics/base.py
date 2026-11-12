@@ -363,8 +363,8 @@ class SimpleLLMMetric(SimpleBaseMetric):
 
         The other keyword arguments fill the prompt's variables. The LLM's
         value is checked against ``allowed_values``; a value outside them
-        raises ``ValueError``, so ``evaluate()`` and experiments treat it like
-        any other failed row.
+        raises ``ValueError``, so experiments treat it like any other failed
+        row.
         """
         from ragas.metrics.result import MetricResult
 

@@ -1,5 +1,8 @@
 # Migration from v0.3 to v0.4
 
+!!! note "`evaluate()` and `EvaluationDataset` are being removed in ragas-ng"
+    This page describes upstream ragas history. In ragas-ng, `evaluate()`, `aevaluate()`, `EvaluationDataset` and `EvaluationResult` are being removed in favour of `Dataset` and `metrics_experiment`. See [From `evaluate()` to experiments](evaluate_to_experiment.md) for the current code.
+
 Ragas v0.4 introduces a fundamental shift towards an **experiment-based architecture**. This represents the most significant change since v0.2, moving from isolated metric evaluations to a cohesive experimentation framework where evaluation, analysis, and iteration are tightly integrated.
 
 This architectural change led to several concrete improvements:
@@ -1056,6 +1059,18 @@ dataset = EvaluationDataset(
 )
 ```
 
+**In ragas-ng**, a `Dataset` of samples replaces `EvaluationDataset`:
+```python
+from ragas import Dataset, SingleTurnSample
+
+dataset = Dataset(
+    "qa",
+    "inmemory",
+    data_model=SingleTurnSample,
+    data=[SingleTurnSample(user_input="Q1", response="A1", reference="correct")],
+)
+```
+
 If loading from CSV/JSON, update your data files:
 
 **Before (v0.3) CSV format:**
@@ -1302,9 +1317,9 @@ These features still work but show deprecation warnings. They will be removed in
 
 ### evaluate() Function - Deprecated
 
-- **Status**: Still works but discouraged
+- **Status**: Deprecated in v0.4; being removed in ragas-ng
 - **Reason**: Replaced by `@experiment()` decorator for better structured workflows
-- **Migration**: See [Evaluation to Experiment](#evaluation-to-experiment) section
+- **Migration**: See [Evaluation to Experiment](#evaluation-to-experiment) section. To score a dataset in one call, as `evaluate()` did, use `metrics_experiment(metrics).run(dataset)`: see [From `evaluate()` to experiments](evaluate_to_experiment.md).
 
 **Before (v0.3) - Deprecated:**
 ```python

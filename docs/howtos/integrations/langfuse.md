@@ -50,7 +50,7 @@ provider = TracerProvider()
 provider.add_span_processor(BatchSpanProcessor(exporter))
 trace.set_tracer_provider(provider)
 
-# every evaluate(), experiment and metric call from here on appears in Langfuse
+# every experiment and metric call from here on appears in Langfuse
 ```
 
 **With the Langfuse SDK, if your app already uses it.** The SDK becomes the global tracer provider, so ragas spans pass through it. By default it exports only Langfuse spans, GenAI spans and known LLM instrumentations, so allow the `ragas` scope as well:
@@ -197,7 +197,7 @@ for summary in traces:
 langfuse.flush()
 ```
 
-To score many traces at once, build an `EvaluationDataset` from the rebuilt samples and run `ragas.aevaluate(...)`. Then write each row's scores back with `create_score(trace_id=...)`.
+To score many traces at once, put the rebuilt samples in a `Dataset` and score them with `await ragas.metrics_experiment(metrics).arun(dataset)`. Keep each trace's id as an extra column (a dataset without a `data_model` keeps extra columns), then write each experiment row's scores back with `create_score(trace_id=row["trace_id"], ...)`.
 
 ### Analyze the scores
 

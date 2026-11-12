@@ -15,7 +15,7 @@ class RunConfig:
     ----------
     timeout : int, optional
         Wall-clock limit (in seconds) on one job -- one metric scoring one
-        sample in ``evaluate()``, or one testset-generation step -- covering
+        row in ``metrics_experiment``, or one testset-generation step -- covering
         all of its LLM calls, retries and backoff waits included. Not a
         per-request timeout; set that on the provider client. By default 180.
     max_retries : int, optional

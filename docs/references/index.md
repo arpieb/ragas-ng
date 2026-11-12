@@ -10,14 +10,15 @@ This section contains detailed API documentation for all core components of Raga
 - [Tokenizers](tokenizers.md) - Tokenizer interfaces for text splitting
 - [RunConfig](run_config.md) - Evaluation runtime configuration
 - [RateLimit](rate_limit.md) - Requests and tokens per minute for LLM calls
-- [Executor](executor.md) - Execution engine for evaluations
+- [Executor](executor.md) - Execution engine for concurrent jobs
 - [Cache](cache.md) - Caching mechanisms for LLM calls
 
 ## Evaluation
 
-- [Schemas](evaluation_schema.md) - Data structures for evaluation
+- [Schemas](evaluation_schema.md) - Samples, messages, datasets and experiments
 - [Metrics](metrics.md) - Available metrics and their implementations
-- [evaluate()](evaluate.md) - Main evaluation function API
+- [metrics_experiment()](evaluate.md) - Score metrics over a dataset; `summarize()` and `check()`
+- [Sync and async runs](aevaluate.md) - `run()` and `arun()`
 
 ## Testset Generation
 

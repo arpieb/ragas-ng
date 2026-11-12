@@ -244,11 +244,11 @@ class MetricResult:
 class ScoreWithReason(float):
     """A numeric score that also carries the metric's explanation.
 
-    ``evaluate()`` aggregates plain numbers, so a collections metric's
+    Scoring runs aggregate plain numbers, so a collections metric's
     ``MetricResult`` is reduced to a float on the way in. This subclass keeps
-    ``MetricResult.reason`` attached through the executor so
-    ``EvaluationResult`` can expose it (``result.reasons``,
-    ``to_pandas(include_reasons=True)``). It behaves exactly like a float.
+    ``MetricResult.reason`` attached, so the run can report it (the
+    ``<metric>_reason`` column of ``metrics_experiment``). It behaves exactly
+    like a float.
     """
 
     reason: t.Optional[str]

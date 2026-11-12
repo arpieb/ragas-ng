@@ -234,7 +234,7 @@ retrieval_results = metrics_experiment(ragas_metrics).run(
 retrieval_results.to_pandas()
 ```
 ```
-Evaluating: 100%|██████████| 9/9 [00:15<00:00,  1.77s/it]
+Running experiment: 100%|██████████| 3/3 [00:15<00:00,  5.31s/it]
 ```
 
 <div>
@@ -329,7 +329,7 @@ genration_results = metrics_experiment(ragas_metrics).run(
 genration_results.to_pandas()
 ```
 ```
-Evaluating: 100%|██████████| 9/9 [00:17<00:00,  1.90s/it]
+Running experiment: 100%|██████████| 3/3 [00:17<00:00,  5.70s/it]
 ```
 
 <div>

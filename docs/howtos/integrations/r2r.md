@@ -99,7 +99,7 @@ With the `R2R Client` in place, we can use Ragas `r2r` integration for evaluatio
 The `R2RClient` and `/rag` configurations specifying RAG settings.
 
 - **2. Evaluation Dataset**
-You need a Ragas `EvaluationDataset` that includes all necessary inputs required by Ragas metrics.
+You need a Ragas `Dataset` of samples that includes all necessary inputs required by Ragas metrics.
 
 - **3. Ragas Metrics**
 Ragas provides various evaluation metrics to assess different aspects of the RAG, such as faithfulness, answer relevance, and context recall. You can explore the full list of available metrics in the [Ragas documentation](../../concepts/metrics/available_metrics/index.md).

@@ -72,21 +72,18 @@ embeddings = GoogleEmbeddings(model="gemini-embedding-001")  # pip install googl
 # embeddings = GoogleEmbeddings(client=genai.Client(), model="gemini-embedding-001")
 ```
 
-!!! note "evaluate()'s default embeddings follow the LLM"
-    When a metric needs embeddings and you pass none, `evaluate()` picks them
-    from the LLM. For `llm_factory("gemini/...")` that's
-    `gemini/gemini-embedding-2` through LiteLLM, with the same `GEMINI_API_KEY`
-    (or `api_key=`), so a Gemini-only setup needs no `OPENAI_API_KEY`.
-    `llm_factory("vertex_ai/...")` gets `vertex_ai/gemini-embedding-2` with the
-    LLM's `vertex_project` / `vertex_location`. An LLM built on an OpenAI
-    client pointed at Gemini's endpoint, as above, still asks that client for
-    an OpenAI embedding model, which Gemini's endpoint doesn't serve, so pass
-    `embeddings=` there.
+!!! note "Pass the embeddings to the metric"
+    There are no default models: a metric that needs embeddings, such as
+    `AnswerCorrectness`, takes them when you create it. With Gemini
+    embeddings, as above, a Gemini-only setup needs no `OPENAI_API_KEY`. An
+    LLM built on an OpenAI client pointed at Gemini's endpoint can't serve
+    OpenAI embedding models, so use `GoogleEmbeddings` there too.
 
 ## Example
 
 ```python
-from ragas import EvaluationDataset, evaluate
+from ragas import Dataset, metrics_experiment, summarize
+from ragas.dataset_schema import SingleTurnSample
 from ragas.embeddings import GoogleEmbeddings
 from ragas.llms import llm_factory
 from ragas.metrics.collections import AnswerCorrectness, ContextPrecision, Faithfulness
@@ -94,28 +91,29 @@ from ragas.metrics.collections import AnswerCorrectness, ContextPrecision, Faith
 llm = llm_factory("gemini/gemini-3.6-flash")
 embeddings = GoogleEmbeddings(model="gemini-embedding-001")
 
-dataset = EvaluationDataset.from_list(
-    [
-        {
-            "user_input": "What is the capital of France?",
-            "response": "Paris is the capital of France.",
-            "retrieved_contexts": [
-                "France is in Western Europe. Paris is its capital."
-            ],
-            "reference": "Paris",
-        }
-    ]
+dataset = Dataset(
+    "gemini_eval",
+    "inmemory",
+    data_model=SingleTurnSample,
+    data=[
+        SingleTurnSample(
+            user_input="What is the capital of France?",
+            response="Paris is the capital of France.",
+            retrieved_contexts=["France is in Western Europe. Paris is its capital."],
+            reference="Paris",
+        )
+    ],
 )
 
-result = evaluate(
-    dataset,
-    metrics=[
+run = metrics_experiment(
+    [
         ContextPrecision(llm=llm),
         Faithfulness(llm=llm),
         AnswerCorrectness(llm=llm, embeddings=embeddings),
-    ],
+    ]
 )
-print(result)
+exp = run.run(dataset, name="gemini")
+print(summarize(exp))
 ```
 
 Or score one sample with a collections metric:

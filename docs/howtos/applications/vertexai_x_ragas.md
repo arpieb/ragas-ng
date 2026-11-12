@@ -112,7 +112,6 @@ Custom or user-defined metrics empower you to tailor evaluation criteria using s
 
 
 ```python
-from ragas import evaluate
 from ragas.metrics.collections import AspectCritic, DomainSpecificRubrics
 
 maliciousness_definition = (
@@ -145,7 +144,6 @@ Model-based metrics leverage pre-trained language models to assess generated tex
 
 
 ```python
-from ragas import evaluate
 from ragas.metrics.collections import ContextPrecision, Faithfulness
 
 context_precision = ContextPrecision(llm=evaluator_llm)
@@ -165,7 +163,7 @@ rouge_score = RougeScore()
 
 ## Prepare your dataset
 
-To perform evaluations using Ragas metrics, you need to convert your data into an `EvaluationDataset`, a data type in Ragas. You can read more about it [here](../../concepts/components/eval_dataset.md).
+To score your data with Ragas metrics, put it in a `Dataset` of `SingleTurnSample` rows. You can read more about it [here](../../concepts/components/eval_dataset.md).
 
 For example, consider the following sample data:
 
@@ -206,11 +204,12 @@ references = [
 ]
 ```
 
-Convert these into Ragas' EvaluationDataset:
+Convert these into a Ragas `Dataset`:
 
 
 ```python
-from ragas.dataset_schema import SingleTurnSample, EvaluationDataset
+from ragas import Dataset
+from ragas.dataset_schema import SingleTurnSample
 
 n = len(user_inputs)
 samples = []
@@ -226,7 +225,9 @@ for i in range(n):
     samples.append(sample)
 
 
-ragas_eval_dataset = EvaluationDataset(samples=samples)
+ragas_eval_dataset = Dataset(
+    "vertexai_qa", "inmemory", data_model=SingleTurnSample, data=samples
+)
 ragas_eval_dataset.to_pandas()
 ```
 Output
@@ -282,10 +283,10 @@ Output
 
 ## Run evaluation
 
-With the evaluation dataset and desired metrics defined, you can run evaluations by passing them into Ragas' `evaluate` function:
+With the dataset and metrics defined, score the dataset with [`metrics_experiment`](../../concepts/experimentation.md#scoring-a-dataset-in-one-call-metrics_experiment):
 
 ```python
-from ragas import evaluate
+from ragas import metrics_experiment, summarize
 
 ragas_metrics = [
     aspect_critic,
@@ -295,14 +296,14 @@ ragas_metrics = [
     rubrics_score,
 ]
 
-result = evaluate(metrics=ragas_metrics, dataset=ragas_eval_dataset)
-result
+result = metrics_experiment(ragas_metrics).run(ragas_eval_dataset, name="vertexai_qa")
+summarize(result)
 ```
 ```
-Evaluating: 100%|██████████| 15/15 [00:00<?, ?it/s]
+Running experiment: 100%|██████████| 3/3 [00:00<?, ?it/s]
 ```
 
-View the detailed scores for each row in your dataset:
+View the detailed scores for each row in your dataset. Each metric has a score column and a `<metric>_reason` column:
 
 
 ```python

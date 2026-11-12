@@ -34,8 +34,8 @@ if t.TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Rows run at once by default. The same as evaluate()'s RunConfig.max_workers;
-# before #117 every row started at once.
+# Rows run at once by default (RunConfig.max_workers' default too); before
+# #117 every row started at once.
 DEFAULT_MAX_WORKERS = 16
 
 
@@ -385,7 +385,7 @@ class ExperimentWrapper:
         """Run the experiment from synchronous code: ``arun``, without ``await``.
 
         Takes the same arguments as :meth:`arun` and returns the same
-        ``Experiment``. Like ``evaluate()`` and ``metric.score()``, it runs on
+        ``Experiment``. Like ``metric.score()``, it runs on
         ragas' shared background event loop (``ragas.async_utils.run_sync``),
         so it works in a plain script and inside a running loop (Jupyter)
         alike. Ctrl-C cancels the rows still running. In async code, prefer
@@ -501,8 +501,8 @@ def experiment(
         name_prefix: Optional prefix for experiment names
         backend_kwargs: Constructor arguments for a backend given by name,
             e.g. ``{"root_dir": "./data"}``
-        max_workers: How many rows ``arun`` runs at once (default 16, the
-            same as ``evaluate()``); ``-1`` means no limit. A sync function
+        max_workers: How many rows ``arun`` runs at once (default 16);
+            ``-1`` means no limit. A sync function
             runs in that many threads, so use 1 if it isn't thread-safe.
         raise_exceptions: Stop ``arun`` on the first row that raises, save
             nothing, and re-raise (default False: log the row, leave it out

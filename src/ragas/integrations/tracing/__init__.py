@@ -16,11 +16,11 @@ Langfuse integration guide.
 Example (MLflow):
     ```python
     from ragas.integrations.tracing.mlflow import sync_trace
-    from ragas import evaluate
+    from ragas import metrics_experiment
     import mlflow
 
     with mlflow.start_run():
-        result = evaluate(dataset, metrics)
+        exp = await metrics_experiment(metrics).arun(dataset)
         trace = await sync_trace()
         print(trace.get_url())
     ```

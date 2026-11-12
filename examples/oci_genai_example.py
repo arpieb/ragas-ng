@@ -17,7 +17,7 @@ Prerequisites (see docs/howtos/integrations/oci_genai.md):
 
 import os
 
-from ragas import EvaluationDataset, evaluate
+from ragas import Dataset, SingleTurnSample, metrics_experiment, summarize
 from ragas.llms import llm_factory
 from ragas.metrics.collections import ContextPrecision, Faithfulness
 
@@ -56,12 +56,17 @@ def main():
     model_id = os.getenv("OCI_MODEL_ID", "cohere.command-latest")
     llm = llm_factory(f"oci/{model_id}")
 
-    dataset = EvaluationDataset.from_list(SAMPLES)
+    dataset = Dataset(
+        "oci_samples",
+        "inmemory",
+        data_model=SingleTurnSample,
+        data=[SingleTurnSample(**row) for row in SAMPLES],
+    )
     metrics = [Faithfulness(llm=llm), ContextPrecision(llm=llm)]
 
-    result = evaluate(dataset, metrics=metrics)
-    print(result)
-    print(result.to_pandas()[[m.name for m in metrics]])
+    exp = metrics_experiment(metrics).run(dataset, name="oci_genai")
+    print(summarize(exp))
+    print(exp.to_pandas()[[m.name for m in metrics]])
 
 
 if __name__ == "__main__":

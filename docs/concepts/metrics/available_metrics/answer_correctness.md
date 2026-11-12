@@ -9,7 +9,7 @@ The assessment of Answer Correctness involves gauging the accuracy of the genera
 Answer correctness encompasses two critical aspects: semantic similarity between the generated answer and the ground truth, as well as factual similarity. These aspects are combined using a weighted scheme to formulate the answer correctness score. Users also have the option to employ a 'threshold' value to round the resulting score to binary, if desired.
 
 !!! note "Embedding Requirement"
-    AnswerCorrectness requires embeddings for semantic similarity calculation. When using `evaluate()` without explicitly providing embeddings, Ragas will automatically match the embedding provider to your LLM provider. For example, if you use Gemini as your LLM, Google embeddings will be used automatically (no OpenAI API key needed). You can also provide embeddings explicitly for full control.
+    AnswerCorrectness requires embeddings for the semantic similarity term. Pass them when you create the metric, `AnswerCorrectness(llm=llm, embeddings=embeddings)`, as in the example below; there are no default embeddings. With `weights=[1.0, 0.0]` (factuality only) no embeddings are needed.
 
 !!! example
     **Ground truth**: Einstein was born in 1879 in Germany.

@@ -183,7 +183,8 @@ Ragas metrics score the pipeline's inputs and outputs directly. Each metric name
 The evaluator LLM and embeddings come from Ragas' own factories, not from Haystack: `llm_factory()` takes any [LiteLLM model string](../llm-adapters.md).
 
 ```python
-from ragas import EvaluationDataset, evaluate
+from ragas import Dataset, metrics_experiment, summarize
+from ragas.dataset_schema import SingleTurnSample
 from ragas.embeddings import LiteLLMEmbeddings
 from ragas.llms import llm_factory
 from ragas.metrics.collections import AnswerRelevancy, ContextPrecision, Faithfulness
@@ -191,32 +192,35 @@ from ragas.metrics.collections import AnswerRelevancy, ContextPrecision, Faithfu
 evaluator_llm = llm_factory("gpt-6-luna")
 evaluator_embeddings = LiteLLMEmbeddings(model="text-embedding-3-small")
 
-dataset = EvaluationDataset.from_list(
-    [
-        {
-            "user_input": question,
-            "retrieved_contexts": [doc.content for doc in answer.documents],
-            "response": answer.data,
-            "reference": reference,
-        }
-    ]
+dataset = Dataset(
+    "haystack_eval",
+    "inmemory",
+    data_model=SingleTurnSample,
+    data=[
+        SingleTurnSample(
+            user_input=question,
+            retrieved_contexts=[doc.content for doc in answer.documents],
+            response=answer.data,
+            reference=reference,
+        )
+    ],
 )
 
-result = evaluate(
-    dataset,
-    metrics=[
+run = metrics_experiment(
+    [
         AnswerRelevancy(llm=evaluator_llm, embeddings=evaluator_embeddings),
         ContextPrecision(llm=evaluator_llm),
         Faithfulness(llm=evaluator_llm),
-    ],
+    ]
 )
-print(result)
+exp = run.run(dataset, name="haystack")
+print(summarize(exp))
 ```
 Output
 ```
-Evaluating: 100%|██████████| 3/3 [00:14<00:00,  4.72s/it]
+Running experiment: 100%|██████████| 1/1 [00:14<00:00, 14.16s/it]
 
-{'answer_relevancy': 0.9782, 'context_precision': 1.0000, 'faithfulness': 1.0000}
+{'answer_relevancy': {'mean': 0.9782, 'count': 1, 'missing': 0}, 'context_precision': {'mean': 1.0, 'count': 1, 'missing': 0}, 'faithfulness': {'mean': 1.0, 'count': 1, 'missing': 0}}
 ```
 
 To score many questions, run the pipeline once per question and add one row per run to the dataset.

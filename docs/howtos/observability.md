@@ -10,14 +10,13 @@ Spans use the instrumentation scope `ragas` and follow the [OpenInference](https
 
 | Span | `openinference.span.kind` | `ragas.chain.type` | Emitted by |
 |---|---|---|---|
-| `ragas evaluation` | `CHAIN` | `evaluation` | `evaluate()` |
-| `experiment <name>` | `CHAIN` | `experiment` | `@experiment` `arun()` |
-| `row 0`, `row 1`, ... | `CHAIN` | `row` | each row of either |
-| one per metric call, named after the metric (e.g. `faithfulness`) | `EVALUATOR` | `metric` | `evaluate()`, and any metric's `score()` / `ascore()` |
+| `experiment <name>` | `CHAIN` | `experiment` | `arun()` / `run()` of an `@experiment` or `metrics_experiment` |
+| `row 0`, `row 1`, ... | `CHAIN` | `row` | each row of an experiment |
+| one per metric call, named after the metric (e.g. `faithfulness`) | `EVALUATOR` | `metric` | any metric's `score()` / `ascore()`, including those `metrics_experiment` makes |
 | one per legacy ragas prompt, named after it | `LLM` | `ragas_prompt` | legacy prompts (testset generation, metrics on the legacy implementation) |
 | one per call to an `llm_factory()` LLM, named after its response model (e.g. `AspectCriticOutput`) | `LLM` | `llm` | `InstructorLLM.generate()` / `agenerate()` |
 
-Spans nest the way the work does. An `evaluate()` run is `ragas evaluation` → `row N` → metric → LLM call. An experiment is `experiment <name>` → `row N`, with any metric scored inside your experiment function under its row. A metric scored on its own is a root span, or a child of your application's active span if there is one. Concurrent rows and calls each get their own branch.
+Spans nest the way the work does. An experiment is `experiment <name>` → `row N`, with each metric scored for the row under it (by `metrics_experiment`, or inside your experiment function), and its LLM calls under the metric. A metric scored on its own is a root span, or a child of your application's active span if there is one. Concurrent rows and calls each get their own branch.
 
 Each span carries `input.value` and `output.value` as JSON and `ragas.run.id`:
 
@@ -43,7 +42,7 @@ To send prompts and outputs in full, opt in:
 export RAGAS_TRACE_FULL_CONTENT=true
 ```
 
-It is read on each span, so setting `os.environ["RAGAS_TRACE_FULL_CONTENT"] = "true"` in a running notebook works too. `result.traces` stays in your process and is never truncated.
+It is read on each span, so setting `os.environ["RAGAS_TRACE_FULL_CONTENT"] = "true"` in a running notebook works too.
 
 LLMs that don't come from `llm_factory()` (the Haystack, OCI and LlamaIndex wrappers) emit no LLM spans of their own; their prompts still have prompt spans.
 
@@ -71,7 +70,7 @@ provider = TracerProvider()
 provider.add_span_processor(BatchSpanProcessor(exporter))
 trace.set_tracer_provider(provider)
 
-# every evaluate() call from here on is exported
+# every experiment run and metric call from here on is exported
 ```
 
 In short scripts, call `provider.force_flush()` before exiting so the last batch is sent.
@@ -104,21 +103,39 @@ Use this exporter in the setup above. LangSmith maps OpenInference attributes, s
 
 See the [Langfuse guide](integrations/langfuse.md), which also covers scoring Langfuse traces with ragas metrics.
 
-## Without a backend: `result.traces`
+## Without a backend: in-process spans
 
-`EvaluationResult.traces` holds the same run tree in process, with no OpenTelemetry setup: one entry per row, keyed by metric name. Each metric's entry holds the input and output of every LLM call or ragas prompt it ran, and `.scores` holds the row's scores:
+To inspect a run in your own process, with no tracing service, collect the spans with the OpenTelemetry SDK's in-memory exporter. Spans collected this way are not truncated:
 
 ```python
-result = evaluate(dataset, metrics=[...])  # each metric built with llm=evaluator_llm
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-result.traces[0].scores  # {'answers': 1.0}
-dict(result.traces[0]["answers"])
-# {'AspectCriticOutput': {'input': {'prompt': '...'},
-#                         'output': AspectCriticOutput(reason='...', verdict=1)}}
+exporter = InMemorySpanExporter()
+provider = TracerProvider()
+provider.add_span_processor(SimpleSpanProcessor(exporter))
+trace.set_tracer_provider(provider)
+
+exp = metrics_experiment([...]).run(
+    dataset, name="debug"
+)  # each metric built with llm=evaluator_llm
+
+for span in exporter.get_finished_spans():
+    print(
+        span.name,
+        span.attributes["ragas.chain.type"],
+        span.attributes.get("output.value"),
+    )
+# AspectCriticOutput llm {"reason": "...", "verdict": 1}
+# answers metric {"output": 1.0, "reason": "..."}
+# row 0 row {"output": {...}}
+# experiment debug experiment {"rows": 1, "failed": 0, "saved": 1}
 ```
 
-A metric that makes the same call several times gets numbered keys: `name`, `name (2)`, and so on.
+`span.parent` links each span to the one it nests under. The scores and reasons themselves are in the experiment's rows (`<metric>` and `<metric>_reason`).
 
 ## Coming from LangChain callbacks
 
-`evaluate(callbacks=...)` has been removed, along with the LangSmith and Opik tracers that hooked into it. Their replacement is the OpenTelemetry setup above. See [Migrating off LangChain](migrations/migrate_off_langchain.md#tracing).
+`evaluate(callbacks=...)` was removed, along with the LangSmith and Opik tracers that hooked into it. Their replacement is the OpenTelemetry setup above. See [Migrating off LangChain](migrations/migrate_off_langchain.md#tracing).

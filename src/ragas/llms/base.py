@@ -70,8 +70,8 @@ class InstructorBaseRagasLLM(ABC):
 
     Provider calls are retried with exponential backoff on transient errors
     (rate limits, timeouts, 5xx) per ``run_config`` (#73): the RunConfig
-    passed to ``evaluate()`` / ``TestsetGenerator`` for calls made inside that
-    run, else this LLM's ``set_run_config``, else ``RunConfig()`` defaults.
+    passed to ``metrics_experiment`` / ``TestsetGenerator`` for calls made
+    inside that run, else this LLM's ``set_run_config``, else ``RunConfig()`` defaults.
     A run's config never sticks to the LLM (#76).
     """
 

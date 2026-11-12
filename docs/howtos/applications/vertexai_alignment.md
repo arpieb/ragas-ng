@@ -13,7 +13,7 @@ In this tutorial, you will learn how to train and align your own custom LLM-base
 In this tutorial, you will:
 
 1. Define a model-based metric using Ragas.
-2. Construct an EvaluationDataset from the "helpful" subset of the HHH dataset.
+2. Construct a `Dataset` from the "helpful" subset of the HHH dataset.
 3. Run an initial evaluation to benchmark the metric’s performance.
 4. Review and annotate 15–20 evaluation examples.
 5. Train the metric using your annotated data.
@@ -151,7 +151,8 @@ The `process_hhh_dataset` function prepares data from the [HHH dataset](https:
 ```python
 import numpy as np
 from datasets import load_dataset
-from ragas import EvaluationDataset
+from ragas import Dataset
+from ragas.dataset_schema import SingleTurnSample
 
 
 def process_hhh_dataset(split: str = "helpful", total_count: int = 50):
@@ -179,15 +180,13 @@ def process_hhh_dataset(split: str = "helpful", total_count: int = 50):
 
         response = choices[label_index]
 
-        data.append(
-            {
-                "user_input": user_input,
-                "response": response,
-            }
-        )
+        data.append(SingleTurnSample(user_input=user_input, response=response))
         expert_scores.append(score)
 
-    return EvaluationDataset.from_list(data), expert_scores
+    dataset = Dataset(
+        f"hhh_{split}", "inmemory", data_model=SingleTurnSample, data=data
+    )
+    return dataset, expert_scores
 
 
 eval_dataset, expert_scores = process_hhh_dataset()
@@ -195,21 +194,21 @@ eval_dataset, expert_scores = process_hhh_dataset()
 
 ## Run evaluation
 
-With the evaluation dataset and the helpfulness metric defined, you can now run the evaluation:
+With the dataset and the helpfulness metric defined, you can now score the dataset with [`metrics_experiment`](../../concepts/experimentation.md#scoring-a-dataset-in-one-call-metrics_experiment):
 
 
 ```python
-from ragas import evaluate
+from ragas import metrics_experiment
 
-results = evaluate(eval_dataset, metrics=[helpfulness_critic])
+results = metrics_experiment([helpfulness_critic]).run(eval_dataset, name="before")
 ```
 ```
-Evaluating: 100%|██████████| 50/50 [00:00<?, ?it/s]
+Running experiment: 100%|██████████| 50/50 [00:00<?, ?it/s]
 ```
 
 This initial run highlights the level of misalignment present in LLM-based evaluators, which the subsequent training will address.
 
-Next, benchmark the metric's performance against the expert scores:
+Next, benchmark the metric's performance against the expert scores. The experiment's rows are in dataset order, so they line up with `expert_scores`:
 
 
 ```python
@@ -280,12 +279,12 @@ evaluator_embeddings = embedding_factory(
 
 
 ```python
-from ragas import evaluate
+from ragas import metrics_experiment
 
-results2 = evaluate(eval_dataset, metrics=[helpfulness_critic])
+results2 = metrics_experiment([helpfulness_critic]).run(eval_dataset, name="after")
 ```
 ```
-Evaluating: 100%|██████████| 50/50 [00:00<?, ?it/s]
+Running experiment: 100%|██████████| 50/50 [00:00<?, ?it/s]
 ```
 
 Benchmark the updated results against the expert scores:

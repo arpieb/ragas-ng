@@ -612,9 +612,12 @@ for event in events:
 
 
 ```python
-from ragas.dataset_schema import EvaluationDataset
+from ragas import Dataset
+from ragas.dataset_schema import SingleTurnSample
 
-dataset = EvaluationDataset(samples=ragas_samples)
+dataset = Dataset(
+    "query_engine_calls", "inmemory", data_model=SingleTurnSample, data=ragas_samples
+)
 dataset.to_pandas()
 ```
 Output:
@@ -674,7 +677,7 @@ This evaluation approach allows us to identify potential issues with either retr
 
 
 ```python
-from ragas import evaluate
+from ragas import metrics_experiment
 from ragas.llms import llm_factory
 from ragas.metrics.collections import ContextRelevance, Faithfulness
 
@@ -683,10 +686,12 @@ evaluator_llm = llm_factory("gpt-6-luna")
 faithfulness = Faithfulness(llm=evaluator_llm)
 context_relevance = ContextRelevance(llm=evaluator_llm)
 
-result = evaluate(dataset, metrics=[faithfulness, context_relevance])
+result = metrics_experiment([faithfulness, context_relevance]).run(
+    dataset, name="query_engines"
+)
 ```
 ```
-Evaluating: 100%|██████████| 4/4 [00:03<00:00,  1.19it/s]
+Running experiment: 100%|██████████| 2/2 [00:03<00:00,  1.68s/it]
 ```
 
 
