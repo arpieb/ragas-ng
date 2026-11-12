@@ -207,7 +207,7 @@ Instead of passing the paths, you can set `GDRIVE_SERVICE_ACCOUNT_PATH`, `GDRIVE
 
 ## Adding a backend
 
-A backend is a subclass of `BaseBackend` with six methods. Each one reads or writes a list of dicts by name:
+A backend is a subclass of `BaseBackend` with three methods. Each takes `kind`, which is `"datasets"` or `"experiments"` (the two are stored apart), and reads or writes a list of dicts by name. `BaseBackend` builds the public `load_dataset`, `save_experiment`, `list_datasets` and so on from them:
 
 ```python
 import typing as t
@@ -219,26 +219,18 @@ class DictBackend(BaseBackend):
     def __init__(self):
         self.store: t.Dict[str, t.List[t.Dict[str, t.Any]]] = {}
 
-    def load_dataset(self, name):
-        return self.store[f"datasets/{name}"]
+    def _load(self, kind, name):
+        key = f"{kind}/{name}"
+        if key not in self.store:
+            raise FileNotFoundError(f"{kind[:-1]} {name!r} not found")
+        return self.store[key]
 
-    def load_experiment(self, name):
-        return self.store[f"experiments/{name}"]
+    def _save(self, kind, name, data, data_model):
+        self.store[f"{kind}/{name}"] = list(data)  # overwrite
 
-    def save_dataset(self, name, data, data_model=None):
-        self.store[f"datasets/{name}"] = list(data)  # overwrite
-
-    def save_experiment(self, name, data, data_model=None):
-        self.store[f"experiments/{name}"] = list(data)
-
-    def list_datasets(self):
+    def _list(self, kind):
         return sorted(
-            k.split("/", 1)[1] for k in self.store if k.startswith("datasets/")
-        )
-
-    def list_experiments(self):
-        return sorted(
-            k.split("/", 1)[1] for k in self.store if k.startswith("experiments/")
+            k.split("/", 1)[1] for k in self.store if k.startswith(f"{kind}/")
         )
 
 
@@ -252,7 +244,25 @@ print(dataset.backend.list_datasets())
 ['demo']
 ```
 
-Loads return plain dicts; `Dataset` validates them with the `data_model`. A load of a name that doesn't exist should raise, as the built-in backends do (`FileNotFoundError`).
+Loads return plain dicts; `Dataset` validates them with the `data_model`. A load of a name that doesn't exist should raise `FileNotFoundError`, as the built-in backends do.
+
+For a backend that keeps one local file per dataset, subclass `FileBackend` instead. It takes `root_dir`, stores `root_dir/datasets/<name><suffix>` and `root_dir/experiments/<name><suffix>`, rejects names that would escape `root_dir`, and lists by suffix; you set `suffix` and write `_read(path)` and `_write(path, data)`:
+
+```python
+import json
+
+from ragas.backends import FileBackend
+
+
+class JSONBackend(FileBackend):
+    suffix = ".json"
+
+    def _read(self, path):
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def _write(self, path, data):
+        path.write_text(json.dumps(data), encoding="utf-8")
+```
 
 To make a backend available by name whenever your package is installed, register it as an entry point in the `ragas.backends` group instead of calling `register_backend()`:
 

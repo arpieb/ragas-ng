@@ -8,6 +8,7 @@ import numpy as np
 
 from ragas.prompt.metrics.base_prompt import BasePrompt
 from ragas.testset.graph import KnowledgeGraph, Node
+from ragas.testset.graph_queries import find_n_indirect_clusters
 from ragas.testset.persona import Persona
 from ragas.testset.synthesizers.multi_hop.base import (
     MultiHopQuerySynthesizer,
@@ -17,10 +18,7 @@ from ragas.testset.synthesizers.multi_hop.prompts import (
     ConceptCombinationPrompt,
     ConceptsList,
 )
-from ragas.testset.synthesizers.prompts import (
-    ThemesPersonasInput,
-    ThemesPersonasMatchingPrompt,
-)
+from ragas.testset.synthesizers.prompts import ThemesPersonasMatchingPrompt
 
 if t.TYPE_CHECKING:
     from ragas.callbacks import Callbacks
@@ -45,7 +43,8 @@ class MultiHopAbstractQuerySynthesizer(MultiHopQuerySynthesizer):
     ) -> t.List[t.Set[Node]]:
         """Find n indirect clusters of nodes based on relationship condition"""
 
-        node_clusters = knowledge_graph.find_n_indirect_clusters(
+        node_clusters = find_n_indirect_clusters(
+            knowledge_graph,
             n,
             relationship_condition=lambda rel: (
                 True if rel.get_property(self.relation_property) else False
@@ -54,6 +53,9 @@ class MultiHopAbstractQuerySynthesizer(MultiHopQuerySynthesizer):
         )
         logger.info("found %d clusters", len(node_clusters))
         return node_clusters
+
+    def is_applicable(self, knowledge_graph: KnowledgeGraph) -> bool:
+        return bool(self.get_node_clusters(knowledge_graph))
 
     async def _generate_scenarios(
         self,
@@ -116,18 +118,18 @@ class MultiHopAbstractQuerySynthesizer(MultiHopQuerySynthesizer):
                 for sublist in concept_combination.combinations
                 for theme in sublist
             ]
-            prompt_input = ThemesPersonasInput(
-                themes=flattened_themes, personas=persona_list
-            )
-            persona_concepts = await self.theme_persona_matching_prompt.generate(
-                data=prompt_input, llm=self.llm, callbacks=callbacks
+            persona_concepts = await self._match_personas_to_themes(
+                self.theme_persona_matching_prompt,
+                flattened_themes,
+                persona_list,
+                callbacks,
             )
 
             base_scenarios = self.prepare_combinations(
                 nodes,
                 concept_combination.combinations,
                 personas=persona_list,
-                persona_item_mapping=persona_concepts.mapping,
+                persona_item_mapping=persona_concepts,
                 property_name=self.abstract_property_name,
             )
             base_scenarios = self.sample_diverse_combinations(

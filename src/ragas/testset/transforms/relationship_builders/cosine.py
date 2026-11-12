@@ -68,46 +68,9 @@ class CosineSimilarityBuilder(RelationshipBuilder):
         similar_pairs = self._find_similar_embedding_pairs(
             np.array(embeddings), self.threshold
         )
-        return [
-            Relationship(
-                source=kg.nodes[i],
-                target=kg.nodes[j],
-                type=self.new_property_name,
-                properties={self.new_property_name: similarity_float},
-                bidirectional=True,
-            )
-            for i, j, similarity_float in similar_pairs
-        ]
-
-    def generate_execution_plan(self, kg: KnowledgeGraph) -> t.List[t.Coroutine]:
-        """
-        Generates a coroutine task for finding similar embedding pairs, which can be scheduled/executed by an Executor.
-        """
-        filtered_kg = self.filter(kg)
-
-        embeddings = []
-        for node in filtered_kg.nodes:
-            embedding = node.get_property(self.property_name)
-            if embedding is None:
-                raise ValueError(f"Node {node.id} has no {self.property_name}")
-            embeddings.append(embedding)
-        self._validate_embedding_shapes(embeddings)
-
-        async def find_and_add_relationships():
-            similar_pairs = self._find_similar_embedding_pairs(
-                np.array(embeddings), self.threshold
-            )
-            for i, j, similarity_float in similar_pairs:
-                rel = Relationship(
-                    source=filtered_kg.nodes[i],
-                    target=filtered_kg.nodes[j],
-                    type=self.new_property_name,
-                    properties={self.new_property_name: similarity_float},
-                    bidirectional=True,
-                )
-                kg.relationships.append(rel)
-
-        return [find_and_add_relationships()]
+        return self._pairs_to_relationships(
+            kg.nodes, similar_pairs, self.new_property_name
+        )
 
 
 @dataclass
@@ -130,14 +93,6 @@ class SummaryCosineSimilarityBuilder(CosineSimilarityBuilder):
                 nodes.append(node)
         return KnowledgeGraph(nodes=nodes)
 
-    def generate_execution_plan(self, kg: KnowledgeGraph) -> t.Sequence[t.Coroutine]:
-        """
-        Applies ``filter_nodes`` and then runs ``transform``, which keeps only the
-        document nodes. The parent's plan bypasses ``transform`` and would build
-        relationships between every node with a summary embedding.
-        """
-        return RelationshipBuilder.generate_execution_plan(self, kg)
-
     async def transform(self, kg: KnowledgeGraph) -> t.List[Relationship]:
         filtered_kg = self._document_summary_filter(kg)
         embeddings = [
@@ -150,13 +105,6 @@ class SummaryCosineSimilarityBuilder(CosineSimilarityBuilder):
         similar_pairs = self._find_similar_embedding_pairs(
             np.array(embeddings), self.threshold
         )
-        return [
-            Relationship(
-                source=filtered_kg.nodes[i],
-                target=filtered_kg.nodes[j],
-                type=self.new_property_name,
-                properties={self.new_property_name: similarity_float},
-                bidirectional=True,
-            )
-            for i, j, similarity_float in similar_pairs
-        ]
+        return self._pairs_to_relationships(
+            filtered_kg.nodes, similar_pairs, self.new_property_name
+        )

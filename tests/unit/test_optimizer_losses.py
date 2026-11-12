@@ -220,3 +220,47 @@ def test_dspy_metric_rewards_lower_mse():
     metric_fn = create_dspy_metric(MSELoss(), "score")
     example = Mock(score=0.9)
     assert metric_fn(example, Mock(score=0.8)) > metric_fn(example, Mock(score=0.1))
+
+
+# --- #217: one check, one prediction helper, a narrower optimize() ------------
+
+
+@pytest.mark.parametrize(
+    "kwargs, match",
+    [({"llm": Mock()}, "No metric provided"), ({"metric": Mock()}, "No llm provided")],
+)
+def test_genetic_optimize_checks_metric_and_llm_first(kwargs, match):
+    from ragas.optimizers.genetic import GeneticOptimizer
+
+    with pytest.raises(ValueError, match=match):
+        GeneticOptimizer(**kwargs).optimize(MagicMock(), MSELoss())
+
+
+def test_predict_reads_the_metric_column():
+    opt, evaluate_candidate = _optimizer({"a": [0.25, 0.75]})
+    with patch.object(opt, "evaluate_candidate", side_effect=evaluate_candidate):
+        y_pred = opt._predict(
+            {"p": "a"},
+            MagicMock(),
+            run_config=None,
+            batch_size=None,
+            callbacks=None,
+            raise_exceptions=True,
+            run_id=None,
+            parent_pbar=None,
+        )
+    assert y_pred == [0.25, 0.75]
+
+
+def test_optimize_takes_run_options_by_keyword_only():
+    import inspect
+
+    from ragas.optimizers.base import Optimizer
+    from ragas.optimizers.dspy_optimizer import DSPyOptimizer
+    from ragas.optimizers.genetic import GeneticOptimizer
+
+    for cls in (Optimizer, GeneticOptimizer, DSPyOptimizer):
+        params = inspect.signature(cls.optimize).parameters
+        assert "with_debugging_logs" not in params
+        assert params["config"].default is None
+        assert params["run_config"].kind is inspect.Parameter.KEYWORD_ONLY

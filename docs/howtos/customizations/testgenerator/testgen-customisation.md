@@ -156,6 +156,7 @@ running_async.md
 ```python
 from dataclasses import dataclass
 import typing as t
+from ragas.testset.graph_queries import find_two_nodes_single_rel
 from ragas.testset.synthesizers.multi_hop.base import (
     MultiHopQuerySynthesizer,
     MultiHopScenario,
@@ -179,10 +180,11 @@ class MyMultiHopQuery(MultiHopQuerySynthesizer):
     ) -> t.List[MultiHopScenario]:
 
         # query and get (node_a, rel, node_b) to create multi-hop queries
-        results = kg.find_two_nodes_single_rel(
+        results = find_two_nodes_single_rel(
+            knowledge_graph,
             relationship_condition=lambda rel: (
                 True if rel.type == "keyphrases_overlap" else False
-            )
+            ),
         )
 
         num_sample_per_triplet = max(1, n // len(results))

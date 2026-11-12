@@ -705,6 +705,95 @@ The legacy metrics, LLM and embedding wrappers and prompt classes are deleted, n
 - **⚠ silent:** under `local_dir`, a file without an image extension is no longer opened. It is sent as text, even if it holds an image.
 - Other URL schemes, such as `ftp://`, raise instead of being treated as file paths.
 
+## Custom backends implement `_load`, `_save` and `_list` ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+`BaseBackend` used to have six abstract methods (`load_dataset`, `load_experiment`, `save_dataset`, `save_experiment`, `list_datasets`, `list_experiments`), and every backend wrote the same six one-line wrappers. Now the six are concrete, and a backend implements three abstract methods that take the store, `kind` (`"datasets"` or `"experiments"`):
+
+- `_load(kind, name)`, `_save(kind, name, data, data_model)` and `_list(kind)`. A custom backend that only defines the six public methods can no longer be instantiated (`TypeError: Can't instantiate abstract class`); rename them to these three.
+- The new `ragas.backends.FileBackend(root_dir)` is the base for one-file-per-name backends: set `suffix` and implement `_read(path)` and `_write(path, data)`. `LocalCSVBackend` and `LocalJSONLBackend` are built on it.
+- The private helpers `_get_data_dir()`, `_get_file_path()` (now `FileBackend._path(kind, name)`) and `LocalJSONLBackend._serialize_datetime()` are gone, as are `GDriveBackend`'s `_load_data_from_spreadsheet()`, `_save_data_to_spreadsheet()` and `_list_data_names()`.
+- The registry names, on-disk formats and error messages are unchanged. See [Storage backends](../customizations/storage_backends.md#adding-a-backend).
+
+## `run_async_tasks()` returns results in order and runs on `Executor` ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+`ragas.async_utils.run_async_tasks()` had its own copy of `Executor`'s batching, progress-bar and cancellation loop. It is now a thin wrapper over `Executor`, and `@experiment`'s `arun()` runs its rows through `concurrent_results()` instead of its own semaphore-and-`as_completed` loop.
+
+- `run_async_tasks()` returns results in the order of `tasks`; they used to come back in completion order. Errors are unchanged: with `fail_fast=True` the first failure cancels the rest and is raised; without it every task runs and the first error to happen is raised at the end.
+- Its unused keyword argument `cancel_check` is removed. To stop a run early, use `Executor` and call `executor.cancel()`.
+- `arun()`'s `max_workers`, `raise_exceptions`, `save_partial`, ordering and cancellation behave as before.
+
+## `EvaluationDataset`: one rule for sample types, `from_dict` takes columns ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+Which sample class a row becomes was decided in three places. It is now `ragas.dataset_schema.sample_type_for(row)`: a row whose `user_input` is a list (of messages) is a `MultiTurnSample`, any other row a `SingleTurnSample`. `SAMPLE_TYPES` lists the two classes.
+
+- `EvaluationDataset.from_list()` decides per row. It used to look only at the first row's `user_input` and build every row as that type. A list mixing single- and multi-turn rows now raises `ValueError: Sample at index N is of type ...`; it used to raise a pydantic validation error on the first row that didn't fit.
+- `EvaluationDataset.from_dict()` takes columns, `{"user_input": [...], "response": [...]}`, as its `Dict` annotation said, and calls `from_list()`. It used to iterate its argument as a list of rows, so only a list worked and a real dict raised `TypeError`. Pass a list of rows to `from_list()`; `from_dict()` raises `TypeError` for one.
+- `EvaluationDataset.backend` and `.name`, and `from_list()`'s `backend=` and `name=` arguments, are removed. Nothing read them. For a named dataset saved to a backend, use `ragas.Dataset`.
+- `ragas.validation.get_supported_metric_type()` is removed. `evaluate()` reports an unsupported sample class as `The metric '<name>' does not support the sample type <class>`, instead of `Unsupported sample type <class>`.
+
+## Names moved out of `ragas.utils` ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+`ragas.utils` is split up. Nothing is re-exported from the old location:
+
+| Was | Now |
+|---|---|
+| `ragas.utils.MemorableNames`, `memorable_names`, `create_nano_id` | `ragas.names` |
+| `ragas.utils.async_to_sync` | `ragas.async_utils.async_to_sync` |
+| `ragas.utils.convert_v1_to_v2_dataset`, `REQUIRED_COLS_v1` | `ragas.validation` |
+| `ragas.utils.convert_row_v1_to_v2`, `convert_v2_to_v1_dataset` | Removed: nothing used them |
+
+## `Dataset.train_test_split()` no longer shuffles the dataset or the global `random` ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+With `random_state` set, `train_test_split()` called `random.seed(random_state)` and shuffled the dataset's own rows in place. Now it shuffles a copy with `random.Random(random_state)`.
+
+- For a given seed and dataset, the same rows land in each split as before.
+- The dataset keeps its row order, and the global `random` state is not reseeded. Code that relied on `train_test_split()` seeding `random` for later calls must seed it itself.
+- Calling it twice with the same seed now gives the same split. It used to shuffle the already-shuffled rows again, so the second call gave a different split.
+- With `random_state=None` the rows are not shuffled, as before: the last `test_size` of them are the test split.
+
+## `ragas.llms.base` is split into modules ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+`llm_factory()`, `InstructorLLM`, `InstructorBaseRagasLLM`, `InstructorModelArgs`, `DEFAULT_LLM_MODEL` and `default_llm` import from `ragas.llms` and `ragas.llms.base` as before. Parameter mapping, cache keys and scores are unchanged.
+
+- `is_reasoning_model` moved to `ragas.llms.provider_rules` and is exported from `ragas.llms`: use `from ragas.llms import is_reasoning_model`. `from ragas.llms.base import is_reasoning_model` raises `ImportError`.
+- The per-provider parameter rules are `ragas.llms.provider_rules.PROVIDER_RULES`, a list of rule objects where the first match wins. The `InstructorLLM._map_google_params`, `_map_anthropic_params`, `_map_openai_params` and `_map_litellm_defaults` methods are gone; `_map_provider_params` still applies them. Claude's sampling warning is logged by `ragas.llms.provider_rules`.
+- `InstructorLLM(..., is_async=...)` says whether `client` is async. `llm_factory()` sets it. Without it, `InstructorLLM` checks whether `client.chat.completions.create` is a coroutine function, which holds for instructor's `AsyncInstructor`. It no longer looks inside instructor's closures or at `client.client`. If you construct `InstructorLLM` around your own client and it is detected wrongly, pass `is_async=`.
+- With `provider="google"`, `InstructorLLM` calls `client.chat.completions.create`, like every other provider, instead of `client.create`. On an instructor client these are the same method.
+
+## `DiscreteMetric`, `NumericMetric` and `RankingMetric`: one scoring path and range checks ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+These metrics, and `SimpleLLMMetric` (`LLMMetric`) subclasses, were refactored. Saving, loading and alignment moved to their own modules; the public methods stay.
+
+- **⚠ silent:** `score()` now runs `ascore()`, so it calls the LLM's `agenerate()`, never `generate()`. `llm_factory()` LLMs support both, with sync or async clients, so most code is unaffected. A custom LLM object needs `agenerate()`. `result.traces["input"]` is now the formatted prompt from `score()` too; it used to hold the keyword arguments.
+- `ascore()` and `score()` check the LLM's value against `allowed_values` and raise `ValueError` when it is outside them. That means a `NumericMetric` value outside its range, or a `RankingMetric` list of the wrong length. Before, the value was returned as is. Under `evaluate()` and `@experiment` this follows `raise_exceptions`, like any other metric error: it is raised, or the row has no score and the error is logged. `DiscreteMetric` values were already restricted by its response model. See [Score changes](score_changes.md).
+- A metric with no prompt raises `ValueError` instead of a bare `Exception`.
+- `load()` checks the saved metric type in the base class, so `LLMMetric.load()` and a custom subclass's `load()` reject another class's file too. The `DiscreteMetric`/`NumericMetric`/`RankingMetric` overrides are unchanged. Files saved by earlier versions load as before.
+- A `NumericMetric` with `allowed_values=range(...)` can now be saved. It used to raise `TypeError`. The range is written as `{"range": [start, stop, step]}`, which earlier versions can't load.
+- `align()` and `align_and_validate()` take `max_similar_examples` and `similarity_threshold` as named arguments. Other keyword arguments raise `TypeError`; they were ignored before. String values are no longer converted to numbers. The aligner itself is `ragas.metrics.alignment.Aligner`.
+- `validate_alignment()` pairs each label with its prediction before dropping rows where either is missing. Before, missing labels and missing predictions were dropped from separate lists, so after a gap the labels were compared with other rows' predictions. `correlation` and `agreement_rate` change for test sets with missing labels or predictions. A test set with no complete row raises `ValueError` instead of `ZeroDivisionError`. Its `mapping` argument defaults to `None`.
+- Persistence lives in `ragas.metrics.serialization`. The private `SimpleLLMMetric` helpers `_serialize_prompt`, `_deserialize_prompt`, `_get_metric_config`, `_serialize_response_model_info`, `_read_metric_type` and `_validate_metric_type` are gone.
+- `Prompt`, `DynamicFewShotPrompt` and metric `save()`/`load()` share one gzip-aware JSON helper (`ragas.prompt.utils.read_json_file`/`write_json_file`). A file that is not valid UTF-8 now raises `ValueError("Cannot load ...")`, like other unreadable files, instead of `UnicodeDecodeError`.
+
+## AG-UI: one tool-argument parser and a separate SSE client ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+- Streamed (`ToolCallStart`/`Args`/`End`) and chunked (`ToolCallChunk`) tool calls now parse their arguments the same way as `MessagesSnapshot` tool calls. Arguments that are valid JSON but not an object, such as `[1, 2]` or `5`, are kept as `{"raw_args": "<the text>"}` with a warning. They used to fail `ToolCall` validation and stop the conversion. Invalid JSON is kept as `raw_args`, as before.
+- With `metadata=True`, a `ToolMessage` now gets the current `step_name`, like text messages.
+- The SSE client moved to `ragas.integrations.sse.post_sse_json`, and `call_ag_ui_endpoint()` uses it. It also accepts `data:` lines with no space after the colon, as the SSE spec allows. Without httpx, the `ImportError` now comes from the SSE client.
+
+## Testset generation and optimizers: one code path per job ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+`TestsetGenerator`'s three entry points now share one graph builder and one check of their inputs.
+
+- `generate_with_docs()` and `generate_with_chunks()` take `num_personas` and `batch_size`, as `generate()` does. They used to always use 3 personas and no batching.
+- An LLM and an embedding model are needed only to build the default transforms. With your own `transforms`, `generate_with_docs()` and `generate_with_chunks()` no longer raise `ValueError` when the generator has no embedding model.
+- `generate_with_docs(transforms=[])` applies no transforms, as `generate_with_chunks(transforms=[])` already did. It used to replace an empty list with the default transforms.
+- `BaseSynthesizer.is_applicable(kg)` says whether a synthesizer can work on a knowledge graph. It returns True unless overridden. `default_query_distribution(kg=...)` calls it, where it used to call each synthesizer's `get_node_clusters()`. The three built-in synthesizers give the same answers as before. The shared theme extraction, persona matching, combination sampling and sample generation moved to `BaseSynthesizer` helpers. The generated testsets are unchanged.
+- The seven LLM extractors (`SummaryExtractor`, `TitleExtractor`, `TopicDescriptionExtractor`, `KeyphrasesExtractor`, `HeadlinesExtractor`, `NERExtractor`, `ThemesExtractor`) are built on two shared bases. Their fields, prompts and outputs are unchanged. `LLMBasedExtractor` no longer has the `merge_if_possible` field, which nothing read. Passing it raises `TypeError`.
+- `CosineSimilarityBuilder` uses the base `RelationshipBuilder` execution plan, as the other relationship builders do. A node without an embedding, or embeddings of different lengths, now raise `ValueError` when the transform runs, not when `apply_transforms()` builds the plan. The relationships built are unchanged.
+- `KnowledgeGraph.find_n_indirect_clusters()` and `KnowledgeGraph.find_two_nodes_single_rel()` moved to `ragas.testset.graph_queries` as functions that take the graph first: `find_n_indirect_clusters(kg, n, ...)` and `find_two_nodes_single_rel(kg, ...)`. The methods are removed. The results are unchanged.
+- `Optimizer.optimize()`, `GeneticOptimizer.optimize()` and `DSPyOptimizer.optimize()` are now `optimize(dataset, loss, config=None, *, run_config=None, batch_size=None, callbacks=None, raise_exceptions=True)`. `config` is optional, and the run options are keyword-only. The `with_debugging_logs` argument, which no optimizer read, is removed. `metric.train()` is unchanged.
+- `GeneticOptimizer` checks its `metric` and `llm` once, when `optimize()` starts. Its steps no longer check them again.
+
 ## Shared metric helpers ([#217](https://github.com/arpieb/ragas-ng/issues/217))
 
 The collections metrics now share helpers instead of carrying copies. Metric class names, constructor arguments and `ascore()` signatures are unchanged. Score effects are in [Metric score changes](score_changes.md#one-f-score-edge-case-policy-217).

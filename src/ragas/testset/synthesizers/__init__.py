@@ -33,7 +33,7 @@ def default_query_distribution(
         available_queries = []
         for query in default_queries:
             try:
-                if query.get_node_clusters(kg):
+                if query.is_applicable(kg):
                     available_queries.append(query)
             except Exception as e:
                 # Keep broad catch minimal for resilience; log and skip.

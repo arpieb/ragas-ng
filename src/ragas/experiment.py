@@ -10,11 +10,12 @@ from pathlib import Path
 from pydantic import BaseModel
 from tqdm import tqdm
 
-from ragas.async_utils import run_sync
+from ragas.async_utils import concurrent_results, run_sync
 from ragas.backends.base import BaseBackend
 from ragas.callbacks import ChainType, traced
 from ragas.dataset import Dataset, DataTable
-from ragas.utils import find_git_root, memorable_names
+from ragas.names import memorable_names
+from ragas.utils import find_git_root
 
 logger = logging.getLogger(__name__)
 
@@ -265,14 +266,8 @@ class ExperimentWrapper:
         with traced(
             f"experiment {name}", {"rows": len(rows)}, ChainType.EXPERIMENT
         ) as experiment_run:
-            # Set by the first failure when fail_fast, before that row gives
-            # up its worker slot, so a row waiting for the slot never starts.
-            stop = False
 
-            async def run_row(index: int, item: t.Any):
-                nonlocal stop
-                if stop:
-                    return index, None, None
+            async def run_row(index: int, item: t.Any) -> t.Tuple[int, t.Any]:
                 try:
                     with traced(
                         f"row {index}",
@@ -290,57 +285,46 @@ class ExperimentWrapper:
                                 self.func, item, *args, **kwargs
                             )
                         row_run.end({"output": result})
-                    return index, result, None
                 except Exception as e:
-                    if fail_fast:
-                        stop = True
-                    return index, None, e
-
-            semaphore = None if limit == -1 else asyncio.Semaphore(limit)
-
-            async def start_row(index: int, item: t.Any):
-                if semaphore is None:
-                    return await run_row(index, item)
-                async with semaphore:
-                    return await run_row(index, item)
+                    raise _RowFailed(index, e) from e
+                return index, result
 
             results: t.List[t.Any] = [None] * len(rows)
             failures = 0
             first_error: t.Optional[BaseException] = None
             failed_index = -1
-            tasks = [
-                asyncio.create_task(start_row(i, item)) for i, item in enumerate(rows)
-            ]
             progress_bar = tqdm(total=len(rows), desc="Running experiment")
             try:
-                for future in asyncio.as_completed(tasks):
-                    index, result, error = await future
-                    if error is not None and fail_fast:
-                        first_error = error
-                        failed_index = index
-                        break
-                    if error is not None:
-                        failures += 1
-                        logger.warning(
-                            "Experiment %r: row %d failed and is not saved: %s: %s",
-                            name,
-                            index,
-                            type(error).__name__,
-                            error,
-                        )
-                    else:
-                        results[index] = result
-                    progress_bar.update(1)
+                # With fail_fast, the first failure stops new rows from
+                # starting (before it gives up its worker slot). Leaving the
+                # block -- after a fail-fast stop, or if arun itself is
+                # cancelled -- cancels the rows still running and waits for
+                # them, so their runs end before the experiment's.
+                async with concurrent_results(
+                    [run_row(i, item) for i, item in enumerate(rows)],
+                    limit,
+                    fail_fast=fail_fast,
+                ) as finished:
+                    async for outcome in finished:
+                        if isinstance(outcome, _RowFailed):
+                            if fail_fast:
+                                first_error = outcome.error
+                                failed_index = outcome.index
+                                break
+                            failures += 1
+                            logger.warning(
+                                "Experiment %r: row %d failed and is not saved: %s: %s",
+                                name,
+                                outcome.index,
+                                type(outcome.error).__name__,
+                                outcome.error,
+                            )
+                        else:
+                            index, result = outcome
+                            results[index] = result
+                        progress_bar.update(1)
             finally:
                 progress_bar.close()
-                # After a fail-fast stop, or if arun itself is cancelled: cancel
-                # the rows still running and wait for them, so their runs end
-                # before the experiment's.
-                pending = [task for task in tasks if not task.done()]
-                for task in pending:
-                    task.cancel()
-                if pending:
-                    await asyncio.gather(*pending, return_exceptions=True)
             if first_error is not None:
                 if keep_partial:
                     saved = _save_in_order(experiment_view, results)
@@ -405,6 +389,15 @@ class ExperimentWrapper:
                 **kwargs,
             )
         )
+
+
+class _RowFailed(Exception):
+    """A row's exception and index, as ``concurrent_results`` yields them."""
+
+    def __init__(self, index: int, error: Exception):
+        super().__init__(index, error)
+        self.index = index
+        self.error = error
 
 
 def _save_in_order(experiment_view: "Experiment", results: t.List[t.Any]) -> int:

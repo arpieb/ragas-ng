@@ -1,0 +1,56 @@
+{
+  "format_version": "1.0",
+  "metric_type": "DiscreteMetric",
+  "name": "judge",
+  "prompt": {
+    "type": "DynamicFewShotPrompt",
+    "instruction": "Judge {response}.",
+    "examples": [
+      {
+        "input": {
+          "response": "great"
+        },
+        "output": {
+          "judge": "pass"
+        }
+      }
+    ],
+    "max_similar_examples": 2,
+    "similarity_threshold": 0.5
+  },
+  "config": {
+    "allowed_values": [
+      "pass",
+      "fail"
+    ]
+  },
+  "response_model_info": {
+    "class_name": "DiscreteResponseModel",
+    "module": "ragas.metrics.base",
+    "schema": {
+      "properties": {
+        "reason": {
+          "description": "Reasoning for the value",
+          "title": "Reason",
+          "type": "string"
+        },
+        "value": {
+          "description": "The value predicted",
+          "enum": [
+            "pass",
+            "fail"
+          ],
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reason",
+        "value"
+      ],
+      "title": "DiscreteResponseModel",
+      "type": "object"
+    },
+    "note": "You must provide this model when loading"
+  }
+}

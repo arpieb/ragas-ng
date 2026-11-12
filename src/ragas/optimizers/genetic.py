@@ -197,15 +197,16 @@ class GeneticOptimizer(Optimizer):
         self,
         dataset: SingleMetricAnnotation,
         loss: Loss,
-        config: t.Dict[t.Any, t.Any],
+        config: t.Optional[t.Mapping[str, t.Any]] = None,
+        *,
         run_config: t.Optional[RunConfig] = None,
         batch_size: t.Optional[int] = None,
         callbacks: t.Optional[Callbacks] = None,
-        with_debugging_logs=False,
         raise_exceptions: bool = True,
     ) -> t.Dict[str, BasePrompt]:
         callbacks = callbacks or []
         metric, _ = self._require()
+        config = config or {}
 
         if len(dataset) < MIN_ANNOTATIONS:
             raise ValueError(
@@ -362,8 +363,6 @@ class GeneticOptimizer(Optimizer):
     async def _reverse_engineer_instruction(
         self, batch: t.List[SampleAnnotation], callbacks: Callbacks = None
     ) -> t.Dict[str, str]:
-        _, llm = self._require()
-
         prompt_annotations = {key: [] for key in batch[0]["prompts"].keys()}
         candidates = {}
         for sample in batch:
@@ -384,7 +383,7 @@ class GeneticOptimizer(Optimizer):
         for prompt_name, examples in prompt_annotations.items():
             formatted_examples = FormattedExamples.from_examples(examples)
             instruction = await self.reverse_engineer_prompt.generate(
-                data=formatted_examples, llm=llm, callbacks=callbacks
+                data=formatted_examples, llm=self._llm, callbacks=callbacks
             )
             candidates[prompt_name] = instruction.instruction
 
@@ -393,11 +392,9 @@ class GeneticOptimizer(Optimizer):
     async def _cross_over_prompts(
         self, parent_1: str, parent_2: str, callbacks: Callbacks = None
     ) -> str:
-        _, llm = self._require()
-
         parents = ParentPrompts(parent_1=parent_1, parent_2=parent_2)
         offspring = await self.cross_over_prompt.generate(
-            data=parents, llm=llm, callbacks=callbacks
+            data=parents, llm=self._llm, callbacks=callbacks
         )
         return offspring.instruction
 
@@ -407,8 +404,7 @@ class GeneticOptimizer(Optimizer):
         The metric under optimization is never changed, so candidates scored
         concurrently can't overwrite each other's instructions.
         """
-        metric, _ = self._require()
-        scored = copy.copy(metric)
+        scored = copy.copy(self._metric)
         scored.set_prompts(**self._with_instructions(candidate))
         return scored
 
@@ -508,8 +504,6 @@ class GeneticOptimizer(Optimizer):
         feedbacks: t.Dict[str, t.List[str]],
         callbacks: Callbacks = None,
     ) -> t.Dict[str, str]:
-        _, llm = self._require()
-
         improved_candidate = {}
         for key in candidate.keys():
             feedback = feedbacks[key]
@@ -518,7 +512,7 @@ class GeneticOptimizer(Optimizer):
                     instruction=candidate[key], feedbacks=feedback
                 )
                 output = await self.feedback_mutation_prompt.generate(
-                    data=feedback_input, llm=llm, callbacks=callbacks
+                    data=feedback_input, llm=self._llm, callbacks=callbacks
                 )
                 improved_candidate[key] = output.instruction
             else:
@@ -537,11 +531,9 @@ class GeneticOptimizer(Optimizer):
         target: t.List[float],
         callbacks: Callbacks = None,
     ) -> t.Dict[str, t.List[str]]:
-        metric, llm = self._require()
-
-        prediction = results.to_pandas()[metric.name].values.tolist()
+        prediction = self._predictions(results)
         indices = [idx for idx in range(len(target)) if target[idx] != prediction[idx]]
-        traces = [trace.get(metric.name, {}) for trace in results.traces]
+        traces = [trace.get(self._metric.name, {}) for trace in results.traces]
         prompts = self._with_instructions(candidate)
         feedback_candidates: t.Dict[str, t.List[str]] = {
             prompt_name: [] for prompt_name in candidate.keys()
@@ -577,7 +569,7 @@ class GeneticOptimizer(Optimizer):
                 instruction=candidate[prompt_name], examples=feedback_data
             )
             feedbacks = await self.feedback_generation_prompt.generate(
-                data=prompt_input, llm=llm, callbacks=callbacks
+                data=prompt_input, llm=self._llm, callbacks=callbacks
             )
             feedback_candidates[prompt_name] = feedbacks.feedbacks
 
@@ -586,9 +578,7 @@ class GeneticOptimizer(Optimizer):
     def _get_evaluation_dataset(
         self, dataset: SingleMetricAnnotation
     ) -> t.Tuple[EvaluationDataset, t.List[float]]:
-        metric, _ = self._require()
-
-        output_type = getattr(metric, "output_type", None)
+        output_type = getattr(self._metric, "output_type", None)
         if output_type is None:
             raise ValueError("No output type provided for the metric.")
 
@@ -669,6 +659,37 @@ class GeneticOptimizer(Optimizer):
             )
         )
 
+    def _predictions(self, results: EvaluationResult) -> t.List[float]:
+        """The metric's score for each sample in ``results``."""
+        values = results.to_pandas()[self._metric.name].values
+        y_pred = values.tolist() if isinstance(values, np.ndarray) else [values]
+        return t.cast(t.List[float], y_pred)
+
+    def _predict(
+        self,
+        candidate: t.Dict[str, str],
+        eval_dataset: EvaluationDataset,
+        *,
+        run_config: t.Optional[RunConfig],
+        batch_size: t.Optional[int],
+        callbacks: t.Optional[Callbacks],
+        raise_exceptions: bool,
+        run_id: t.Optional[UUID],
+        parent_pbar: t.Optional[tqdm],
+    ) -> t.List[float]:
+        """``candidate``'s score for each sample of ``eval_dataset``."""
+        results = self.evaluate_candidate(
+            candidate=candidate,
+            eval_dataset=eval_dataset,
+            run_config=run_config,
+            batch_size=batch_size,
+            callbacks=callbacks,
+            raise_exceptions=raise_exceptions,
+            run_id=run_id,
+            parent_pbar=parent_pbar,
+        )
+        return self._predictions(results)
+
     def evaluate_fitness(
         self,
         *,
@@ -681,8 +702,6 @@ class GeneticOptimizer(Optimizer):
         raise_exceptions: bool = True,
         parent_pbar: t.Optional[tqdm] = None,
     ) -> t.List[float]:
-        metric, _ = self._require()
-
         fitness_scores = []
 
         eval_dataset, y_true = self._get_evaluation_dataset(dataset)
@@ -694,9 +713,9 @@ class GeneticOptimizer(Optimizer):
         )
         run_id = initialize_population_rm.run_id
         for candidate in candidates:
-            results = self.evaluate_candidate(
-                candidate=candidate,
-                eval_dataset=eval_dataset,
+            y_pred = self._predict(
+                candidate,
+                eval_dataset,
                 run_config=run_config,
                 batch_size=batch_size,
                 callbacks=initialize_population_grp,
@@ -704,10 +723,6 @@ class GeneticOptimizer(Optimizer):
                 run_id=run_id,
                 parent_pbar=parent_pbar,
             )
-            values = results.to_pandas()[metric.name].values
-            y_pred = values.tolist() if isinstance(values, np.ndarray) else [values]
-            y_pred = t.cast(t.List[float], y_pred)
-
             # Loss takes (predicted, actual). fitness() negates lower-is-better
             # losses, so a larger value is always better.
             fitness_scores.append(loss_fn.fitness(y_pred, y_true))
@@ -747,8 +762,6 @@ class GeneticOptimizer(Optimizer):
         raise_exceptions: bool = True,
         parent_pbar: t.Optional[tqdm] = None,
     ):
-        metric, _ = self._require()
-
         eval_dataset, y_true = self._get_evaluation_dataset(dataset)
 
         cross_over_rm, cross_over_grp = new_group(
@@ -759,9 +772,9 @@ class GeneticOptimizer(Optimizer):
         run_id = cross_over_rm.run_id
         prediction_vectors = []
         for candidate in candidates:
-            results = self.evaluate_candidate(
-                candidate=candidate,
-                eval_dataset=eval_dataset,
+            y_pred = self._predict(
+                candidate,
+                eval_dataset,
                 run_config=run_config,
                 batch_size=batch_size,
                 callbacks=cross_over_grp,
@@ -769,7 +782,6 @@ class GeneticOptimizer(Optimizer):
                 run_id=run_id,
                 parent_pbar=parent_pbar,
             )
-            y_pred = results.to_pandas()[metric.name].values.tolist()
             prediction = [int(pred == true) for pred, true in zip(y_pred, y_true)]
             prediction_vectors.append(prediction)
 

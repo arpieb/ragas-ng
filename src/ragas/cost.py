@@ -81,54 +81,64 @@ class TokenUsage(BaseModel):
             return False
 
 
-def get_token_usage_for_openai(completion: t.Any) -> TokenUsage:
-    """OpenAI-shaped responses: ``usage.prompt_tokens`` / ``usage.completion_tokens``."""
-    if _read(completion, "usage") is None:
-        logger.info("No usage found on the completion")
-        return TokenUsage(input_tokens=0, output_tokens=0)
-    return TokenUsage(
-        input_tokens=_read(completion, "usage", "prompt_tokens", default=0),
-        output_tokens=_read(completion, "usage", "completion_tokens", default=0),
-        model=_read(completion, "model", default=""),
-    )
+def _usage_parser(
+    name: str,
+    input_tokens: str,
+    output_tokens: str,
+    model: t.Tuple[str, ...] = ("model",),
+    doc: str = "",
+) -> TokenUsageParser:
+    """A parser reading ``usage.<input_tokens>`` / ``usage.<output_tokens>``
+    and the model name from the first of ``model`` that is set."""
+
+    def parse(completion: t.Any) -> TokenUsage:
+        if _read(completion, "usage") is None:
+            logger.info("No usage found on the completion")
+            return TokenUsage(input_tokens=0, output_tokens=0)
+        model_name = next(
+            (
+                value
+                for value in (_read(completion, field) for field in model)
+                if value is not None
+            ),
+            "",
+        )
+        return TokenUsage(
+            input_tokens=_read(completion, "usage", input_tokens, default=0),
+            output_tokens=_read(completion, "usage", output_tokens, default=0),
+            model=model_name,
+        )
+
+    parse.__name__ = parse.__qualname__ = f"get_token_usage_for_{name}"
+    parse.__doc__ = doc
+    return parse
 
 
-def get_token_usage_for_anthropic(completion: t.Any) -> TokenUsage:
-    """Anthropic names them ``input_tokens`` / ``output_tokens``."""
-    if _read(completion, "usage") is None:
-        logger.info("No usage found on the completion")
-        return TokenUsage(input_tokens=0, output_tokens=0)
-    return TokenUsage(
-        input_tokens=_read(completion, "usage", "input_tokens", default=0),
-        output_tokens=_read(completion, "usage", "output_tokens", default=0),
-        model=_read(completion, "model", default=""),
-    )
-
-
-def get_token_usage_for_bedrock(completion: t.Any) -> TokenUsage:
-    """Bedrock is OpenAI-shaped but identifies the model as ``model_id``."""
-    if _read(completion, "usage") is None:
-        logger.info("No usage found on the completion")
-        return TokenUsage(input_tokens=0, output_tokens=0)
-    return TokenUsage(
-        input_tokens=_read(completion, "usage", "prompt_tokens", default=0),
-        output_tokens=_read(completion, "usage", "completion_tokens", default=0),
-        model=_read(
-            completion, "model_id", default=_read(completion, "model", default="")
-        ),
-    )
-
-
-def get_token_usage_for_azure_ai(completion: t.Any) -> TokenUsage:
-    """Azure AI uses the Anthropic-style names with an OpenAI-style envelope."""
-    if _read(completion, "usage") is None:
-        logger.info("No usage found on the completion")
-        return TokenUsage(input_tokens=0, output_tokens=0)
-    return TokenUsage(
-        input_tokens=_read(completion, "usage", "input_tokens", default=0),
-        output_tokens=_read(completion, "usage", "output_tokens", default=0),
-        model=_read(completion, "model", default=""),
-    )
+get_token_usage_for_openai = _usage_parser(
+    "openai",
+    "prompt_tokens",
+    "completion_tokens",
+    doc="OpenAI-shaped responses: ``usage.prompt_tokens`` / ``usage.completion_tokens``.",
+)
+get_token_usage_for_anthropic = _usage_parser(
+    "anthropic",
+    "input_tokens",
+    "output_tokens",
+    doc="Anthropic names them ``input_tokens`` / ``output_tokens``.",
+)
+get_token_usage_for_bedrock = _usage_parser(
+    "bedrock",
+    "prompt_tokens",
+    "completion_tokens",
+    model=("model_id", "model"),
+    doc="Bedrock is OpenAI-shaped but identifies the model as ``model_id``.",
+)
+get_token_usage_for_azure_ai = _usage_parser(
+    "azure_ai",
+    "input_tokens",
+    "output_tokens",
+    doc="Azure AI uses the Anthropic-style names with an OpenAI-style envelope.",
+)
 
 
 class TokenUsageCollector:
@@ -152,6 +162,15 @@ class TokenUsageCollector:
             "LLM does not report usage (only LLMs from llm_factory() do); "
             "reporting 0."
         )
+
+    def _totals_by_model(self) -> t.Dict[str, TokenUsage]:
+        """Usage summed per model, in first-seen order."""
+        totals: t.Dict[str, TokenUsage] = {}
+        for usage in self.usage_data:
+            totals[usage.model] = (
+                totals[usage.model] + usage if usage.model in totals else usage
+            )
+        return totals
 
     def record(self, raw_completion: t.Any) -> None:
         """Record usage for one completion. Never raises."""
@@ -179,14 +198,7 @@ class TokenUsageCollector:
             self._warn_no_usage()
             return 0.0
 
-        # sum up everything
-        first_usage = self.usage_data[0]
-        total_table: t.Dict[str, TokenUsage] = {first_usage.model: first_usage}
-        for usage in self.usage_data[1:]:
-            if usage.model in total_table:
-                total_table[usage.model] += usage
-            else:
-                total_table[usage.model] = usage
+        total_table = self._totals_by_model()
 
         # caculate total cost
         # if only one model is used
@@ -221,13 +233,7 @@ class TokenUsageCollector:
         if not self.usage_data:
             self._warn_no_usage()
             return TokenUsage(input_tokens=0, output_tokens=0)
-        first_usage = self.usage_data[0]
-        total_table: t.Dict[str, TokenUsage] = {first_usage.model: first_usage}
-        for usage in self.usage_data[1:]:
-            if usage.model in total_table:
-                total_table[usage.model] += usage
-            else:
-                total_table[usage.model] = usage
+        total_table = self._totals_by_model()
 
         if len(total_table) == 1:
             return list(total_table.values())[0]

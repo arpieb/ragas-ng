@@ -3,11 +3,8 @@ from __future__ import annotations
 import itertools
 import logging
 import os
-import random
 import re
-import string
 import typing as t
-import uuid
 import warnings
 from datetime import datetime
 from functools import lru_cache
@@ -15,7 +12,6 @@ from pathlib import Path
 
 import numpy as np
 import tiktoken
-from datasets import Dataset
 from rich.console import Console
 from tqdm.auto import tqdm
 
@@ -181,29 +177,6 @@ def get_from_dict(data_dict: t.Dict, key: str, default=None) -> t.Any:
     return current
 
 
-REQUIRED_COLS_v1 = {
-    "user_input": "question",
-    "retrieved_contexts": "contexts",
-    "response": "answer",
-    "reference": "ground_truth",
-}
-
-
-def convert_row_v1_to_v2(row: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-    required_cols_v2 = {k: v for v, k in REQUIRED_COLS_v1.items()}
-    return {required_cols_v2[k]: v for k, v in row.items() if k in required_cols_v2}
-
-
-def convert_v1_to_v2_dataset(dataset: Dataset) -> Dataset:
-    columns_map = {v: k for k, v in REQUIRED_COLS_v1.items() if v in dataset.features}
-    return dataset.rename_columns(columns_map)
-
-
-def convert_v2_to_v1_dataset(dataset: Dataset) -> Dataset:
-    columns_map = {k: v for k, v in REQUIRED_COLS_v1.items() if k in dataset.features}
-    return dataset.rename_columns(columns_map)
-
-
 def camel_to_snake(name):
     """
     Convert a camelCase string to snake_case.
@@ -365,220 +338,6 @@ base_logger = set_logging_level()
 console = Console()
 
 
-class MemorableNames:
-    """Generator for memorable, unique names for experiments and datasets."""
-
-    def __init__(self):
-        # List of adjectives (similar to what Docker uses)
-        self.adjectives = [
-            "admiring",
-            "adoring",
-            "affectionate",
-            "agitated",
-            "amazing",
-            "angry",
-            "awesome",
-            "blissful",
-            "bold",
-            "boring",
-            "brave",
-            "busy",
-            "charming",
-            "clever",
-            "cool",
-            "compassionate",
-            "competent",
-            "condescending",
-            "confident",
-            "cranky",
-            "crazy",
-            "dazzling",
-            "determined",
-            "distracted",
-            "dreamy",
-            "eager",
-            "ecstatic",
-            "elastic",
-            "elated",
-            "elegant",
-            "eloquent",
-            "epic",
-            "fervent",
-            "festive",
-            "flamboyant",
-            "focused",
-            "friendly",
-            "frosty",
-            "gallant",
-            "gifted",
-            "goofy",
-            "gracious",
-            "happy",
-            "hardcore",
-            "heuristic",
-            "hopeful",
-            "hungry",
-            "infallible",
-            "inspiring",
-            "jolly",
-            "jovial",
-            "keen",
-            "kind",
-            "laughing",
-            "loving",
-            "lucid",
-            "magical",
-            "mystifying",
-            "modest",
-            "musing",
-            "naughty",
-            "nervous",
-            "nifty",
-            "nostalgic",
-            "objective",
-            "optimistic",
-            "peaceful",
-            "pedantic",
-            "pensive",
-            "practical",
-            "priceless",
-            "quirky",
-            "quizzical",
-            "relaxed",
-            "reverent",
-            "romantic",
-            "sad",
-            "serene",
-            "sharp",
-            "silly",
-            "sleepy",
-            "stoic",
-            "stupefied",
-            "suspicious",
-            "sweet",
-            "tender",
-            "thirsty",
-            "trusting",
-            "upbeat",
-            "vibrant",
-            "vigilant",
-            "vigorous",
-            "wizardly",
-            "wonderful",
-            "xenodochial",
-            "youthful",
-            "zealous",
-            "zen",
-        ]
-
-        # List of influential computer scientists and tech entrepreneurs
-        self.scientists = [
-            "turing",
-            "hopper",
-            "knuth",
-            "torvalds",
-            "ritchie",
-            "thompson",
-            "dijkstra",
-            "kay",
-            "wozniak",
-            "gates",
-            "jobs",
-            "musk",
-            "bezos",
-            "lovelace",
-            "berners_lee",
-            "cerf",
-            "gosling",
-            "kernighan",
-            "lamport",
-            "mccarthy",
-            "minsky",
-            "rossum",
-            "backus",
-            "engelbart",
-            "hamilton",
-            "chomsky",
-            "shannon",
-            "zuckerberg",
-            "page",
-            "brin",
-            "matsumoto",
-            "stallman",
-            "stroustrup",
-            "cook",
-            "neumann",
-            "babbage",
-            "tanenbaum",
-            "rivest",
-            "shamir",
-            "adleman",
-            "carmack",
-            "andreessen",
-            "ullman",
-            "postel",
-            "huffman",
-            "boole",
-            "curry",
-            "liskov",
-            "wing",
-            "goldwasser",
-            "hoare",
-            "milner",
-            "perlis",
-            "sutherland",
-            "tarjan",
-            "valiant",
-            "yao",
-            "hopcroft",
-            "naur",
-            "wilkes",
-            "codd",
-            "diffie",
-            "hellman",
-            "pearl",
-            "thiel",
-            "narayen",
-            "nadella",
-            "pichai",
-            "dorsey",
-        ]
-
-        self.used_names = set()
-
-    def generate_name(self):
-        """Generate a single memorable name."""
-        adjective = random.choice(self.adjectives)
-        scientist = random.choice(self.scientists)
-        return f"{adjective}_{scientist}"
-
-    def generate_unique_name(self):
-        """Generate a unique memorable name."""
-        attempts = 0
-        max_attempts = 100  # Prevent infinite loops
-
-        while attempts < max_attempts:
-            name = self.generate_name()
-            if name not in self.used_names:
-                self.used_names.add(name)
-                return name
-            attempts += 1
-
-        # If we exhaust our combinations, add a random suffix
-        base_name = self.generate_name()
-        unique_name = f"{base_name}_{random.randint(1000, 9999)}"
-        self.used_names.add(unique_name)
-        return unique_name
-
-    def generate_unique_names(self, count):
-        """Generate multiple unique memorable names."""
-        return [self.generate_unique_name() for _ in range(count)]
-
-
-# Global instance for easy access
-memorable_names = MemorableNames()
-
-
 def find_git_root(start_path: t.Union[str, Path, None] = None) -> Path:
     """Find the root directory of a git repository by traversing up from the start path."""
     # Start from the current directory if no path is provided
@@ -604,37 +363,6 @@ def find_git_root(start_path: t.Union[str, Path, None] = None) -> Path:
     raise ValueError(f"No git repository found in or above {start_path}")
 
 
-def create_nano_id(size: int = 12) -> str:
-    """Generate a short unique identifier."""
-    # Define characters to use (alphanumeric)
-    alphabet = string.ascii_letters + string.digits
-
-    # Generate UUID and convert to int
-    uuid_int = t.cast(int, uuid.uuid4().int)
-
-    # Convert to base62
-    result = ""
-    while uuid_int:
-        uuid_int, remainder = divmod(uuid_int, len(alphabet))
-        result = alphabet[remainder] + result
-
-    # Pad if necessary and return desired length
-    return result[:size]
-
-
-def async_to_sync(async_func):
-    """Convert an async function to a sync function"""
-    import functools
-
-    @functools.wraps(async_func)
-    def sync_wrapper(*args, **kwargs):
-        from ragas.async_utils import run_sync
-
-        return run_sync(async_func(*args, **kwargs))
-
-    return sync_wrapper
-
-
 def get_test_directory():
     """Create a test directory that will be cleaned up on process exit.
 
@@ -642,6 +370,8 @@ def get_test_directory():
         str: Path to test directory
     """
     import tempfile
+
+    from ragas.names import create_nano_id
 
     # Create a directory in the system temp directory
     test_dir = os.path.join(tempfile.gettempdir(), f"ragas_test_{create_nano_id()}")

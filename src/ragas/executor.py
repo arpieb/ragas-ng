@@ -163,27 +163,8 @@ class Executor:
                 # Check for cancellation before processing each batch
                 if self.is_cancelled():
                     break
-
                 progress_manager.update_batch_bar(batch_pbar, i, n_batches, len(batch))
-
-                # Create coroutines per batch
-                coroutines = [
-                    afunc(*args, **kwargs) for afunc, args, kwargs, _ in batch
-                ]
-
-                async with concurrent_results(
-                    coroutines,
-                    max_workers,
-                    cancel_check=self.is_cancelled,
-                    fail_fast=self.raise_exceptions,
-                ) as finished:
-                    async for result in finished:
-                        # raise_exceptions: propagate at once; leaving the
-                        # block cancels the other jobs and waits for them (#207)
-                        if isinstance(result, Exception) and self.raise_exceptions:
-                            raise result
-                        results.append(result)
-                        batch_pbar.update(1)
+                await self._process_coroutines(batch, batch_pbar, results, max_workers)
                 # Update overall progress bar for all futures in this batch
                 overall_pbar.update(len(batch))
 

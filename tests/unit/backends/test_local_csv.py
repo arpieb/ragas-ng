@@ -106,21 +106,15 @@ class TestBasicFunctionality:
         backend = LocalCSVBackend(temp_dir)
         assert backend.root_dir == Path(temp_dir)
 
-    def test_get_data_dir(self, backend):
-        """Test data directory path generation."""
-        datasets_dir = backend._get_data_dir("datasets")
-        experiments_dir = backend._get_data_dir("experiments")
-
-        assert datasets_dir.name == "datasets"
-        assert experiments_dir.name == "experiments"
-
-    def test_get_file_path(self, backend):
+    def test_path(self, backend):
         """Test file path generation."""
-        dataset_path = backend._get_file_path("datasets", "test_dataset")
-        experiment_path = backend._get_file_path("experiments", "test_experiment")
+        dataset_path = backend._path("datasets", "test_dataset")
+        experiment_path = backend._path("experiments", "test_experiment")
 
         assert dataset_path.name == "test_dataset.csv"
+        assert dataset_path.parent.name == "datasets"
         assert experiment_path.name == "test_experiment.csv"
+        assert experiment_path.parent.name == "experiments"
 
     def test_save_and_load_simple_data(self, backend, simple_data):
         """Test basic save and load cycle with simple data."""
@@ -139,8 +133,8 @@ class TestBasicFunctionality:
     def test_directory_creation(self, backend, simple_data):
         """Test automatic directory creation."""
         # Directories shouldn't exist initially
-        datasets_dir = backend._get_data_dir("datasets")
-        experiments_dir = backend._get_data_dir("experiments")
+        datasets_dir = backend.root_dir / "datasets"
+        experiments_dir = backend.root_dir / "experiments"
         assert not datasets_dir.exists()
         assert not experiments_dir.exists()
 
@@ -175,7 +169,7 @@ class TestBasicFunctionality:
         backend.save_dataset("empty_dataset", [])
 
         # Should create empty file
-        file_path = backend._get_file_path("datasets", "empty_dataset")
+        file_path = backend._path("datasets", "empty_dataset")
         assert file_path.exists()
 
         # Loading should return empty list

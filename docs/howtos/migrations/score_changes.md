@@ -293,6 +293,10 @@ The semantic-similarity part of `AnswerCorrectness` was the raw cosine, which sp
 
 Only samples whose response and reference embeddings have a negative cosine score differently (unrelated texts, with some embedding models), and only when the similarity weight is above 0. The score rises by `similarity_weight × |cosine|`, divided by the sum of the weights. For example, factuality 0.5, cosine −1 and `weights=[0.5, 0.5]` scored −0.25 and now scores 0.25. With the default weights `[0.75, 0.25]` and cosine −0.1, the score rises by 0.025.
 
+## NumericMetric and RankingMetric: values outside `allowed_values` are errors ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+A `NumericMetric` value outside its `allowed_values` range, or a `RankingMetric` list of the wrong length, now raises `ValueError` (see [Behavior changes](behavior_changes.md)). Before, the value was returned as the score. Under `evaluate()` with `raise_exceptions=False`, such a row now has no score (NaN) and is left out of the mean. For example, a judge that answered `7` for a `(0.0, 1.0)` metric used to add 7.0 to the mean. In-range values score as before.
+
 ## One F-score edge-case policy ([#217](https://github.com/arpieb/ragas-ng/issues/217))
 
 Five metrics computed precision, recall and F-beta themselves, and they disagreed when a count was zero. They now share `ragas.metrics.utils.precision_recall` / `fbeta_score`:

@@ -35,11 +35,11 @@ class Optimizer(ABC):
         self,
         dataset: SingleMetricAnnotation,
         loss: Loss,
-        config: t.Dict[t.Any, t.Any],
+        config: t.Optional[t.Mapping[str, t.Any]] = None,
+        *,
         run_config: t.Optional[RunConfig] = None,
         batch_size: t.Optional[int] = None,
         callbacks: t.Optional[Callbacks] = None,
-        with_debugging_logs=False,
         raise_exceptions: bool = True,
     ) -> t.Dict[str, BasePrompt]:
         """
@@ -51,16 +51,14 @@ class Optimizer(ABC):
             The annotated samples to optimize against.
         loss : Loss
             The loss used to score candidate prompts.
-        config : Dict[Any, Any]
-            The optimizer configuration.
+        config : Mapping[str, Any], optional
+            The optimizer's settings (``optimizer_config``), by default none.
         run_config : Optional[RunConfig], optional
             Execution limits for the underlying runs, by default None.
         batch_size : Optional[int], optional
             The number of samples per batch, by default None.
         callbacks : Optional[Callbacks], optional
             The callbacks to use during optimization, by default None.
-        with_debugging_logs : bool, optional
-            Whether to emit debugging logs, by default False.
         raise_exceptions : bool, optional
             Whether to raise instead of swallowing errors, by default True.
 
@@ -75,7 +73,11 @@ class Optimizer(ABC):
         raise NotImplementedError("The method `optimize` must be implemented.")
 
     def _require(self) -> t.Tuple[BaseMetric, InstructorBaseRagasLLM]:
-        """``(metric, llm)``, or a ValueError naming the one missing."""
+        """``(metric, llm)``, or a ValueError naming the one missing.
+
+        ``optimize()`` calls this once; its steps then use ``_metric`` and
+        ``_llm``.
+        """
         if self.metric is None:
             raise ValueError("No metric provided for optimization.")
         if self.llm is None:
@@ -87,17 +89,25 @@ class Optimizer(ABC):
             )
         return self.metric, self.llm
 
+    @property
+    def _metric(self) -> BaseMetric:
+        """``metric``, which ``optimize()`` checked with ``_require()``."""
+        return t.cast("BaseMetric", self.metric)
+
+    @property
+    def _llm(self) -> InstructorBaseRagasLLM:
+        """``llm``, which ``optimize()`` checked with ``_require()``."""
+        return t.cast("InstructorBaseRagasLLM", self.llm)
+
     def _with_instructions(
         self, instructions: t.Mapping[str, str]
     ) -> t.Dict[str, BasePrompt]:
         """Copies of the metric's prompts with these instructions."""
-        if self.metric is None:
-            raise ValueError("No metric provided for optimization.")
-        prompts = self.metric.get_prompts()  # copies
+        prompts = self._metric.get_prompts()  # copies
         unknown = set(instructions) - set(prompts)
         if unknown:
             raise ValueError(
-                f"Metric '{self.metric.name}' has no prompt named "
+                f"Metric '{self._metric.name}' has no prompt named "
                 f"{', '.join(repr(n) for n in sorted(unknown))}. Available "
                 f"prompts: {', '.join(sorted(prompts)) or 'none'}."
             )

@@ -27,7 +27,7 @@ Providers shut down model IDs on a schedule. A retired ID fails on the first cal
    ```
    Prose that names a model family ("the o1 series") usually needs rewording, not a swapped ID.
 4. **Regenerate** the `_*.md` pages the report lists from their notebooks.
-5. **If the library default changed,** update `DEFAULT_LLM_MODEL` in `src/ragas/llms/base.py` and add a `score_changes.md` entry: a different judge gives different scores. Error messages and hints build their suggestion from `DEFAULT_LLM_MODEL`, and metric docstrings use `"<model>"`, so nothing else in `src` needs editing.
+5. **If the library default changed,** update `DEFAULT_LLM_MODEL` in `src/ragas/llms/factory.py` and add a `score_changes.md` entry: a different judge gives different scores. Error messages and hints build their suggestion from `DEFAULT_LLM_MODEL`, and metric docstrings use `"<model>"`, so nothing else in `src` needs editing.
 6. **Check:**
    ```bash
    uv run pytest tests/unit/test_retired_models.py -W default

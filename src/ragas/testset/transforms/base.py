@@ -211,7 +211,6 @@ class Extractor(BaseGraphTransformation):
 @dataclass
 class LLMBasedExtractor(Extractor, PromptMixin):
     llm: InstructorBaseRagasLLM = field(default_factory=_default_llm_factory)
-    merge_if_possible: bool = True
     max_token_limit: int = 32000
     tokenizer: BaseTokenizer = field(default_factory=lambda: DEFAULT_TOKENIZER)
 
@@ -342,6 +341,28 @@ class RelationshipBuilder(BaseGraphTransformation):
             A list of new relationships.
         """
         pass
+
+    @staticmethod
+    def _pairs_to_relationships(
+        nodes: t.Sequence[Node],
+        pairs: t.Iterable[t.Tuple[int, int, float]],
+        name: str,
+    ) -> t.List[Relationship]:
+        """A bidirectional ``name`` relationship for each ``(i, j, score)`` pair.
+
+        ``i`` and ``j`` index ``nodes``, and the score is stored as the
+        ``name`` property.
+        """
+        return [
+            Relationship(
+                source=nodes[i],
+                target=nodes[j],
+                type=name,
+                properties={name: score},
+                bidirectional=True,
+            )
+            for i, j, score in pairs
+        ]
 
     def generate_execution_plan(self, kg: KnowledgeGraph) -> t.Sequence[t.Coroutine]:
         """

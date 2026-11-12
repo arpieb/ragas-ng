@@ -99,37 +99,14 @@ class RankingMetric(SimpleLLMMetric, RankingValidator):
     def load(
         cls, path: str, embedding_model: t.Optional["EmbeddingModelType"] = None
     ) -> "RankingMetric":
+        """Load a RankingMetric saved by ``save()``.
+
+        Only narrows ``SimpleLLMMetric.load``: the response model is built
+        from ``allowed_values``, so none is taken. ``embedding_model`` is
+        needed if the saved prompt is a DynamicFewShotPrompt. Raises
+        ``ValueError`` if the file holds another metric type.
         """
-        Load a RankingMetric from a JSON file.
-
-        Parameters:
-        -----------
-        path : str
-            File path to load from. Supports .gz compressed files.
-        embedding_model : Optional[Any]
-            Embedding model for DynamicFewShotPrompt. Required if the original used one.
-
-        Returns:
-        --------
-        RankingMetric
-            Loaded metric instance
-
-        Raises:
-        -------
-        ValueError
-            If file cannot be loaded or is not a RankingMetric
-        """
-        # Validate metric type before loading
-        cls._validate_metric_type(path)
-
-        # Load using parent class method
-        metric = super().load(path, embedding_model=embedding_model)
-
-        # Additional type check for safety
-        if not isinstance(metric, cls):
-            raise ValueError(f"Loaded metric is not a {cls.__name__}")
-
-        return metric
+        return super().load(path, embedding_model=embedding_model)
 
 
 def ranking_metric(

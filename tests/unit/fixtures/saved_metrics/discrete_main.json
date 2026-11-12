@@ -1,0 +1,54 @@
+{
+  "format_version": "1.0",
+  "metric_type": "DiscreteMetric",
+  "name": "quality",
+  "prompt": {
+    "type": "Prompt",
+    "instruction": "Is {response} good? Return pass or fail.",
+    "examples": [
+      {
+        "input": {
+          "response": "ok"
+        },
+        "output": {
+          "value": "pass"
+        }
+      }
+    ]
+  },
+  "config": {
+    "allowed_values": [
+      "pass",
+      "fail"
+    ]
+  },
+  "response_model_info": {
+    "class_name": "DiscreteResponseModel",
+    "module": "ragas.metrics.base",
+    "schema": {
+      "properties": {
+        "reason": {
+          "description": "Reasoning for the value",
+          "title": "Reason",
+          "type": "string"
+        },
+        "value": {
+          "description": "The value predicted",
+          "enum": [
+            "pass",
+            "fail"
+          ],
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reason",
+        "value"
+      ],
+      "title": "DiscreteResponseModel",
+      "type": "object"
+    },
+    "note": "You must provide this model when loading"
+  }
+}
