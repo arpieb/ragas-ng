@@ -423,7 +423,7 @@ make install
 rm -rf .venv
 uv venv -p 3.13
 make install-minimal
-uv pip install "ragas[tracing,gdrive,ai-frameworks]"
+uv pip install -e ".[tracing,gdrive]"
 ```
 - Or force a newer NumPy wheel:
 ```bash

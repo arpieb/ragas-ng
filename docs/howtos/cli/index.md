@@ -13,7 +13,7 @@ pip install ragas-ng
 Or use `uvx` to run without installation:
 
 ```sh
-uvx ragas --help
+uvx --from ragas-ng ragas --help
 ```
 
 ## Available Commands
@@ -94,7 +94,7 @@ Get running in 60 seconds:
 
 ```sh
 # Create project
-uvx ragas quickstart rag_eval
+uvx --from ragas-ng ragas quickstart rag_eval
 cd rag_eval
 
 # Install dependencies

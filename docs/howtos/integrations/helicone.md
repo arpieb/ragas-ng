@@ -19,7 +19,7 @@ First, let's install the required packages and set up our environment.
 
 
 ```python
-!pip install datasets ragas openai
+!pip install datasets ragas-ng openai
 ```
 
 

@@ -35,7 +35,7 @@ TokenUsage(input_tokens=9, output_tokens=9, model='')
 ```
 
 
-You can define your own or import parsers if they are defined. If you would like to suggest parser for LLM providers or contribute your own ones please check out this [issue](https://github.com/vibrantlabsai/ragas/issues/1151) 🙂.
+You can define your own or import parsers if they are defined. If you would like to suggest parser for LLM providers or contribute your own ones please open an [issue](https://github.com/arpieb/ragas-ng/issues) 🙂.
 
 ## Token Usage for Evaluations
 

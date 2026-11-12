@@ -6,7 +6,7 @@ The `improve_rag` template demonstrates how to compare different RAG approaches 
 
 ```sh
 # Using uvx (no installation required)
-uvx ragas quickstart improve_rag
+uvx --from ragas-ng ragas quickstart improve_rag
 cd improve_rag
 
 # Or with ragas installed

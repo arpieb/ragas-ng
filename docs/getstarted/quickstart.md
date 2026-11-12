@@ -7,10 +7,10 @@ Get started with Ragas in minutes. Create a complete evaluation project with jus
 Choose one of the following methods:
 
 === "uvx (Recommended)"
-    No installation required. `uvx` automatically downloads and runs ragas:
+    No installation required. `uvx` automatically downloads and runs ragas. The `--from ragas-ng` is needed because the PyPI package named `ragas` is the upstream project, not this fork:
 
     ```sh
-    uvx ragas quickstart rag_eval
+    uvx --from ragas-ng ragas quickstart rag_eval
     cd rag_eval
     ```
 

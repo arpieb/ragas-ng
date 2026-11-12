@@ -93,5 +93,5 @@ All the prompts have been rewritten to use `PydanticPrompts` which is based on t
 
 !!! note "Need Further Assistance?"
 
-    If you have any further questions feel free to post them in this [github issue](https://github.com/vibrantlabsai/ragas/issues/1486).
+    If you have any further questions feel free to ask in [GitHub Discussions](https://github.com/arpieb/ragas-ng/discussions/categories/q-a).
 
