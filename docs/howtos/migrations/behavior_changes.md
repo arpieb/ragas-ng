@@ -704,3 +704,11 @@ The legacy metrics, LLM and embedding wrappers and prompt classes are deleted, n
 - An image reference is an image data URI, an http(s) URL, or a path ending in an image extension (`.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.bmp`). Any other context is text, as before.
 - **⚠ silent:** under `local_dir`, a file without an image extension is no longer opened. It is sent as text, even if it holds an image.
 - Other URL schemes, such as `ftp://`, raise instead of being treated as file paths.
+
+## Testset generation and optimizers: one code path per job ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+`TestsetGenerator`'s three entry points now share one graph builder and one check of their inputs.
+
+- `generate_with_docs()` and `generate_with_chunks()` take `num_personas` and `batch_size`, as `generate()` does. They used to always use 3 personas and no batching.
+- An LLM and an embedding model are needed only to build the default transforms. With your own `transforms`, `generate_with_docs()` and `generate_with_chunks()` no longer raise `ValueError` when the generator has no embedding model.
+- `generate_with_docs(transforms=[])` applies no transforms, as `generate_with_chunks(transforms=[])` already did. It used to replace an empty list with the default transforms.

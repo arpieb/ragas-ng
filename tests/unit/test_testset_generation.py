@@ -393,3 +393,73 @@ def test_factory_outputs_type_check_as_generator_arguments(tmp_path):
         timeout=180,
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+# --- #217: one entry-point path ----------------------------------------------
+
+
+@pytest.mark.parametrize("method", ["generate_with_docs", "generate_with_chunks"])
+def test_transform_entry_points_pass_num_personas_and_batch_size(method, monkeypatch):
+    import ragas.testset.synthesizers.generate as generate_module
+
+    batch_sizes: t.List[t.Optional[int]] = []
+    real_executor = generate_module.Executor
+
+    def recording_executor(*args, **kwargs):
+        batch_sizes.append(kwargs.get("batch_size"))
+        return real_executor(*args, **kwargs)
+
+    monkeypatch.setattr(generate_module, "Executor", recording_executor)
+    seen_personas: t.List[int] = []
+
+    @dataclass
+    class Recording(FakeSynthesizer):
+        async def _generate_scenarios(self, n, knowledge_graph, persona_list, cb):
+            seen_personas.append(len(persona_list))
+            return [_scenario(i) for i in range(n)]
+
+    gen = _generator(persona_list=list(PERSONAS))
+    getattr(gen, method)(
+        ["some text"],
+        1,
+        transforms=[],
+        query_distribution=[(Recording(name="r", llm=fake_llm()), 1.0)],
+        num_personas=2,
+        batch_size=5,
+    )
+
+    assert seen_personas == [2]
+    assert batch_sizes == [5, 5]
+
+
+@pytest.mark.parametrize("method", ["generate_with_docs", "generate_with_chunks"])
+def test_custom_transforms_need_no_embedding_model(method):
+    gen = TestsetGenerator(llm=fake_llm(), embedding_model=None)  # type: ignore[arg-type]
+    gen.persona_list = list(PERSONAS)
+    getattr(gen, method)(
+        ["some text"],
+        1,
+        transforms=[],
+        query_distribution=[(_synth("s"), 1.0)],
+    )
+    assert len(gen.knowledge_graph.nodes) == 1
+
+
+@pytest.mark.parametrize("method", ["generate_with_docs", "generate_with_chunks"])
+def test_default_transforms_need_an_embedding_model(method):
+    gen = TestsetGenerator(llm=fake_llm(), embedding_model=None)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="embedding client was not provided"):
+        getattr(gen, method)(["some text"], 1)
+
+
+def test_generate_with_docs_keeps_an_empty_transform_list(monkeypatch):
+    import ragas.testset.synthesizers.generate as generate_module
+
+    def no_defaults(**kwargs):
+        raise AssertionError("default transforms were built")
+
+    monkeypatch.setattr(generate_module, "default_transforms", no_defaults)
+    gen = _generator(persona_list=list(PERSONAS))
+    gen.generate_with_docs(
+        ["some text"], 1, transforms=[], query_distribution=[(_synth("s"), 1.0)]
+    )
