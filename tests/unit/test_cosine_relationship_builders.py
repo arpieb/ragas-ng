@@ -431,3 +431,23 @@ async def test_apply_transforms_summary_cosine_similarity_builder(simple_kg):
         and str(r.target.id) == "437c8c08-cef6-4ebf-a35f-93d6168b61a4"
         for r in kg.relationships
     )
+
+
+def test_every_relationship_builder_uses_the_base_plan():
+    """The plan runs ``transform`` on the filtered graph (#217)."""
+    from ragas.testset.transforms.base import RelationshipBuilder
+    from ragas.testset.transforms.relationship_builders.traditional import (
+        JaccardSimilarityBuilder,
+        OverlapScoreBuilder,
+    )
+
+    for builder in (
+        CosineSimilarityBuilder,
+        SummaryCosineSimilarityBuilder,
+        JaccardSimilarityBuilder,
+        OverlapScoreBuilder,
+    ):
+        assert (
+            builder.generate_execution_plan
+            is RelationshipBuilder.generate_execution_plan
+        )

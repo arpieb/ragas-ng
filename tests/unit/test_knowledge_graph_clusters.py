@@ -6,6 +6,7 @@ import uuid
 import pytest
 
 from ragas.testset.graph import KnowledgeGraph, Node, NodeType, Relationship
+from ragas.testset.graph_queries import find_n_indirect_clusters
 
 T = t.TypeVar("T")
 
@@ -415,8 +416,8 @@ def assert_n_clusters_with_varying_params(
         param_list: List of tuples (n, depth_limit) to test
     """
     for n, depth_limit in param_list:
-        clusters: list[set[Node]] = kg.find_n_indirect_clusters(
-            n=n, depth_limit=depth_limit
+        clusters: list[set[Node]] = find_n_indirect_clusters(
+            kg, n=n, depth_limit=depth_limit
         )
         if len(clusters) != n:
             # Convert clusters to sets of node IDs for more readable error messages
@@ -434,7 +435,7 @@ def test_find_n_indirect_clusters_with_document_and_children():
     kg: KnowledgeGraph = build_knowledge_graph(nodes, relationships)
 
     # It should not include subsets of found nodes
-    clusters: list[set[Node]] = kg.find_n_indirect_clusters(n=4, depth_limit=4)
+    clusters: list[set[Node]] = find_n_indirect_clusters(kg, n=4, depth_limit=4)
     assert_clusters_equal(
         clusters,
         [
@@ -459,7 +460,7 @@ def test_find_n_indirect_clusters_with_similarity_relationships():
         create_document_node("A"), node_count=4
     )
     kg: KnowledgeGraph = build_knowledge_graph(nodes, relationships)
-    clusters: list[set[Node]] = kg.find_n_indirect_clusters(n=5, depth_limit=4)
+    clusters: list[set[Node]] = find_n_indirect_clusters(kg, n=5, depth_limit=4)
 
     # It should not include subsets of found nodes.  Since for n=5 it will always find the four-node superset,
     # it should only return that one cluster.
@@ -484,7 +485,7 @@ def test_find_n_indirect_clusters_with_similarity_relationships():
     for item in new_nodes + fnc_relationships + tnc_relationships:
         kg.add(item)
 
-    clusters: list[set[Node]] = kg.find_n_indirect_clusters(n=12, depth_limit=3)
+    clusters: list[set[Node]] = find_n_indirect_clusters(kg, n=12, depth_limit=3)
 
     assert_clusters_equal(
         clusters,
@@ -519,7 +520,7 @@ def test_find_n_indirect_clusters_with_overlap_relationships():
         create_document_node("A"), node_count=4
     )
     kg: KnowledgeGraph = build_knowledge_graph(nodes, relationships)
-    clusters: list[set[Node]] = kg.find_n_indirect_clusters(n=5, depth_limit=3)
+    clusters: list[set[Node]] = find_n_indirect_clusters(kg, n=5, depth_limit=3)
 
     # Assert the two supersets from above are returned.
     assert_clusters_equal(
@@ -545,7 +546,7 @@ def test_find_n_indirect_clusters_with_overlap_relationships():
     for item in new_nodes + fnc_relationships + tnc_relationships:
         kg.add(item)
 
-    clusters: list[set[Node]] = kg.find_n_indirect_clusters(n=15, depth_limit=3)
+    clusters: list[set[Node]] = find_n_indirect_clusters(kg, n=15, depth_limit=3)
 
     assert_clusters_equal(
         clusters,
@@ -589,7 +590,7 @@ def test_find_n_indirect_clusters_handles_worst_case_grouping():
         kg: KnowledgeGraph = build_knowledge_graph(
             nodes_A + nodes_B, relationships_A + relationships_B
         )
-        clusters: list[set[Node]] = kg.find_n_indirect_clusters(n=2, depth_limit=2)
+        clusters: list[set[Node]] = find_n_indirect_clusters(kg, n=2, depth_limit=2)
 
         assert_clusters_equal(
             clusters,
@@ -611,8 +612,8 @@ def test_find_n_indirect_clusters_with_condition():
     def condition(rel):
         return rel.type == "next"
 
-    clusters: list[set[Node]] = kg.find_n_indirect_clusters(
-        n=5, relationship_condition=condition
+    clusters: list[set[Node]] = find_n_indirect_clusters(
+        kg, n=5, relationship_condition=condition
     )
 
     # Only "next" relationships are considered, so we should only have paths between B, C, D, and E
@@ -642,7 +643,7 @@ def test_find_n_indirect_clusters_with_cyclic_similarity_relationships():
 
     kg: KnowledgeGraph = build_knowledge_graph(nodes, relationships)
     # Using a depth limit of 3 which should yield the 5 clusters of three nodes from the previous test.
-    clusters: list[set[Node]] = kg.find_n_indirect_clusters(n=5, depth_limit=3)
+    clusters: list[set[Node]] = find_n_indirect_clusters(kg, n=5, depth_limit=3)
 
     # With a cycle, we expect additional clusters that include paths through the cycle. Using depth_limit=3
     # here so it should yield the 5 3-node clusters from the previous test.
@@ -668,7 +669,7 @@ def test_find_n_indirect_clusters_with_web_graph():
     node_dict = {f"{i}": nodes[i] for i in range(len(nodes))}
 
     kg: KnowledgeGraph = build_knowledge_graph(nodes, relationships)
-    clusters: list[set[Node]] = kg.find_n_indirect_clusters(n=10, depth_limit=3)
+    clusters: list[set[Node]] = find_n_indirect_clusters(kg, n=10, depth_limit=3)
 
     # Using a depth_limit=3 which should yield the 4 clusters of three nodes seen in the previous test.
     # This method ignores the subsets.
@@ -702,7 +703,7 @@ def test_performance_find_n_indirect_clusters_max_density():
 
         # Measure execution time (best of several runs; see measure_best_time)
         execution_time, clusters = measure_best_time(
-            lambda: kg.find_n_indirect_clusters(n=size, depth_limit=4)
+            lambda: find_n_indirect_clusters(kg, n=size, depth_limit=4)
         )
 
         # Store results
@@ -796,7 +797,7 @@ def test_performance_find_n_indirect_clusters_large_web_constant_n(
     for kg, size in constant_n_knowledge_graphs:
         # Measure execution time (best of several runs; see measure_best_time)
         execution_time, clusters = measure_best_time(
-            lambda: kg.find_n_indirect_clusters(n=constant_n, depth_limit=3)
+            lambda: find_n_indirect_clusters(kg, n=constant_n, depth_limit=3)
         )
 
         # Store results
@@ -889,7 +890,7 @@ def test_performance_find_n_indirect_clusters_independent_chains():
 
         # Measure execution time (best of several runs; see measure_best_time)
         execution_time, clusters = measure_best_time(
-            lambda: kg.find_n_indirect_clusters(n=num_chains, depth_limit=3)
+            lambda: find_n_indirect_clusters(kg, n=num_chains, depth_limit=3)
         )
 
         # Store results

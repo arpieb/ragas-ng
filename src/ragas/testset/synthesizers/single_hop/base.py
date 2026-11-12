@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import random
 import typing as t
 from dataclasses import dataclass
@@ -8,7 +7,7 @@ from dataclasses import dataclass
 from ragas.dataset_schema import SingleTurnSample
 from ragas.prompt.metrics.base_prompt import BasePrompt
 from ragas.testset.graph import Node
-from ragas.testset.persona import Persona, PersonaList
+from ragas.testset.persona import Persona
 from ragas.testset.synthesizers.base import (
     BaseScenario,
     BaseSynthesizer,
@@ -23,8 +22,6 @@ from ragas.testset.synthesizers.single_hop.prompts import (
 
 if t.TYPE_CHECKING:
     from ragas.callbacks import Callbacks
-
-logger = logging.getLogger(__name__)
 
 
 class SingleHopScenario(BaseScenario):
@@ -54,60 +51,28 @@ class SingleHopQuerySynthesizer(BaseSynthesizer[Scenario]):
         personas: t.List[Persona],
         persona_concepts: t.Dict[str, t.List[str]],
     ) -> t.List[t.Dict[str, t.Any]]:
-        sample = {"terms": terms, "node": node}
-        valid_personas = []
-        persona_list = PersonaList(personas=personas)
-        for persona, concepts in persona_concepts.items():
-            concepts = [concept.lower() for concept in concepts]
-            if any(term.lower() in concepts for term in terms):
-                # the name came back from the LLM and may not match exactly;
-                # skip one that matches no persona instead of raising (#84)
-                matched = persona_list.get(persona)
-                if matched is None:
-                    logger.debug("No persona named %r; skipping it.", persona)
-                elif matched not in valid_personas:
-                    valid_personas.append(matched)
-        sample["personas"] = valid_personas
-        sample["styles"] = list(QueryStyle)
-        sample["lengths"] = list(QueryLength)
-
-        return [sample]
+        return [
+            {
+                "terms": terms,
+                "node": node,
+                "personas": self._personas_for(terms, personas, persona_concepts),
+                "styles": list(QueryStyle),
+                "lengths": list(QueryLength),
+            }
+        ]
 
     def sample_combinations(self, data: t.List[t.Dict[str, t.Any]], num_samples):
-        selected_samples = []
-        node_term_set = set()
-
-        all_combinations = []
-        for entry in data:
-            node = entry["node"]
-            for term in entry["terms"]:
-                for persona in entry["personas"]:
-                    for style in entry["styles"]:
-                        for length in entry["lengths"]:
-                            all_combinations.append(
-                                {
-                                    "term": term,
-                                    "node": node,
-                                    "persona": persona,
-                                    "style": style,
-                                    "length": length,
-                                }
-                            )
-
+        all_combinations = [
+            combination
+            for entry in data
+            for term in entry["terms"]
+            for combination in self._expand_combinations(
+                {"term": term, "node": entry["node"]}, entry
+            )
+        ]
         random.shuffle(all_combinations)
-        for sample in all_combinations:
-            if len(selected_samples) >= num_samples:
-                break
-
-            term = sample["term"]
-            node = sample["node"]
-
-            if (node, term) not in node_term_set:
-                selected_samples.append(sample)
-                node_term_set.add((node, term))
-            elif len(selected_samples) < num_samples:
-                selected_samples.append(sample)
-
+        # every combination is taken, so this is the first num_samples of them
+        selected_samples = all_combinations[:num_samples]
         return [self.convert_to_scenario(sample) for sample in selected_samples]
 
     def convert_to_scenario(self, data: t.Dict[str, t.Any]) -> SingleHopScenario:
@@ -133,14 +98,10 @@ class SingleHopQuerySynthesizer(BaseSynthesizer[Scenario]):
             query_style=scenario.style.value,
             llm_context=self.llm_context,
         )
-        response = await self.generate_query_reference_prompt.generate(
-            data=prompt_input, llm=self.llm, callbacks=callbacks
-        )
-        return SingleTurnSample(
-            user_input=response.query,
-            reference=response.answer,
-            reference_contexts=[reference_context],
-            persona_name=getattr(scenario.persona, "name", None),
-            query_style=getattr(scenario.style, "name", None),
-            query_length=getattr(scenario.length, "name", None),
+        return await self._generate_query_sample(
+            scenario,
+            self.generate_query_reference_prompt,
+            prompt_input,
+            [reference_context],
+            callbacks,
         )

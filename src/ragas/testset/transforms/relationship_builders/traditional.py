@@ -46,17 +46,9 @@ class JaccardSimilarityBuilder(RelationshipBuilder):
         return list(similar_pairs)
 
     async def transform(self, kg: KnowledgeGraph) -> t.List[Relationship]:
-        similar_pairs = self._find_similar_embedding_pairs(kg)
-        return [
-            Relationship(
-                source=kg.nodes[i],
-                target=kg.nodes[j],
-                type=self.new_property_name,
-                properties={self.new_property_name: similarity_float},
-                bidirectional=True,
-            )
-            for i, j, similarity_float in similar_pairs
-        ]
+        return self._pairs_to_relationships(
+            kg.nodes, self._find_similar_embedding_pairs(kg), self.new_property_name
+        )
 
 
 @dataclass

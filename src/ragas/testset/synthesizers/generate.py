@@ -88,6 +88,8 @@ class TestsetGenerator:
         raise_exceptions: bool = True,
         return_executor: bool = False,
         document_adapter: t.Optional[DocumentAdapter] = None,
+        num_personas: int = 3,
+        batch_size: t.Optional[int] = None,
     ) -> t.Union[Testset, Executor]:
         """
         Generates an evaluation dataset from whole documents.
@@ -133,6 +135,11 @@ class TestsetGenerator:
             other names. For LlamaIndex documents:
             ``lambda d: Document(page_content=d.text, metadata=d.metadata)``.
             By default the documents are used as they are.
+        num_personas : int, default 3
+            The number of personas to generate or use, as in :meth:`generate`.
+        batch_size : Optional[int], optional
+            How large generation batches should be, as in :meth:`generate`.
+            By default no batching is done.
 
         Returns
         -------
@@ -143,45 +150,29 @@ class TestsetGenerator:
         Raises
         ------
         ValueError
-            If no LLM or embedding model is provided either during initialization or as arguments
+            If ``transforms`` is not given and no LLM or embedding model is
+            provided, either on the generator or as arguments
         TypeError
             If an LLM is not an ``llm_factory()`` LLM, or an embedding model
             is not a ``BaseRagasEmbedding``
         """
 
-        # force the user to provide an llm and embedding client to prevent use of default LLMs
-        if not self.llm and not transforms_llm:
-            raise ValueError(
-                """An llm client was not provided.
-                       Provide an LLM on TestsetGenerator instantiation or as an argument for transforms_llm parameter.
-                       Alternatively you can provide your own transforms through the `transforms` parameter."""
-            )
-        if not self.embedding_model and not transforms_embedding_model:
-            raise ValueError(
-                """An embedding client was not provided. Provide an embedding through the transforms_embedding_model parameter. Alternatively you can provide your own transforms through the `transforms` parameter."""
-            )
-        transforms_llm = optional(require_llm, transforms_llm, "transforms_llm")
-        transforms_embedding_model = optional(
-            require_embedding, transforms_embedding_model, "transforms_embedding_model"
+        kg, transforms = self._build_kg(
+            documents,
+            NodeType.DOCUMENT,
+            document_adapter,
+            transforms,
+            transforms_llm,
+            transforms_embedding_model,
         )
-
-        docs = _to_documents(documents, document_adapter)
-        if not transforms:
-            transforms = default_transforms(
-                documents=docs,
-                llm=transforms_llm or self.llm,
-                embedding_model=transforms_embedding_model or self.embedding_model,
-            )
-
-        kg = KnowledgeGraph(nodes=_to_nodes(docs, NodeType.DOCUMENT))
-
-        # transforms and generation share one run scope (#90)
         return self._transform_and_generate(
             kg,
             transforms,
             testset_size=testset_size,
             query_distribution=query_distribution,
+            num_personas=num_personas,
             run_config=run_config,
+            batch_size=batch_size,
             callbacks=callbacks,
             token_usage_parser=token_usage_parser,
             with_debugging_logs=with_debugging_logs,
@@ -221,6 +212,8 @@ class TestsetGenerator:
         raise_exceptions: bool = True,
         return_executor: bool = False,
         document_adapter: t.Optional[DocumentAdapter] = None,
+        num_personas: int = 3,
+        batch_size: t.Optional[int] = None,
     ) -> t.Union[Testset, Executor]:
         """
         Generates an evaluation dataset based on provided pre-chunked documents.
@@ -260,6 +253,11 @@ class TestsetGenerator:
         document_adapter : Optional[Callable[[Any], DocumentLike]], optional
             Converts each chunk that is not a string, as in
             :meth:`generate_with_docs`.
+        num_personas : int, default 3
+            The number of personas to generate or use, as in :meth:`generate`.
+        batch_size : Optional[int], optional
+            How large generation batches should be, as in :meth:`generate`.
+            By default no batching is done.
 
         Returns
         -------
@@ -268,38 +266,22 @@ class TestsetGenerator:
             If return_executor is True, returns the Executor instance.
         """
 
-        # force the user to provide an llm and embedding client
-        if not self.llm and not transforms_llm:
-            raise ValueError(
-                """An llm client was not provided.
-                       Provide an LLM on TestsetGenerator instantiation or as an argument for transforms_llm parameter.
-                       Alternatively you can provide your own transforms through the `transforms` parameter."""
-            )
-        if not self.embedding_model and not transforms_embedding_model:
-            raise ValueError(
-                """An embedding client was not provided. Provide an embedding through the transforms_embedding_model parameter. Alternatively you can provide your own transforms through the `transforms` parameter."""
-            )
-        transforms_llm = optional(require_llm, transforms_llm, "transforms_llm")
-        transforms_embedding_model = optional(
-            require_embedding, transforms_embedding_model, "transforms_embedding_model"
+        kg, transforms = self._build_kg(
+            chunks,
+            NodeType.CHUNK,
+            document_adapter,
+            transforms,
+            transforms_llm,
+            transforms_embedding_model,
         )
-
-        if transforms is None:
-            transforms = default_transforms_for_prechunked(
-                llm=transforms_llm or self.llm,
-                embedding_model=transforms_embedding_model or self.embedding_model,
-            )
-
-        docs = _to_documents(chunks, document_adapter)
-        kg = KnowledgeGraph(nodes=_to_nodes(docs, NodeType.CHUNK))
-
-        # transforms and generation share one run scope (#90)
         return self._transform_and_generate(
             kg,
             transforms,
             testset_size=testset_size,
             query_distribution=query_distribution,
+            num_personas=num_personas,
             run_config=run_config,
+            batch_size=batch_size,
             callbacks=callbacks,
             token_usage_parser=token_usage_parser,
             with_debugging_logs=with_debugging_logs,
@@ -366,55 +348,117 @@ class TestsetGenerator:
         4. Generate samples for each scenario.
         5. Compile the results into an EvaluationDataset.
         """
-        # Token accounting: run-scoped, like the RunConfig, rather than set on
-        # self.llm, which may be shared -- and was never detached (#76).
-        cost_cb = _usage_collector(token_usage_parser)
+        return self._transform_and_generate(
+            None,
+            None,
+            testset_size=testset_size,
+            query_distribution=query_distribution,
+            num_personas=num_personas,
+            run_config=run_config,
+            batch_size=batch_size,
+            callbacks=callbacks,
+            token_usage_parser=token_usage_parser,
+            with_debugging_logs=with_debugging_logs,
+            raise_exceptions=raise_exceptions,
+            return_executor=return_executor,
+        )
 
-        with run_scope(run_config=run_config, usage_collector=cost_cb):
-            return self._generate(
-                testset_size=testset_size,
-                query_distribution=query_distribution,
-                num_personas=num_personas,
-                run_config=run_config,
-                batch_size=batch_size,
-                callbacks=callbacks,
-                cost_cb=cost_cb,
-                with_debugging_logs=with_debugging_logs,
-                raise_exceptions=raise_exceptions,
-                return_executor=return_executor,
+    def _build_kg(
+        self,
+        items: t.Sequence[t.Any],
+        node_type: NodeType,
+        document_adapter: t.Optional[DocumentAdapter],
+        transforms: t.Optional[Transforms],
+        transforms_llm: t.Optional[InstructorBaseRagasLLM],
+        transforms_embedding_model: t.Optional[BaseRagasEmbedding],
+    ) -> t.Tuple[KnowledgeGraph, Transforms]:
+        """The unbuilt graph of ``items`` as ``node_type`` nodes, and its transforms.
+
+        ``transforms`` defaults to the default transforms for ``node_type``,
+        made with ``transforms_llm`` and ``transforms_embedding_model`` or
+        else the generator's own models; only that default needs them.
+        """
+        transforms_llm = optional(require_llm, transforms_llm, "transforms_llm")
+        transforms_embedding_model = optional(
+            require_embedding, transforms_embedding_model, "transforms_embedding_model"
+        )
+        docs = _to_documents(items, document_adapter)
+        if transforms is None:
+            llm, embedding_model = self._transform_models(
+                transforms_llm, transforms_embedding_model
             )
+            if node_type == NodeType.DOCUMENT:
+                transforms = default_transforms(
+                    documents=docs, llm=llm, embedding_model=embedding_model
+                )
+            else:
+                transforms = default_transforms_for_prechunked(
+                    llm=llm, embedding_model=embedding_model
+                )
+        return KnowledgeGraph(nodes=_to_nodes(docs, node_type)), transforms
+
+    def _transform_models(
+        self,
+        transforms_llm: t.Optional[InstructorBaseRagasLLM],
+        transforms_embedding_model: t.Optional[BaseRagasEmbedding],
+    ) -> t.Tuple[InstructorBaseRagasLLM, BaseRagasEmbedding]:
+        """The LLM and embedding model for the default transforms."""
+        llm = transforms_llm or self.llm
+        embedding_model = transforms_embedding_model or self.embedding_model
+        if not llm:
+            raise ValueError(
+                "An llm client was not provided. Provide an LLM on TestsetGenerator "
+                "instantiation or as the transforms_llm argument, or pass your own "
+                "transforms through the `transforms` parameter."
+            )
+        if not embedding_model:
+            raise ValueError(
+                "An embedding client was not provided. Provide an embedding model on "
+                "TestsetGenerator instantiation or as the transforms_embedding_model "
+                "argument, or pass your own transforms through the `transforms` "
+                "parameter."
+            )
+        return llm, embedding_model
 
     def _transform_and_generate(
         self,
-        kg: KnowledgeGraph,
-        transforms: Transforms,
+        kg: t.Optional[KnowledgeGraph],
+        transforms: t.Optional[Transforms],
         *,
         testset_size: int,
         query_distribution: t.Optional[QueryDistribution],
+        num_personas: int,
         run_config: t.Optional[RunConfig],
+        batch_size: t.Optional[int],
         callbacks: t.Optional[Callbacks],
         token_usage_parser: t.Optional[TokenUsageParser],
         with_debugging_logs: bool,
         raise_exceptions: bool,
         return_executor: bool,
     ) -> t.Union[Testset, Executor]:
-        """Build the knowledge graph, then generate, in one run scope.
+        """Build the knowledge graph, if one is given, then generate, in one run scope.
 
         Building the graph is most of the LLM cost, so the token collector
         and the RunConfig (timeouts, retries) cover the transforms as well
         as generation (#90). The graph is stored only once every transform
-        has succeeded.
+        has succeeded. With no ``kg``, generation uses the stored graph.
+
+        Token accounting is run-scoped, like the RunConfig, rather than set
+        on self.llm, which may be shared -- and was never detached (#76).
         """
         cost_cb = _usage_collector(token_usage_parser)
         with run_scope(run_config=run_config, usage_collector=cost_cb):
-            apply_transforms(kg, transforms, run_config=run_config or RunConfig())
-            self.knowledge_graph = kg
+            if kg is not None:
+                apply_transforms(
+                    kg, transforms or [], run_config=run_config or RunConfig()
+                )
+                self.knowledge_graph = kg
             return self._generate(
                 testset_size=testset_size,
                 query_distribution=query_distribution,
-                num_personas=3,
+                num_personas=num_personas,
                 run_config=run_config,
-                batch_size=None,
+                batch_size=batch_size,
                 callbacks=callbacks,
                 cost_cb=cost_cb,
                 with_debugging_logs=with_debugging_logs,
@@ -439,15 +483,6 @@ class TestsetGenerator:
             self.llm, self.knowledge_graph, self.llm_context
         )
         callbacks = callbacks or []
-
-        # dict to store any callbacks we define
-        ragas_callbacks = {}
-        # `callbacks` may be a CallbackGroup or a plain list of handlers
-        for cb in ragas_callbacks.values():
-            if hasattr(callbacks, "add_handler"):
-                callbacks.add_handler(cb)  # type: ignore[union-attr]
-            else:
-                callbacks.append(cb)  # type: ignore[union-attr]
 
         # new group for Testset Generation
         testset_generation_rm, testset_generation_grp = new_group(
