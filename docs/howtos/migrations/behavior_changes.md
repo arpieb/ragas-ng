@@ -730,3 +730,14 @@ Which sample class a row becomes was decided in three places. It is now `ragas.d
 - `EvaluationDataset.from_dict()` takes columns, `{"user_input": [...], "response": [...]}`, as its `Dict` annotation said, and calls `from_list()`. It used to iterate its argument as a list of rows, so only a list worked and a real dict raised `TypeError`. Pass a list of rows to `from_list()`; `from_dict()` raises `TypeError` for one.
 - `EvaluationDataset.backend` and `.name`, and `from_list()`'s `backend=` and `name=` arguments, are removed. Nothing read them. For a named dataset saved to a backend, use `ragas.Dataset`.
 - `ragas.validation.get_supported_metric_type()` is removed. `evaluate()` reports an unsupported sample class as `The metric '<name>' does not support the sample type <class>`, instead of `Unsupported sample type <class>`.
+
+## Names moved out of `ragas.utils` ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+`ragas.utils` is split up. Nothing is re-exported from the old location:
+
+| Was | Now |
+|---|---|
+| `ragas.utils.MemorableNames`, `memorable_names`, `create_nano_id` | `ragas.names` |
+| `ragas.utils.async_to_sync` | `ragas.async_utils.async_to_sync` |
+| `ragas.utils.convert_v1_to_v2_dataset`, `REQUIRED_COLS_v1` | `ragas.validation` |
+| `ragas.utils.convert_row_v1_to_v2`, `convert_v2_to_v1_dataset` | Removed: nothing used them |

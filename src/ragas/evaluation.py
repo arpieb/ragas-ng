@@ -39,8 +39,7 @@ from ragas.llms.base import DEFAULT_LLM_MODEL, InstructorBaseRagasLLM
 from ragas.metrics.base import SimpleBaseMetric, adopt_metric_run
 from ragas.metrics.sample_inputs import InputSpec, as_score, input_spec
 from ragas.run_config import RunConfig, run_scope
-from ragas.utils import convert_v1_to_v2_dataset
-from ragas.validation import remap_column_names
+from ragas.validation import convert_v1_to_v2_dataset, remap_column_names
 
 if t.TYPE_CHECKING:
     from ragas.callbacks import Callbacks

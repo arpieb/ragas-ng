@@ -14,7 +14,8 @@ from ragas.async_utils import concurrent_results, run_sync
 from ragas.backends.base import BaseBackend
 from ragas.callbacks import ChainType, traced
 from ragas.dataset import Dataset, DataTable
-from ragas.utils import find_git_root, memorable_names
+from ragas.names import memorable_names
+from ragas.utils import find_git_root
 
 logger = logging.getLogger(__name__)
 

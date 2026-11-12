@@ -124,6 +124,17 @@ def run_sync(coro: t.Coroutine[t.Any, t.Any, T]) -> T:
         raise
 
 
+def async_to_sync(async_func: t.Callable[..., t.Coroutine[t.Any, t.Any, T]]):
+    """Convert an async function to a sync function that runs it with ``run_sync``."""
+    import functools
+
+    @functools.wraps(async_func)
+    def sync_wrapper(*args, **kwargs) -> T:
+        return run_sync(async_func(*args, **kwargs))
+
+    return sync_wrapper
+
+
 def is_event_loop_running() -> bool:
     """
     Check if an event loop is currently running.
