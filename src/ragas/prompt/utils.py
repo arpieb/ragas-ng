@@ -1,5 +1,8 @@
 import copy
+import gzip
+import json
 import typing as t
+from pathlib import Path
 
 from pydantic import BaseModel
 
@@ -163,3 +166,34 @@ def output_language_directive(language: t.Optional[str]) -> str:
         f"Write every text value in the output in {name}, even if the input "
         "is in another language. Keep the JSON keys exactly as in the schema.\n"
     )
+
+
+def _open_text(path: Path, mode: str) -> t.IO[str]:
+    if path.suffix == ".gz":
+        return t.cast(t.IO[str], gzip.open(path, mode + "t", encoding="utf-8"))
+    return open(path, mode, encoding="utf-8")
+
+
+def write_json_file(path: t.Union[str, Path], data: t.Any, what: str) -> None:
+    """Write ``data`` as indented JSON, gzip-compressed when ``path`` ends in .gz.
+
+    Raises ``ValueError("Cannot save {what} to {path}: ...")`` on an I/O error.
+    """
+    try:
+        with _open_text(Path(path), "w") as f:
+            json.dump(data, f, indent=2)
+    except OSError as e:
+        raise ValueError(f"Cannot save {what} to {path}: {e}") from e
+
+
+def read_json_file(path: t.Union[str, Path], what: str) -> t.Any:
+    """Read JSON written by :func:`write_json_file` (gzip when ``path`` ends in .gz).
+
+    Raises ``ValueError("Cannot load {what} from {path}: ...")`` when the file is
+    missing, unreadable or not JSON.
+    """
+    try:
+        with _open_text(Path(path), "r") as f:
+            return json.load(f)
+    except (OSError, ValueError) as e:  # JSONDecodeError/UnicodeDecodeError
+        raise ValueError(f"Cannot load {what} from {path}: {e}") from e

@@ -2,17 +2,20 @@ from __future__ import annotations
 
 __all__ = ["SimpleExampleStore", "SimpleInMemoryExampleStore", "DynamicFewShotPrompt"]
 
-import gzip
-import json
 import typing as t
 import warnings
 from abc import ABC, abstractmethod
-from pathlib import Path
 
 from ragas.embeddings.base import BaseRagasEmbedding as BaseEmbedding
 
 from .simple_prompt import Prompt
-from .utils import check_example_count, get_examples_from_store, nearest_indices
+from .utils import (
+    check_example_count,
+    get_examples_from_store,
+    nearest_indices,
+    read_json_file,
+    write_json_file,
+)
 
 if t.TYPE_CHECKING:
     from pydantic import BaseModel
@@ -301,16 +304,7 @@ class DynamicFewShotPrompt(Prompt):
         if include_embeddings and self.example_store._embeddings_list:
             data["embeddings"] = self.example_store._embeddings_list
 
-        file_path = Path(path)
-        try:
-            if file_path.suffix == ".gz":
-                with gzip.open(file_path, "wt", encoding="utf-8") as f:
-                    json.dump(data, f, indent=2)
-            else:
-                with open(file_path, "w", encoding="utf-8") as f:
-                    json.dump(data, f, indent=2)
-        except (OSError, IOError) as e:
-            raise ValueError(f"Cannot save DynamicFewShotPrompt to {path}: {e}")
+        write_json_file(path, data, "DynamicFewShotPrompt")
 
     def _serialize_embedding_model_info(self) -> t.Optional[t.Dict]:
         """Serialize embedding model information for storage."""
@@ -354,18 +348,7 @@ class DynamicFewShotPrompt(Prompt):
         ValueError
             If file cannot be loaded, is invalid, or missing required models
         """
-        file_path = Path(path)
-
-        # Load JSON data
-        try:
-            if file_path.suffix == ".gz":
-                with gzip.open(file_path, "rt", encoding="utf-8") as f:
-                    data = json.load(f)
-            else:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError, OSError) as e:
-            raise ValueError(f"Cannot load DynamicFewShotPrompt from {path}: {e}")
+        data = read_json_file(path, "DynamicFewShotPrompt")
 
         # Validate format
         if data.get("type") != "DynamicFewShotPrompt":
