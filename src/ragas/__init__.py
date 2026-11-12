@@ -1,7 +1,7 @@
 from ragas import backends
 from ragas.cache import CacheInterface, DiskCacheBackend, cacher
 from ragas.dataset import Dataset, DataTable
-from ragas.dataset_schema import EvaluationDataset, MultiTurnSample, SingleTurnSample
+from ragas.dataset_schema import MultiTurnSample, SingleTurnSample
 from ragas.experiment import Experiment, experiment, version_experiment
 from ragas.run_config import RunConfig
 from ragas.scoring import check, metrics_experiment, summarize
@@ -23,7 +23,6 @@ __all__ = [
     "__version__",
     "SingleTurnSample",
     "MultiTurnSample",
-    "EvaluationDataset",
     "DataTable",
     "Dataset",
     "cacher",

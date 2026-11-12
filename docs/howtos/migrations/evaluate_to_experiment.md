@@ -1,6 +1,6 @@
 # From `evaluate()` to experiments
 
-`evaluate()`, `aevaluate()` and `EvaluationResult` are removed ([#257](https://github.com/arpieb/ragas-ng/issues/257)), and `EvaluationDataset` goes next ([#241](https://github.com/arpieb/ragas-ng/issues/241)). Scoring a dataset is now an [experiment](../../concepts/experimentation.md):
+`evaluate()`, `aevaluate()`, `EvaluationResult` ([#257](https://github.com/arpieb/ragas-ng/issues/257)) and `EvaluationDataset` ([#258](https://github.com/arpieb/ragas-ng/issues/258)) are removed, and Hugging Face `datasets` is no longer a dependency: `pip install datasets` to load Hub data, as below. Scoring a dataset is now an [experiment](../../concepts/experimentation.md):
 
 - the rows live in a `Dataset` of `SingleTurnSample` / `MultiTurnSample` objects;
 - `metrics_experiment(metrics)` scores them, as `evaluate()` did;
@@ -137,10 +137,12 @@ Rows may also be plain dicts, or a `Dataset` without a `data_model`: `metrics_ex
 
 ### From a Hugging Face dataset
 
+`datasets` isn't installed with ragas any more; `pip install datasets` first.
+
 `from_pandas` builds each sample from a DataFrame row, so missing values must be `None`, not NaN:
 
 ```python
-from datasets import load_dataset
+from datasets import load_dataset  # pip install datasets
 
 from ragas import Dataset
 from ragas.dataset_schema import SingleTurnSample

@@ -20,7 +20,6 @@ from pydantic import BaseModel
 from ragas import Dataset
 from ragas.backends.local_jsonl import LocalJSONLBackend
 from ragas.dataset_schema import (
-    EvaluationDataset,
     SingleTurnSample,
 )
 from ragas.optimizers.annotations import (
@@ -218,21 +217,33 @@ def test_annotation_loaders_close_their_files_and_read_utf8(tmp_path, opens):
     assert opens.encodings == ["utf-8", "utf-8"]
 
 
-def test_dataset_files_are_utf8_and_round_trip_non_ascii(tmp_path, opens):
-    ds = EvaluationDataset(
-        samples=[SingleTurnSample(user_input="¿Qué tal? 日本語", response="ü")]
+def _testset(*samples):
+    from ragas.testset import Testset, TestsetSample
+
+    return Testset(
+        samples=[TestsetSample(eval_sample=s, synthesizer_name="t") for s in samples]
     )
 
-    ds.to_jsonl(tmp_path / "d.jsonl")
-    ds.to_csv(tmp_path / "d.csv")
-    loaded = EvaluationDataset.from_jsonl(tmp_path / "d.jsonl")
 
-    assert loaded.samples[0].user_input == "¿Qué tal? 日本語"
+def test_testset_files_are_utf8_and_round_trip_non_ascii(tmp_path, opens):
+    from ragas.testset import Testset
+
+    ts = _testset(SingleTurnSample(user_input="¿Qué tal? 日本語", response="ü"))
+
+    ts.to_jsonl(tmp_path / "d.jsonl")
+    ts.to_csv(tmp_path / "d.csv")
+    loaded = Testset.from_jsonl(tmp_path / "d.jsonl")
+
+    assert loaded.samples[0].eval_sample.user_input == "¿Qué tal? 日本語"
     assert opens.encodings == ["utf-8", "utf-8", "utf-8"]
 
 
-def test_from_jsonl_ignores_a_trailing_blank_line(tmp_path):
-    path = tmp_path / "d.jsonl"
-    path.write_text('{"user_input": "q"}\n\n', encoding="utf-8")
+def test_testset_from_jsonl_ignores_a_trailing_blank_line(tmp_path):
+    from ragas.testset import Testset
 
-    assert len(EvaluationDataset.from_jsonl(path)) == 1
+    path = tmp_path / "d.jsonl"
+    path.write_text(
+        '{"user_input": "q", "synthesizer_name": "t"}\n\n', encoding="utf-8"
+    )
+
+    assert len(Testset.from_jsonl(path)) == 1

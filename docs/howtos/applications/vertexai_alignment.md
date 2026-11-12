@@ -150,7 +150,7 @@ The `process_hhh_dataset` function prepares data from the [HHH dataset](https:
 
 ```python
 import numpy as np
-from datasets import load_dataset
+from datasets import load_dataset  # pip install datasets
 from ragas import Dataset
 from ragas.dataset_schema import SingleTurnSample
 

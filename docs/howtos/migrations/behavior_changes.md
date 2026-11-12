@@ -946,3 +946,21 @@ Step 5 of replacing `evaluate()` (#241). See [From `evaluate()` to experiments](
 - **No default metrics, LLM or embeddings.** `evaluate(metrics=None)` ran four default metrics with a default OpenAI LLM and embeddings matched to your LLM. Build the metrics with the models you want.
 - `default_llm()` stays: testset generation still uses it.
 - `ThresholdError` stays; `ragas.check()` raises it.
+
+## `EvaluationDataset` removed; `datasets` is no longer a dependency ([#258](https://github.com/arpieb/ragas-ng/issues/258))
+
+The last step of replacing `evaluate()` (#241). See [From `evaluate()` to experiments](evaluate_to_experiment.md#evaluationdataset-dataset) for each constructor and converter.
+
+| Removed | Use instead |
+|---|---|
+| `ragas.EvaluationDataset`, `ragas.dataset_schema.EvaluationDataset` | `Dataset("name", "inmemory", data_model=SingleTurnSample, data=samples)` |
+| `ragas.dataset_schema.RagasDataset` | nothing: `Testset` (#255) and `EvaluationDataset` were its only subclasses |
+| `EvaluationDataset.from_hf_dataset(hf)` / `to_hf_dataset()` | `Dataset.from_pandas(hf.to_pandas(), ...)` / `datasets.Dataset.from_pandas(dataset.to_pandas())` |
+
+`ragas.dataset_schema` now holds the sample types (`BaseSample`, `SingleTurnSample`, `MultiTurnSample`) and `sample_from_dict` / `sample_type_for`.
+
+**Dependencies:**
+
+- **Hugging Face `datasets` is no longer installed with ragas,** and neither is `pyarrow`, which only `datasets` needed. To load data from the Hub, `pip install datasets`.
+- **`pandas` is now a direct dependency.** It used to arrive only through `datasets`, and `to_pandas()` and `ragas hello-world` need it.
+- **`huggingface_hub` is no longer guaranteed.** `HuggingFaceEmbeddings(use_api=True)` needs `pip install huggingface-hub`, and says so if it's missing. The local `sentence-transformers` path brings its own copy.
