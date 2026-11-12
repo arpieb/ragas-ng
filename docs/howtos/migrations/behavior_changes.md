@@ -873,3 +873,15 @@ Metrics built with `@discrete_metric`, `@numeric_metric` and `@ranking_metric` n
 - They draw from a private `random.Random(seed)` and never use or change the global `random` state.
 - **⚠ silent:** `random.seed(...)` no longer makes them reproducible; pass `seed=` instead. Without a seed, each call draws fresh.
 - **⚠ silent:** `GeneticOptimizer` passes seeds derived from `run_config.seed`, which `train()` defaults to 42. The annotations it samples are now the same on every run with the same seed. Before, they followed the global `random` state.
+
+## `metrics_experiment`, `summarize` and `check` ([#253](https://github.com/arpieb/ragas-ng/issues/253))
+
+New, as the first step of replacing `evaluate()` (#241). Nothing is removed yet.
+
+- `ragas.metrics_experiment(metrics, ...)` scores metrics over a `Dataset` as an experiment. It maps the fields the same way `evaluate()` does, and runs the same up-front checks. Each row gets a `<metric>` and a `<metric>_reason` column. See [Experiments](../../concepts/experimentation.md#scoring-a-dataset-in-one-call-metrics_experiment).
+- `ragas.summarize(exp)` and `ragas.check(exp, min_mean=..., max_mean=..., allow_missing=...)` give the same numbers and the same `ThresholdError` as `EvaluationResult.summary()` / `check()`, for any experiment with metric columns.
+- Differences from `evaluate()`:
+  - there are no default metrics and no default OpenAI LLM or embeddings;
+  - `max_workers` counts rows, and a row's metrics run concurrently;
+  - token usage goes to a `TokenUsageCollector` you pass as `usage=`;
+  - traces come from OpenTelemetry spans.

@@ -35,10 +35,11 @@ from ragas.exceptions import ExceptionInRunner
 from ragas.executor import Executor
 from ragas.integrations.helicone import helicone_config
 from ragas.llms import default_llm
-from ragas.llms.base import DEFAULT_LLM_MODEL, InstructorBaseRagasLLM
+from ragas.llms.base import InstructorBaseRagasLLM
 from ragas.metrics.base import SimpleBaseMetric, adopt_metric_run
 from ragas.metrics.sample_inputs import InputSpec, as_score, input_spec
 from ragas.run_config import RunConfig, run_scope
+from ragas.scoring import check_models
 from ragas.validation import convert_v1_to_v2_dataset, remap_column_names
 
 if t.TYPE_CHECKING:
@@ -200,7 +201,7 @@ async def _aevaluate(
     # Fail up front with the fix, rather than with an AttributeError deep in
     # the run or a NaN per job (#77).
     dataset = _coerce_dataset(dataset)
-    _check_models(llm, embeddings)
+    check_models(llm, embeddings)
 
     # Check metrics are correct type: any sequence (a list or a tuple)
     if metrics is not None:
@@ -515,29 +516,6 @@ def _coerce_dataset(dataset: t.Any) -> t.Union[Dataset, EvaluationDataset]:
         "For example: EvaluationDataset.from_list([{'user_input': ..., "
         "'response': ...}])"
     )
-
-
-def _check_models(llm: t.Any, embeddings: t.Any) -> None:
-    """Reject an llm/embeddings that ragas can't call, before the run starts.
-
-    A raw provider client used to be accepted and fail in every job, giving
-    NaN scores and one AttributeError per row instead of a clear error.
-    """
-    if llm is not None and not isinstance(llm, InstructorBaseRagasLLM):
-        raise TypeError(
-            f"llm must be a ragas LLM, got {type(llm).__module__}."
-            f"{type(llm).__name__}. Wrap your client or model name with "
-            "llm_factory: from ragas.llms import llm_factory; "
-            f"llm = llm_factory('{DEFAULT_LLM_MODEL}', client=client)"
-        )
-    if embeddings is not None and not isinstance(embeddings, BaseRagasEmbedding):
-        raise TypeError(
-            f"embeddings must be ragas embeddings, got "
-            f"{type(embeddings).__module__}.{type(embeddings).__name__}. Wrap "
-            "your client with embedding_factory: from ragas.embeddings import "
-            "embedding_factory; embeddings = embedding_factory('openai', "
-            "client=client)"
-        )
 
 
 class _Models:
