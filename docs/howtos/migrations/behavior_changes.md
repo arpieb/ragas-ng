@@ -741,3 +741,12 @@ Which sample class a row becomes was decided in three places. It is now `ragas.d
 | `ragas.utils.async_to_sync` | `ragas.async_utils.async_to_sync` |
 | `ragas.utils.convert_v1_to_v2_dataset`, `REQUIRED_COLS_v1` | `ragas.validation` |
 | `ragas.utils.convert_row_v1_to_v2`, `convert_v2_to_v1_dataset` | Removed: nothing used them |
+
+## `Dataset.train_test_split()` no longer shuffles the dataset or the global `random` ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+With `random_state` set, `train_test_split()` called `random.seed(random_state)` and shuffled the dataset's own rows in place. Now it shuffles a copy with `random.Random(random_state)`.
+
+- For a given seed and dataset, the same rows land in each split as before.
+- The dataset keeps its row order, and the global `random` state is not reseeded. Code that relied on `train_test_split()` seeding `random` for later calls must seed it itself.
+- Calling it twice with the same seed now gives the same split. It used to shuffle the already-shuffled rows again, so the second call gave a different split.
+- With `random_state=None` the rows are not shuffled, as before: the last `test_size` of them are the test split.
