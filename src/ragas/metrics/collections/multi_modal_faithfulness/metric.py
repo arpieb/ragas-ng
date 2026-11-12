@@ -4,6 +4,7 @@ import typing as t
 from typing import List
 
 from ragas.metrics.collections.base import BaseMetric
+from ragas.metrics.collections.image_sources import ImageSourcePolicy
 from ragas.metrics.result import MetricResult
 
 from .util import (
@@ -64,11 +65,13 @@ class MultiModalFaithfulness(BaseMetric):
 
     # Type hints for linter (attributes are set in __init__)
     llm: "InstructorBaseRagasLLM"
+    image_policy: ImageSourcePolicy
 
     def __init__(
         self,
         llm: "InstructorBaseRagasLLM",
         name: str = "multi_modal_faithfulness",
+        image_policy: t.Optional[ImageSourcePolicy] = None,
         **kwargs,
     ):
         """
@@ -77,8 +80,13 @@ class MultiModalFaithfulness(BaseMetric):
         Args:
             llm: Modern instructor-based LLM with vision capabilities
             name: The metric name
+            image_policy: Where context images may be loaded from. The default
+                fetches public http(s) URLs and data URIs only, and reads no
+                local files; pass ``ImageSourcePolicy(local_dir=...)`` to read
+                images from a directory. See ``ImageSourcePolicy``.
         """
         self.llm = llm
+        self.image_policy = image_policy or ImageSourcePolicy()
         super().__init__(name=name, **kwargs)
 
     async def ascore(
@@ -115,6 +123,7 @@ class MultiModalFaithfulness(BaseMetric):
             instruction=MULTIMODAL_FAITHFULNESS_INSTRUCTION,
             response=response,
             retrieved_contexts=retrieved_contexts,
+            image_policy=self.image_policy,
         )
 
         # Call the LLM with multimodal content

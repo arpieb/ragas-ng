@@ -4,10 +4,9 @@ import typing as t
 
 from pydantic import BaseModel, Field
 
+from ragas.metrics.collections.image_sources import ImageSourcePolicy
 from ragas.metrics.collections.multi_modal_faithfulness.util import (
     build_multimodal_content,
-    is_image_path_or_url,
-    process_image_to_base64,
 )
 
 
@@ -40,6 +39,7 @@ def build_multimodal_relevance_message_content(
     user_input: str,
     response: str,
     retrieved_contexts: t.List[str],
+    image_policy: t.Optional[ImageSourcePolicy] = None,
 ) -> t.List[t.Dict[str, t.Any]]:
     """
     Build multimodal message content for relevance evaluation.
@@ -49,6 +49,7 @@ def build_multimodal_relevance_message_content(
         user_input: The user's question or input
         response: The response to evaluate
         retrieved_contexts: List of contexts (text or image references)
+        image_policy: Where images may be loaded from (``ImageSourcePolicy``)
 
     Returns:
         List of content blocks for the message
@@ -65,6 +66,7 @@ Retrieved contexts:
         prompt_text,
         retrieved_contexts,
         "\n\nBased on the above contexts (both visual and textual), determine if the response is relevant. A response is relevant if it appropriately addresses the question using information from the provided contexts.",
+        image_policy,
     )
 
 
@@ -88,7 +90,5 @@ __all__ = [
     "MultiModalRelevanceInput",
     "MultiModalRelevanceOutput",
     "build_multimodal_relevance_message_content",
-    "is_image_path_or_url",
-    "process_image_to_base64",
     "MULTIMODAL_RELEVANCE_INSTRUCTION",
 ]

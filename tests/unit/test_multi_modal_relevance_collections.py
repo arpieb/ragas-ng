@@ -6,11 +6,15 @@ import tempfile
 import pytest
 from PIL import Image
 
+from ragas.metrics.collections.image_sources import ImageSourcePolicy
 from ragas.metrics.collections.multi_modal_relevance.util import (
     MULTIMODAL_RELEVANCE_INSTRUCTION,
     MultiModalRelevanceOutput,
     build_multimodal_relevance_message_content,
 )
+
+# Local image files are read only from a directory the caller names (#229).
+TMP_POLICY = ImageSourcePolicy(local_dir=tempfile.gettempdir())
 
 
 class TestBuildMultimodalRelevanceMessageContent:
@@ -44,6 +48,7 @@ class TestBuildMultimodalRelevanceMessageContent:
                 user_input="What is shown in the image?",
                 response="The image shows green color.",
                 retrieved_contexts=[temp_path, "Green is a color."],
+                image_policy=TMP_POLICY,
             )
 
             # Should have both text and image blocks
@@ -115,6 +120,7 @@ class TestBuildMultimodalRelevanceMessageContent:
                 user_input="What colors are shown?",
                 response="Red and blue colors are shown.",
                 retrieved_contexts=temp_paths,
+                image_policy=TMP_POLICY,
             )
 
             image_blocks = [c for c in content if c["type"] == "image_url"]

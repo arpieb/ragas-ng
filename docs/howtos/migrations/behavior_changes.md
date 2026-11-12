@@ -683,3 +683,14 @@ The legacy metrics, LLM and embedding wrappers and prompt classes are deleted, n
 - `PromptMixin.get_prompts()` / `set_prompts()` (testset synthesizers and transforms) find and take any `ragas.prompt.BasePrompt`; the testset-only override is folded into it.
 - `ragas.metrics._collections_bridge` is gone; the sample-to-`ascore()` mapping `evaluate()` uses is `ragas.metrics.sample_inputs`.
 - `DistanceMeasure` for `OverlapScoreBuilder` comes from `ragas.metrics.collections`; the values are unchanged.
+
+## Multimodal metrics restrict where context images are loaded from ([#229](https://github.com/arpieb/ragas-ng/issues/229))
+
+`MultiModalFaithfulness` and `MultiModalRelevance` load the images named in `retrieved_contexts`. They used to open any local image path and fetch any http(s) URL, following redirects to any host, internal ones included. Upstream's checks for this (vibrantlabsai/ragas#1991) were only in the legacy `ImageTextPrompt`. They now apply to both metrics, configured through the new `ragas.metrics.collections.ImageSourcePolicy`, passed as `image_policy=`:
+
+- **⚠ silent:** local image paths are no longer read by default. Such a context is sent to the LLM as its path text, and a warning is logged. To read local images, pass `image_policy=ImageSourcePolicy(local_dir="images/")`. Paths are resolved against that directory, and a path that resolves outside it is refused, symlinks included.
+- **⚠ silent:** a URL whose host resolves to a non-public address (private, loopback, link-local, shared, reserved or multicast, IPv4 or IPv6) is not fetched, and neither is a redirect to one. Both are sent as text. For an internal image server, pass `ImageSourcePolicy(allow_private_urls=True)`.
+- URLs with credentials, a backslash in the host part, or a host that `urllib` and `requests` parse differently are refused. At most 5 redirects are followed.
+- The size limit (10 MB) is now `ImageSourcePolicy(max_bytes=...)`.
+- Data URIs are unchanged.
+- The image helpers `process_image_to_base64()` and `is_image_path_or_url()` moved from the `multi_modal_faithfulness.util` and `multi_modal_relevance.util` modules to `ragas.metrics.collections.image_sources`. `process_image_to_base64()` takes the policy as its second argument.
