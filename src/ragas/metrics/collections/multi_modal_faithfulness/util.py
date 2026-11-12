@@ -4,6 +4,7 @@ import typing as t
 
 from pydantic import BaseModel, Field
 
+from ragas.exceptions import ImageLoadError
 from ragas.metrics.collections.image_sources import (
     ImageSourcePolicy,
     process_image_to_base64,
@@ -46,11 +47,19 @@ def build_multimodal_content(
     ``[Image context N]`` label; any other context as ``Context N: ...`` text.
     ``image_policy`` limits where images are loaded from (the default reads
     no local files and fetches public URLs only; see ``ImageSourcePolicy``).
+
+    Raises:
+        ImageLoadError: a context is an image reference the policy refuses or
+            that fails to load (unless ``on_blocked="warn"``); the error gives
+            its 1-based position.
     """
     content: t.List[t.Dict[str, t.Any]] = [{"type": "text", "text": prompt_text}]
 
     for i, ctx in enumerate(retrieved_contexts):
-        image_data = process_image_to_base64(ctx, image_policy)
+        try:
+            image_data = process_image_to_base64(ctx, image_policy)
+        except ImageLoadError as e:
+            raise e.with_index(i + 1) from None
         if image_data:
             content.append(
                 {
