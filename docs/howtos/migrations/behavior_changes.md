@@ -721,3 +721,12 @@ The legacy metrics, LLM and embedding wrappers and prompt classes are deleted, n
 - `run_async_tasks()` returns results in the order of `tasks`; they used to come back in completion order. Errors are unchanged: with `fail_fast=True` the first failure cancels the rest and is raised; without it every task runs and the first error to happen is raised at the end.
 - Its unused keyword argument `cancel_check` is removed. To stop a run early, use `Executor` and call `executor.cancel()`.
 - `arun()`'s `max_workers`, `raise_exceptions`, `save_partial`, ordering and cancellation behave as before.
+
+## `EvaluationDataset`: one rule for sample types, `from_dict` takes columns ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+Which sample class a row becomes was decided in three places. It is now `ragas.dataset_schema.sample_type_for(row)`: a row whose `user_input` is a list (of messages) is a `MultiTurnSample`, any other row a `SingleTurnSample`. `SAMPLE_TYPES` lists the two classes.
+
+- `EvaluationDataset.from_list()` decides per row. It used to look only at the first row's `user_input` and build every row as that type. A list mixing single- and multi-turn rows now raises `ValueError: Sample at index N is of type ...`; it used to raise a pydantic validation error on the first row that didn't fit.
+- `EvaluationDataset.from_dict()` takes columns, `{"user_input": [...], "response": [...]}`, as its `Dict` annotation said, and calls `from_list()`. It used to iterate its argument as a list of rows, so only a list worked and a real dict raised `TypeError`. Pass a list of rows to `from_list()`; `from_dict()` raises `TypeError` for one.
+- `EvaluationDataset.backend` and `.name`, and `from_list()`'s `backend=` and `name=` arguments, are removed. Nothing read them. For a named dataset saved to a backend, use `ragas.Dataset`.
+- `ragas.validation.get_supported_metric_type()` is removed. `evaluate()` reports an unsupported sample class as `The metric '<name>' does not support the sample type <class>`, instead of `Unsupported sample type <class>`.
