@@ -21,9 +21,11 @@ from ragas import Dataset
 from ragas.backends.local_jsonl import LocalJSONLBackend
 from ragas.dataset_schema import (
     EvaluationDataset,
+    SingleTurnSample,
+)
+from ragas.optimizers.annotations import (
     MetricAnnotation,
     SingleMetricAnnotation,
-    SingleTurnSample,
 )
 
 DATE_LIKE = [

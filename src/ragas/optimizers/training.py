@@ -6,9 +6,9 @@ import copy
 import os
 import typing as t
 
-from ragas.dataset_schema import MetricAnnotation, SingleMetricAnnotation
 from ragas.losses import BinaryMetricLoss, Loss, MSELoss
 from ragas.metrics.base import MetricOutputType
+from ragas.optimizers.annotations import MetricAnnotation, SingleMetricAnnotation
 from ragas.optimizers.demonstrations import optimize_demonstrations
 from ragas.run_config import RunConfig
 

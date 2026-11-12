@@ -3,12 +3,12 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 from pydantic import BaseModel, Field
 
-from ragas.dataset_schema import (
+from ragas.losses import MSELoss
+from ragas.optimizers.annotations import (
     PromptAnnotation,
     SampleAnnotation,
     SingleMetricAnnotation,
 )
-from ragas.losses import MSELoss
 from ragas.prompt.metrics.base_prompt import BasePrompt
 
 try:

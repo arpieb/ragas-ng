@@ -2,10 +2,10 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from ragas.dataset_schema import SingleMetricAnnotation
 from ragas.llms.base import InstructorLLM
 from ragas.losses import MSELoss
 from ragas.metrics.collections.aspect_critic.util import AspectCriticPrompt
+from ragas.optimizers.annotations import SingleMetricAnnotation
 
 try:
     import dspy  # noqa: F401

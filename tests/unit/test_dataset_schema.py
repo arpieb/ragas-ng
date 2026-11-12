@@ -6,11 +6,13 @@ from ragas.dataset_schema import (
     EvaluationDataset,
     HumanMessage,
     MultiTurnSample,
+    SingleTurnSample,
+    sample_type_for,
+)
+from ragas.optimizers.annotations import (
     PromptAnnotation,
     SampleAnnotation,
     SingleMetricAnnotation,
-    SingleTurnSample,
-    sample_type_for,
 )
 
 samples = [

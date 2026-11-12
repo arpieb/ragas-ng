@@ -21,9 +21,9 @@ from ragas.prompt.utils import check_example_count, nearest_indices
 
 if t.TYPE_CHECKING:
     from ragas.config import DemonstrationConfig
-    from ragas.dataset_schema import PromptAnnotation, SingleMetricAnnotation
     from ragas.embeddings.base import BaseRagasEmbedding
     from ragas.metrics.collections.base import BaseMetric
+    from ragas.optimizers.annotations import PromptAnnotation, SingleMetricAnnotation
 
 logger = logging.getLogger(__name__)
 
