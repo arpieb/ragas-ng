@@ -292,3 +292,43 @@ With `llm_factory("gemini/...")` or `llm_factory("vertex_ai/...")` and no `embed
 The semantic-similarity part of `AnswerCorrectness` was the raw cosine, which spans `[-1, 1]`, so the weighted score could go below 0. It is now clipped to `[0, 1]`, the same as `SemanticSimilarity` ([#107](https://github.com/arpieb/ragas-ng/issues/107)).
 
 Only samples whose response and reference embeddings have a negative cosine score differently (unrelated texts, with some embedding models), and only when the similarity weight is above 0. The score rises by `similarity_weight × |cosine|`, divided by the sum of the weights. For example, factuality 0.5, cosine −1 and `weights=[0.5, 0.5]` scored −0.25 and now scores 0.25. With the default weights `[0.75, 0.25]` and cosine −0.1, the score rises by 0.025.
+
+## One F-score edge-case policy ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+Five metrics computed precision, recall and F-beta themselves, and they disagreed when a count was zero. They now share `ragas.metrics.utils.precision_recall` / `fbeta_score`:
+
+- **Nothing expected and nothing produced** (`tp + fp + fn == 0`): precision, recall and F are 1.0.
+- **One side empty, the other not:** 0.0.
+- **No epsilon:** a perfect score is exactly 1.0.
+
+What moves:
+
+| Metric | Inputs that score differently | Before | Now |
+|---|---|---|---|
+| `ToolCallF1` | no reference tool calls and none made | 0.0 | 1.0 |
+| `TopicAdherence` (all modes) | every topic out of scope and refused | ~0.0 | 1.0 |
+| `TopicAdherence` (all modes) | everything else | off by up to ~1e-10 (a perfect score was 0.9999999999) | exact |
+| `DataCompyScore` | reference and response both have zero rows (`mode="rows"`) or zero columns (`mode="columns"`) | 0.0 | 1.0 |
+| `BinaryMetricLoss(metric="f1_score")`, used by `train()` | all predictions and all annotations negative | 0.0 | 1.0 |
+
+`AnswerCorrectness` already followed this policy, so its factuality term is unchanged. `FactualCorrectness` combines two separately measured fractions with `fbeta_from_precision_recall`, which is unchanged.
+
+## One cosine similarity ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+Embedding similarity is now `ragas.similarity.cosine` / `cosine_matrix` everywhere. The cosine is clipped to `[-1, 1]` only to absorb rounding, a zero vector has similarity 0.0 to everything, and no epsilon is added to the norms.
+
+- **`SemanticSimilarity`**: a zero embedding scored NaN; it now scores 0.0.
+- **`AnswerRelevancy`**: a zero embedding (question or generated question) made the mean similarity NaN; that pair now counts as 0.0.
+- **`AnswerCorrectness`**: unchanged (a zero embedding was already 0.0).
+- **Test generation** (`CosineSimilarityBuilder`, `SummaryCosineSimilarityBuilder`, persona grouping): a zero embedding gave NaN similarities, which never passed a threshold. It now gives 0.0, which also passes no positive threshold. Identical embeddings now score exactly 1.0, not `1.0000000002`.
+- **Few-shot example selection** (`DynamicFewShotPrompt`, and `train()` with a `demonstration_config`): similarities lose the `+1e-8` in the denominator. Only an example whose similarity sits within ~1e-8 of `threshold` can flip.
+
+## AnswerAccuracy, ResponseGroundedness, ContextRelevance: retries can change the rating ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+Each of the two judges retries an off-scale rating (e.g. 3 on a 0/2/4 scale) up to `max_retries` attempts in total. A retry used to resend the identical request at the configured near-deterministic settings, so it almost always returned the same off-scale rating, and under a cache it always did (cf. [#55](https://github.com/arpieb/ragas-ng/issues/55)). That judge then counted as NaN, and the score was the other judge's alone, or NaN.
+
+A retry is now a fresh sample: temperature 0.3, with its own `sample_index` so a cache stores it separately. The first attempt is unchanged, so samples whose judges answer on-scale score as before. Samples where a judge answered off-scale can now get that judge's rating instead of NaN.
+
+## FactualCorrectness: verification prompt schema ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+`FactualCorrectness` now verifies claims with the shared Faithfulness NLI prompt instead of its own copy. The instruction and examples are identical. The JSON schema printed into the prompt differs in two field descriptions (a description on `statements`, no trailing period on `verdict`), so the prompt text changes slightly. Scores should be close; cached verification responses are not reused.
