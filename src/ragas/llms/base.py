@@ -14,8 +14,9 @@ from abc import ABC, abstractmethod
 import instructor
 from pydantic import BaseModel
 
+from ragas._copying import CachedCopyable
 from ragas.async_utils import run_sync
-from ragas.cache import CacheInterface, cache_identity, cacher
+from ragas.cache import CacheInterface
 from ragas.callbacks import ChainType, clip_for_span, current_group, traced
 from ragas.llms._retry import acall_with_retry, call_with_retry
 from ragas.run_config import (
@@ -534,7 +535,7 @@ def _record_usage_on_span(span: t.Any, raw: t.Any) -> None:
         logger.debug("Could not record token usage on the LLM span", exc_info=True)
 
 
-class InstructorLLM(InstructorBaseRagasLLM):
+class InstructorLLM(CachedCopyable, InstructorBaseRagasLLM):
     """LLM wrapper using the Instructor library for structured outputs.
 
     ``llm_factory()`` builds these over LiteLLM (#182). You can also construct
@@ -601,26 +602,9 @@ class InstructorLLM(InstructorBaseRagasLLM):
 
         self._wrap_with_cache()
 
-    def _wrap_with_cache(self) -> None:
-        """Route ``generate``/``agenerate`` through ``cache``, if set.
-
-        The wrappers are bound to this object, so a copy gets its own
-        (see ``__copy__``): with the original's, the copy's calls would run
-        on the original, with its settings.
-        """
-        if self.cache is None:
-            return
-        cls = type(self)
-        self.generate = cacher(  # type: ignore
-            cache_backend=self.cache, identity=lambda: cache_identity(self)
-        )(cls.generate.__get__(self, cls))
-        self.agenerate = cacher(  # type: ignore
-            cache_backend=self.cache, identity=lambda: cache_identity(self)
-        )(cls.agenerate.__get__(self, cls))
-
-    # Shared by copies, never copied: what connects to the provider, and the
-    # limits and stores meant to be shared. A copied LLM goes to the same
-    # provider, under the same rate limit, with the same cache (#211).
+    _CACHED_METHODS = ("generate", "agenerate")
+    # A copied LLM goes to the same provider, under the same rate limit, with
+    # the same cache (#211).
     _SHARED_ON_COPY = frozenset(
         {
             "client",
@@ -631,26 +615,6 @@ class InstructorLLM(InstructorBaseRagasLLM):
             "usage_collector",
         }
     )
-
-    def _copied(self, memo: t.Optional[t.Dict[int, t.Any]]) -> "InstructorLLM":
-        from ragas._copying import copy_sharing
-
-        new = copy_sharing(
-            self,
-            shared=self._SHARED_ON_COPY,
-            rebuilt={"generate", "agenerate"},
-            memo=memo,
-        )
-        new._wrap_with_cache()
-        return new
-
-    def __copy__(self) -> "InstructorLLM":
-        return self._copied(None)
-
-    def __deepcopy__(self, memo: t.Dict[int, t.Any]) -> "InstructorLLM":
-        # instructor's clients can't be deep-copied: their __getattr__
-        # recurses on an object that copy made without __init__ (#211)
-        return self._copied(memo)
 
     def _map_provider_params(
         self, args: t.Optional[t.Dict[str, t.Any]] = None, sampled: bool = False
