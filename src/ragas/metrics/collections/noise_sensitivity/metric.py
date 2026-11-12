@@ -72,6 +72,8 @@ class NoiseSensitivity(BaseMetric):
         allowed_values: Score range (0.0 to 1.0, lower is better)
     """
 
+    required_components = ("llm",)
+
     # Type hints for linter (attributes are set in __init__)
     llm: "InstructorBaseRagasLLM"
 
@@ -90,8 +92,6 @@ class NoiseSensitivity(BaseMetric):
             name: The metric name
             mode: Either "relevant" or "irrelevant" context sensitivity mode
         """
-        # Set attributes explicitly before calling super()
-        self.llm = llm
         self.mode = mode
         self.statement_prompt = StatementGeneratorPrompt()
         self.faithfulness_prompt = NLIStatementPrompt()
@@ -102,8 +102,7 @@ class NoiseSensitivity(BaseMetric):
                 f"Invalid argument passed for 'mode': {mode}. Must be 'relevant' or 'irrelevant'."
             )
 
-        # Call super() for validation (without passing llm in kwargs)
-        super().__init__(name=name, **kwargs)
+        super().__init__(llm=llm, name=name, **kwargs)
 
     async def ascore(
         self,

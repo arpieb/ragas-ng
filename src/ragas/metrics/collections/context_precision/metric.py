@@ -58,6 +58,8 @@ class ContextPrecisionWithReference(BaseMetric):
         allowed_values: Score range (0.0 to 1.0, higher is better)
     """
 
+    required_components = ("llm",)
+
     # Type hints for linter (attributes are set in __init__)
     llm: "InstructorBaseRagasLLM"
 
@@ -74,12 +76,9 @@ class ContextPrecisionWithReference(BaseMetric):
             llm: Modern instructor-based LLM for context evaluation
             name: The metric name
         """
-        # Set attributes explicitly before calling super()
-        self.llm = llm
         self.prompt = ContextPrecisionPrompt()  # Initialize prompt class once
 
-        # Call super() for validation (without passing llm in kwargs)
-        super().__init__(name=name, **kwargs)
+        super().__init__(llm=llm, name=name, **kwargs)
 
     async def ascore(
         self, user_input: str, reference: str, retrieved_contexts: List[str]
@@ -176,6 +175,8 @@ class ContextPrecisionWithoutReference(BaseMetric):
         allowed_values: Score range (0.0 to 1.0, higher is better)
     """
 
+    required_components = ("llm",)
+
     # Type hints for linter (attributes are set in __init__)
     llm: "InstructorBaseRagasLLM"
 
@@ -192,12 +193,9 @@ class ContextPrecisionWithoutReference(BaseMetric):
             llm: Modern instructor-based LLM for context evaluation
             name: The metric name
         """
-        # Set attributes explicitly before calling super()
-        self.llm = llm
         self.prompt = ContextPrecisionPrompt()  # Initialize prompt class once
 
-        # Call super() for validation (without passing llm in kwargs)
-        super().__init__(name=name, **kwargs)
+        super().__init__(llm=llm, name=name, **kwargs)
 
     async def ascore(
         self, user_input: str, response: str, retrieved_contexts: List[str]

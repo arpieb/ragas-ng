@@ -56,6 +56,8 @@ class AspectCritic(BaseMetric):
         allowed_values: Score range (0.0 to 1.0)
     """
 
+    required_components = ("llm",)
+
     llm: "InstructorBaseRagasLLM"
     output_type = MetricOutputType.BINARY
 
@@ -77,7 +79,6 @@ class AspectCritic(BaseMetric):
                 ``AspectCritic``, where the parameter was accepted but never
                 took more than one sample, so the vote was a no-op.
         """
-        self.llm = llm
         self._definition = definition
         # Even counts can tie; the legacy implementation rounded up the same way.
         self.strictness = strictness if strictness % 2 != 0 else strictness + 1
@@ -85,7 +86,7 @@ class AspectCritic(BaseMetric):
         self.prompt = AspectCriticPrompt()
         self._apply_definition()
 
-        super().__init__(name=name, allowed_values=(0.0, 1.0), **kwargs)
+        super().__init__(llm=llm, name=name, allowed_values=(0.0, 1.0), **kwargs)
 
     def _apply_definition(self) -> None:
         self.prompt.instruction = (

@@ -64,6 +64,8 @@ class MultiModalRelevance(BaseMetric):
         contexts. Check the model's page on your provider's site.
     """
 
+    required_components = ("llm",)
+
     # Type hints for linter (attributes are set in __init__)
     llm: "InstructorBaseRagasLLM"
     image_policy: ImageSourcePolicy
@@ -86,9 +88,8 @@ class MultiModalRelevance(BaseMetric):
                 local files; pass ``ImageSourcePolicy(local_dir=...)`` to read
                 images from a directory. See ``ImageSourcePolicy``.
         """
-        self.llm = llm
         self.image_policy = image_policy or ImageSourcePolicy()
-        super().__init__(name=name, **kwargs)
+        super().__init__(llm=llm, name=name, **kwargs)
 
     async def ascore(
         self,

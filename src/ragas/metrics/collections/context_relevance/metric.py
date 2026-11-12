@@ -62,6 +62,8 @@ class ContextRelevance(BaseMetric):
         max_retries: Maximum retry attempts for invalid ratings
     """
 
+    required_components = ("llm",)
+
     # Type hints for linter (attributes are set in __init__)
     llm: "InstructorBaseRagasLLM"
 
@@ -80,14 +82,11 @@ class ContextRelevance(BaseMetric):
             name: The metric name
             max_retries: Maximum retry attempts for invalid ratings
         """
-        # Set attributes explicitly before calling super()
-        self.llm = llm
         self.max_retries = max_retries
         self.judge1_prompt = ContextRelevanceJudge1Prompt()
         self.judge2_prompt = ContextRelevanceJudge2Prompt()
 
-        # Call super() for validation (without passing llm in kwargs)
-        super().__init__(name=name, **kwargs)
+        super().__init__(llm=llm, name=name, **kwargs)
 
     async def ascore(
         self, user_input: str, retrieved_contexts: List[str]

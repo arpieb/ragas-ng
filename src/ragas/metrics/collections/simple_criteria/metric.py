@@ -56,6 +56,8 @@ class SimpleCriteriaScore(BaseMetric):
         allowed_values: Score range; widen it to match your definition
     """
 
+    required_components = ("llm",)
+
     llm: "InstructorBaseRagasLLM"
     output_type = MetricOutputType.DISCRETE
 
@@ -80,14 +82,13 @@ class SimpleCriteriaScore(BaseMetric):
             allowed_values: The score range your definition asks for. Defaults
                 to 0-5; the legacy metric imposed no range at all.
         """
-        self.llm = llm
         self._definition = definition
         self.strictness = strictness if strictness % 2 != 0 else strictness + 1
 
         self.prompt = SimpleCriteriaPrompt()
         self._apply_definition()
 
-        super().__init__(name=name, allowed_values=allowed_values, **kwargs)
+        super().__init__(llm=llm, name=name, allowed_values=allowed_values, **kwargs)
 
     def _apply_definition(self) -> None:
         self.prompt.instruction = (

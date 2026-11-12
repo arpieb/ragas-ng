@@ -51,6 +51,8 @@ class SemanticSimilarity(BaseMetric):
         allowed_values: Score range (0.0 to 1.0)
     """
 
+    required_components = ("embeddings",)
+
     embeddings: "BaseRagasEmbedding"
 
     def __init__(
@@ -61,10 +63,9 @@ class SemanticSimilarity(BaseMetric):
         **kwargs,
     ):
         """Initialize SemanticSimilarity metric with required embeddings."""
-        self.embeddings = embeddings
         self.threshold = threshold
 
-        super().__init__(name=name, **kwargs)
+        super().__init__(embeddings=embeddings, name=name, **kwargs)
 
     async def ascore(self, reference: str, response: str) -> MetricResult:
         """

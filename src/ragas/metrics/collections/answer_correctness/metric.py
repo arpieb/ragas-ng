@@ -73,6 +73,11 @@ class AnswerCorrectness(BaseMetric):
         allowed_values: Score range (0.0 to 1.0)
     """
 
+    required_components = ("llm",)
+    # None is allowed for pure factuality (weights=[1.0, 0.0]); __init__
+    # requires embeddings when the similarity weight is > 0.
+    optional_components = ("embeddings",)
+
     # Type hints for linter (attributes are set in __init__)
     llm: "InstructorBaseRagasLLM"
     embeddings: t.Optional["BaseRagasEmbedding"]
@@ -107,9 +112,6 @@ class AnswerCorrectness(BaseMetric):
             Factuality + Similarity (embeddings required):
                 >>> metric = AnswerCorrectness(llm=llm, embeddings=embeddings, weights=[0.75, 0.25])
         """
-        # Set attributes explicitly before calling super()
-        self.llm = llm
-        self.embeddings = embeddings
         self.weights = weights
         self.beta = beta
         self.statement_generator_prompt = StatementGeneratorPrompt()
@@ -139,19 +141,7 @@ class AnswerCorrectness(BaseMetric):
                 "Beta must be a float. A beta > 1 gives more weight to recall, while beta < 1 favors precision."
             )
 
-        # Call super() for validation (without passing llm/embeddings in kwargs)
-        super().__init__(name=name, **kwargs)
-
-    def _validate_embeddings(self) -> None:
-        """Validate embeddings when given; None is allowed.
-
-        AnswerCorrectness allows ``embeddings=None`` for pure factuality
-        evaluation (weights=[1.0, 0.0]); __init__ already requires embeddings
-        when the similarity weight is > 0. Anything else passed as embeddings
-        must be a modern embedding, as for every collections metric.
-        """
-        if self.embeddings is not None:
-            super()._validate_embeddings()
+        super().__init__(llm=llm, embeddings=embeddings, name=name, **kwargs)
 
     async def ascore(
         self, user_input: str, response: str, reference: str

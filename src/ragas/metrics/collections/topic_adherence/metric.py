@@ -72,6 +72,8 @@ class TopicAdherence(BaseMetric):
         name: The metric name
     """
 
+    required_components = ("llm",)
+
     llm: "InstructorBaseRagasLLM"
 
     def __init__(
@@ -81,13 +83,12 @@ class TopicAdherence(BaseMetric):
         name: str = "topic_adherence",
         **kwargs,
     ):
-        self.llm = llm
         self.mode = mode
         self.topic_extraction_prompt = TopicExtractionPrompt()
         self.topic_refused_prompt = TopicRefusedPrompt()
         self.topic_classification_prompt = TopicClassificationPrompt()
 
-        super().__init__(name=name, **kwargs)
+        super().__init__(llm=llm, name=name, **kwargs)
 
     async def ascore(
         self,

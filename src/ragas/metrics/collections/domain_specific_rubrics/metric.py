@@ -80,6 +80,8 @@ class DomainSpecificRubrics(BaseMetric):
         name: The metric name (default: "domain_specific_rubrics")
     """
 
+    required_components = ("llm",)
+
     llm: "InstructorBaseRagasLLM"
     output_type = MetricOutputType.DISCRETE
 
@@ -91,7 +93,6 @@ class DomainSpecificRubrics(BaseMetric):
         name: str = "domain_specific_rubrics",
         **kwargs,
     ):
-        self.llm = llm
         self.with_reference = with_reference
 
         if rubrics is None:
@@ -109,7 +110,7 @@ class DomainSpecificRubrics(BaseMetric):
             f"{self.scoring_prompt.instruction}\n\nScoring Rubrics:\n{rubrics_text}\n"
         )
 
-        super().__init__(name=name, allowed_values=(1.0, 5.0), **kwargs)
+        super().__init__(llm=llm, name=name, allowed_values=(1.0, 5.0), **kwargs)
 
     async def ascore(
         self,

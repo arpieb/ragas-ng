@@ -69,6 +69,8 @@ class Faithfulness(BaseMetric):
         allowed_values: Score range (0.0 to 1.0, higher is better)
     """
 
+    required_components = ("llm",)
+
     # Type hints for linter (attributes are set in __init__)
     llm: "InstructorBaseRagasLLM"
 
@@ -85,13 +87,10 @@ class Faithfulness(BaseMetric):
             llm: Modern instructor-based LLM for statement generation and NLI evaluation
             name: The metric name
         """
-        # Set attributes explicitly before calling super()
-        self.llm = llm
         self.statement_generator_prompt = StatementGeneratorPrompt()
         self.nli_statement_prompt = NLIStatementPrompt()
 
-        # Call super() for validation (without passing llm in kwargs)
-        super().__init__(name=name, **kwargs)
+        super().__init__(llm=llm, name=name, **kwargs)
 
     async def ascore(
         self, user_input: str, response: str, retrieved_contexts: List[str]

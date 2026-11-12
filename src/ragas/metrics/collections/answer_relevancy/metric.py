@@ -60,6 +60,11 @@ class AnswerRelevancy(BaseMetric):
         allowed_values: Score range (0.0 to 1.0, higher is better)
     """
 
+    required_components = (
+        "llm",
+        "embeddings",
+    )
+
     # Type hints for linter (attributes are set in __init__)
     llm: "InstructorBaseRagasLLM"
     embeddings: "BaseRagasEmbedding"
@@ -82,14 +87,10 @@ class AnswerRelevancy(BaseMetric):
             strictness: Number of questions to generate (default: 3)
             **kwargs: Additional arguments passed to BaseMetric
         """
-        # Set attributes explicitly before calling super()
-        self.llm = llm
-        self.embeddings = embeddings
         self.strictness = strictness
         self.prompt = AnswerRelevancePrompt()  # Initialize prompt class once
 
-        # Call super() for validation
-        super().__init__(name=name, **kwargs)
+        super().__init__(llm=llm, embeddings=embeddings, name=name, **kwargs)
 
     async def ascore(self, user_input: str, response: str) -> MetricResult:
         """

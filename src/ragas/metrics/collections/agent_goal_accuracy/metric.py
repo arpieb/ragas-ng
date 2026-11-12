@@ -59,6 +59,8 @@ class AgentGoalAccuracyWithReference(BaseMetric):
         name: The metric name
     """
 
+    required_components = ("llm",)
+
     llm: "InstructorBaseRagasLLM"
     output_type = MetricOutputType.BINARY
 
@@ -68,11 +70,10 @@ class AgentGoalAccuracyWithReference(BaseMetric):
         name: str = "agent_goal_accuracy",
         **kwargs,
     ):
-        self.llm = llm
         self.workflow_prompt = InferGoalOutcomePrompt()
         self.compare_outcome_prompt = CompareOutcomePrompt()
 
-        super().__init__(name=name, **kwargs)
+        super().__init__(llm=llm, name=name, **kwargs)
 
     async def ascore(
         self,
@@ -175,6 +176,8 @@ class AgentGoalAccuracyWithoutReference(BaseMetric):
         name: The metric name
     """
 
+    required_components = ("llm",)
+
     llm: "InstructorBaseRagasLLM"
     output_type = MetricOutputType.BINARY
 
@@ -184,11 +187,10 @@ class AgentGoalAccuracyWithoutReference(BaseMetric):
         name: str = "agent_goal_accuracy",
         **kwargs,
     ):
-        self.llm = llm
         self.workflow_prompt = InferGoalOutcomePrompt()
         self.compare_outcome_prompt = CompareOutcomePrompt()
 
-        super().__init__(name=name, **kwargs)
+        super().__init__(llm=llm, name=name, **kwargs)
 
     async def ascore(
         self,

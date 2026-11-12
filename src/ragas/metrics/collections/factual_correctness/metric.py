@@ -79,6 +79,8 @@ class FactualCorrectness(BaseMetric):
         allowed_values: Score range (0.0 to 1.0, higher is better)
     """
 
+    required_components = ("llm",)
+
     # Type hints for linter (attributes are set in __init__)
     llm: "InstructorBaseRagasLLM"
 
@@ -103,8 +105,6 @@ class FactualCorrectness(BaseMetric):
             coverage: Claim decomposition coverage ("low" or "high")
             name: The metric name
         """
-        # Set attributes explicitly before calling super()
-        self.llm = llm
         self.mode = mode
         self.beta = beta
         self.atomicity = atomicity
@@ -118,8 +118,7 @@ class FactualCorrectness(BaseMetric):
                 "Beta must be a float. A beta > 1 gives more weight to recall, while beta < 1 favors precision."
             )
 
-        # Call super() for validation (without passing llm in kwargs)
-        super().__init__(name=name, **kwargs)
+        super().__init__(llm=llm, name=name, **kwargs)
 
     async def ascore(self, response: str, reference: str) -> MetricResult:
         """

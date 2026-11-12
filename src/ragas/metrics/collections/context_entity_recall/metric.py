@@ -54,6 +54,8 @@ class ContextEntityRecall(BaseMetric):
         allowed_values: Score range (0.0 to 1.0, higher is better)
     """
 
+    required_components = ("llm",)
+
     # Type hints for linter (attributes are set in __init__)
     llm: "InstructorBaseRagasLLM"
 
@@ -71,12 +73,9 @@ class ContextEntityRecall(BaseMetric):
             name: The metric name (default: "context_entity_recall")
             **kwargs: Additional arguments passed to BaseMetric
         """
-        # Set attributes explicitly before calling super()
-        self.llm = llm
         self.prompt = ExtractEntitiesPrompt()  # Initialize prompt class once
 
-        # Call super() for validation
-        super().__init__(name=name, **kwargs)
+        super().__init__(llm=llm, name=name, **kwargs)
 
     async def ascore(
         self, reference: str, retrieved_contexts: List[str]

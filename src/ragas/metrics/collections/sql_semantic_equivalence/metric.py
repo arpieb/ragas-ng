@@ -49,6 +49,8 @@ class SQLSemanticEquivalence(BaseMetric):
         name: The metric name (default: "sql_semantic_equivalence")
     """
 
+    required_components = ("llm",)
+
     llm: "InstructorBaseRagasLLM"
     output_type = MetricOutputType.BINARY
 
@@ -58,9 +60,8 @@ class SQLSemanticEquivalence(BaseMetric):
         name: str = "sql_semantic_equivalence",
         **kwargs,
     ):
-        self.llm = llm
         self.equivalence_prompt = SQLEquivalencePrompt()
-        super().__init__(name=name, **kwargs)
+        super().__init__(llm=llm, name=name, **kwargs)
 
     async def ascore(
         self,
