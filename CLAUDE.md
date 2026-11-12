@@ -91,6 +91,7 @@ make install        # Full dev environment (adds the ML/tracing stack and all ex
 make format         # Format and lint all code
 make type           # Type check all code
 make check          # Quick health check (format + type, no tests)
+make lint-workflows # Lint GitHub Actions workflows with zizmor (pinned; accepted findings in .github/zizmor.yml)
 
 # Testing
 make test           # Run all unit tests

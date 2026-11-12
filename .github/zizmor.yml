@@ -1,0 +1,27 @@
+# zizmor (GitHub Actions security linter) configuration.
+#
+# Known findings in the existing workflows, accepted until #247 fixes them.
+# Remove each entry when its finding is fixed; the goal is an empty `rules:`.
+# New workflows and new findings in these files are not covered by these
+# per-file entries unless they hit the same rule in the same file.
+rules:
+  unpinned-uses:
+    ignore:
+      - ci.yaml
+      - docs.yaml
+      - claude.yml
+      - claude-code-review.yml
+      - issue-manager.yaml
+  artipacked:
+    ignore:
+      - ci.yaml
+      - docs.yaml
+      - claude.yml
+      - claude-code-review.yml
+  dangerous-triggers:
+    ignore:
+      - claude.yml
+      - issue-manager.yaml
+  excessive-permissions:
+    ignore:
+      - docs.yaml
