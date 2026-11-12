@@ -145,11 +145,11 @@ class DSPyOptimizer(Optimizer):
         self,
         dataset: SingleMetricAnnotation,
         loss: Loss,
-        config: t.Dict[t.Any, t.Any],
+        config: t.Optional[t.Mapping[str, t.Any]] = None,
+        *,
         run_config: t.Optional[RunConfig] = None,
         batch_size: t.Optional[int] = None,
         callbacks: t.Optional[Callbacks] = None,
-        with_debugging_logs: bool = False,
         raise_exceptions: bool = True,
     ) -> t.Dict[str, BasePrompt]:
         """
@@ -170,18 +170,11 @@ class DSPyOptimizer(Optimizer):
             Annotated dataset with ground truth scores.
         loss : Loss
             Loss function to optimize.
-        config : Dict[Any, Any]
-            Additional configuration parameters.
-        run_config : RunConfig, optional
-            Runtime configuration.
-        batch_size : int, optional
-            Batch size for evaluation.
-        callbacks : Callbacks, optional
-            Unused; DSPy traces its own calls.
-        with_debugging_logs : bool
-            Enable debug logging.
-        raise_exceptions : bool
-            Whether to raise exceptions during optimization.
+        config : Mapping[str, Any], optional
+            Additional settings: ``num_trials`` (without ``auto``).
+        run_config, batch_size, callbacks, raise_exceptions
+            Unused: DSPy runs and traces its own calls, and ``max_errors``
+            sets how many failures it tolerates.
 
         Returns
         -------
@@ -199,6 +192,7 @@ class DSPyOptimizer(Optimizer):
             raise RuntimeError("DSPy module not loaded.")
 
         metric = self.metric
+        config = dict(config or {})
         if self.cache is not None:
             cache_key = self._generate_cache_key(dataset, loss, config)
             if self.cache.has_key(cache_key):
@@ -295,9 +289,7 @@ class DSPyOptimizer(Optimizer):
 
     def _from_cacheable(self, cached: t.Mapping[str, t.Any]) -> t.Dict[str, BasePrompt]:
         """Cached results as copies of the metric's prompts."""
-        if self.metric is None:
-            raise ValueError("No metric provided for optimization.")
-        prompts = self.metric.get_prompts()
+        prompts = self._metric.get_prompts()
         result: t.Dict[str, BasePrompt] = {}
         for name, entry in cached.items():
             prompt = prompts[name]
