@@ -342,6 +342,28 @@ class RelationshipBuilder(BaseGraphTransformation):
         """
         pass
 
+    @staticmethod
+    def _pairs_to_relationships(
+        nodes: t.Sequence[Node],
+        pairs: t.Iterable[t.Tuple[int, int, float]],
+        name: str,
+    ) -> t.List[Relationship]:
+        """A bidirectional ``name`` relationship for each ``(i, j, score)`` pair.
+
+        ``i`` and ``j`` index ``nodes``, and the score is stored as the
+        ``name`` property.
+        """
+        return [
+            Relationship(
+                source=nodes[i],
+                target=nodes[j],
+                type=name,
+                properties={name: score},
+                bidirectional=True,
+            )
+            for i, j, score in pairs
+        ]
+
     def generate_execution_plan(self, kg: KnowledgeGraph) -> t.Sequence[t.Coroutine]:
         """
         Generates a sequence of coroutines to be executed in parallel by the Executor.
