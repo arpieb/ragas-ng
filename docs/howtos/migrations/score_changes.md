@@ -336,3 +336,7 @@ A retry is now a fresh sample: temperature 0.3, with its own `sample_index` so a
 ## FactualCorrectness: verification prompt schema ([#217](https://github.com/arpieb/ragas-ng/issues/217))
 
 `FactualCorrectness` now verifies claims with the shared Faithfulness NLI prompt instead of its own copy. The instruction and examples are identical. The JSON schema printed into the prompt differs in two field descriptions (a description on `statements`, no trailing period on `verdict`), so the prompt text changes slightly. Scores should be close; cached verification responses are not reused.
+
+## Decorator metrics: failed rows are errors ([#239](https://github.com/arpieb/ragas-ng/issues/239))
+
+A `@discrete_metric` / `@numeric_metric` / `@ranking_metric` metric now raises when its function fails or returns an invalid value (see [Behavior changes](behavior_changes.md#decorator-metrics-raise-instead-of-returning-valuenone-239)). Under `evaluate()` with `raise_exceptions=False`, a failed row is NaN, as before. With `raise_exceptions=True` the run now stops on it. In an `@experiment`, a row whose function lets the error through is now logged and left out of the results. Before, it was saved with a `None` score. Rows that score successfully are unchanged.

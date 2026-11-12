@@ -841,3 +841,13 @@ The private methods `_calculate_average_precision` (ContextPrecision), `_format_
 - The quickstart templates' `pyproject.toml` files depend on `ragas-ng[all]` (they had `ragas[all]>=0.3.0`, which resolved to upstream).
 - Install hints in error messages and the docs say `ragas-ng[...]`. The `ragas[examples]` hint, an extra that never existed here, is now the `ragas-ng-examples` package.
 - `ragas.experimental` no longer lazily imports upstream's separate `ragas_experimental` package. It raises `AttributeError`, like any other missing attribute.
+
+## Decorator metrics raise instead of returning `value=None` ([#239](https://github.com/arpieb/ragas-ng/issues/239))
+
+Metrics built with `@discrete_metric`, `@numeric_metric` and `@ranking_metric` now handle errors the way `DiscreteMetric` / `NumericMetric` / `RankingMetric` do.
+
+- **An invalid value raises `ValueError`.** That covers a value not in the allowed values, a number outside the range, or a ranking list of the wrong length. The message is the same one those classes use, e.g. `Metric m returned 1.5 but expected value in range (0.0, 1.0)`. Before, `score()` / `ascore()` returned `MetricResult(value=None, reason=<that message>)`.
+- **Errors from your function propagate.** Before, any exception, including LLM, network and coding errors, came back as `MetricResult(value=None, reason="Error executing metric <name>: ...")`.
+- **⚠ silent: `result.value is None` no longer detects a failure.** Code that checked for it, or that read `result.reason` for the error, now gets the exception instead. If a failure should count as a score, catch it inside the function and return that score; for example, return `"incorrect"` when the model's output can't be parsed.
+- Under `evaluate()` and `@experiment` these errors follow `raise_exceptions`, like any other metric error: raised, or the row gets no score (`evaluate()`) or is left out (`@experiment`) and the error is logged. Before, `raise_exceptions=True` could never surface them.
+- The private `_validate_result_value()` method is gone; use `validate_result_value()`, which returns the error message or `None`.

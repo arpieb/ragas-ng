@@ -81,8 +81,10 @@ Benchmarks model accuracy:
 ```python
 @discrete_metric(name="discount_accuracy", allowed_values=["correct", "incorrect"])
 def discount_accuracy(prediction: str, expected_discount):
-    parsed_json = json.loads(prediction)
-    predicted_discount = parsed_json.get("discount_percentage")
+    try:
+        predicted_discount = json.loads(prediction).get("discount_percentage")
+    except (json.JSONDecodeError, AttributeError) as e:
+        return MetricResult(value="incorrect", reason=f"Unparseable response: {e}")
 
     if predicted_discount == int(expected_discount):
         return MetricResult(value="correct", ...)

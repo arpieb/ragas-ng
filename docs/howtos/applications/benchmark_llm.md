@@ -155,9 +155,13 @@ def discount_accuracy(prediction: str, expected_discount):
     """Check if the discount prediction is correct."""
     import json
 
-    parsed_json = json.loads(prediction)
-    predicted_discount = parsed_json.get("discount_percentage")
     expected_discount_int = int(expected_discount)
+    try:
+        predicted_discount = json.loads(prediction).get("discount_percentage")
+    except (json.JSONDecodeError, AttributeError) as e:
+        # Malformed output is a wrong answer. Without this, the error would
+        # propagate and the experiment would leave the row out.
+        return MetricResult(value="incorrect", reason=f"Unparseable response: {e}")
 
     if predicted_discount == expected_discount_int:
         return MetricResult(

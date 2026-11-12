@@ -66,11 +66,8 @@ class TestDiscreteMetric:
         def my_metric(predicted: str, expected: str) -> str:
             return "maybe"  # Invalid value
 
-        result = my_metric.score(predicted="test", expected="test")
-
-        assert isinstance(result, MetricResult)
-        assert result.value is None
-        assert "expected one of ['pass', 'fail']" in result.reason
+        with pytest.raises(ValueError, match=r"expected one of \['pass', 'fail'\]"):
+            my_metric.score(predicted="test", expected="test")
 
     @pytest.mark.asyncio
     async def test_discrete_metric_async_with_plain_return(self):
@@ -126,11 +123,8 @@ class TestNumericMetric:
         def my_metric(predicted: float, expected: float) -> float:
             return 1.5  # Out of range
 
-        result = my_metric.score(predicted=0.8, expected=1.0)
-
-        assert isinstance(result, MetricResult)
-        assert result.value is None
-        assert "expected value in range (0, 1)" in result.reason
+        with pytest.raises(ValueError, match=r"expected value in range \(0, 1\)"):
+            my_metric.score(predicted=0.8, expected=1.0)
 
     @pytest.mark.asyncio
     async def test_numeric_metric_async_with_plain_return(self):
@@ -197,11 +191,8 @@ class TestRankingMetric:
         def my_metric(responses: list) -> list:
             return [0, 1]  # Wrong length - should be 3
 
-        result = my_metric.score(responses=["short", "medium", "long"])
-
-        assert isinstance(result, MetricResult)
-        assert result.value is None
-        assert "expected 3 items" in result.reason
+        with pytest.raises(ValueError, match="expected 3 items"):
+            my_metric.score(responses=["short", "medium", "long"])
 
     @pytest.mark.asyncio
     async def test_ranking_metric_async_with_plain_return(self):
@@ -386,7 +377,7 @@ class TestEdgeCases:
         assert result.value == "always_pass"
 
     def test_function_with_exception(self):
-        """Test that exceptions are handled gracefully."""
+        """Errors from the function propagate (#239)."""
 
         @discrete_metric(name="error_metric", allowed_values=["pass", "fail"])
         def error_metric(should_error: bool) -> str:
@@ -394,13 +385,8 @@ class TestEdgeCases:
                 raise ValueError("Test error")
             return "pass"
 
-        # Should not raise exception, should return error result
-        result = error_metric.score(should_error=True)
-
-        assert isinstance(result, MetricResult)
-        assert result.value is None
-        assert "Error executing metric" in result.reason
-        assert "Test error" in result.reason
+        with pytest.raises(ValueError, match="^Test error$"):
+            error_metric.score(should_error=True)
 
 
 class TestErrorHandling:
