@@ -704,3 +704,23 @@ The legacy metrics, LLM and embedding wrappers and prompt classes are deleted, n
 - An image reference is an image data URI, an http(s) URL, or a path ending in an image extension (`.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.bmp`). Any other context is text, as before.
 - **⚠ silent:** under `local_dir`, a file without an image extension is no longer opened. It is sent as text, even if it holds an image.
 - Other URL schemes, such as `ftp://`, raise instead of being treated as file paths.
+
+## `DiscreteMetric`, `NumericMetric` and `RankingMetric`: one scoring path and range checks ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+These metrics, and `SimpleLLMMetric` (`LLMMetric`) subclasses, were refactored. Saving, loading and alignment moved to their own modules; the public methods stay.
+
+- **⚠ silent:** `score()` now runs `ascore()`, so it calls the LLM's `agenerate()`, never `generate()`. `llm_factory()` LLMs support both, with sync or async clients, so most code is unaffected. A custom LLM object needs `agenerate()`. `result.traces["input"]` is now the formatted prompt from `score()` too; it used to hold the keyword arguments.
+- `ascore()` and `score()` check the LLM's value against `allowed_values` and raise `ValueError` when it is outside them. That means a `NumericMetric` value outside its range, or a `RankingMetric` list of the wrong length. Before, the value was returned as is. Under `evaluate()` and `@experiment` this follows `raise_exceptions`, like any other metric error: it is raised, or the row has no score and the error is logged. `DiscreteMetric` values were already restricted by its response model. See [Score changes](score_changes.md).
+- A metric with no prompt raises `ValueError` instead of a bare `Exception`.
+- `load()` checks the saved metric type in the base class, so `LLMMetric.load()` and a custom subclass's `load()` reject another class's file too. The `DiscreteMetric`/`NumericMetric`/`RankingMetric` overrides are unchanged. Files saved by earlier versions load as before.
+- A `NumericMetric` with `allowed_values=range(...)` can now be saved. It used to raise `TypeError`. The range is written as `{"range": [start, stop, step]}`, which earlier versions can't load.
+- `align()` and `align_and_validate()` take `max_similar_examples` and `similarity_threshold` as named arguments. Other keyword arguments raise `TypeError`; they were ignored before. String values are no longer converted to numbers. The aligner itself is `ragas.metrics.alignment.Aligner`.
+- `validate_alignment()` pairs each label with its prediction before dropping rows where either is missing. Before, missing labels and missing predictions were dropped from separate lists, so after a gap the labels were compared with other rows' predictions. `correlation` and `agreement_rate` change for test sets with missing labels or predictions. A test set with no complete row raises `ValueError` instead of `ZeroDivisionError`. Its `mapping` argument defaults to `None`.
+- Persistence lives in `ragas.metrics.serialization`. The private `SimpleLLMMetric` helpers `_serialize_prompt`, `_deserialize_prompt`, `_get_metric_config`, `_serialize_response_model_info`, `_read_metric_type` and `_validate_metric_type` are gone.
+- `Prompt`, `DynamicFewShotPrompt` and metric `save()`/`load()` share one gzip-aware JSON helper (`ragas.prompt.utils.read_json_file`/`write_json_file`). A file that is not valid UTF-8 now raises `ValueError("Cannot load ...")`, like other unreadable files, instead of `UnicodeDecodeError`.
+
+## AG-UI: one tool-argument parser and a separate SSE client ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+- Streamed (`ToolCallStart`/`Args`/`End`) and chunked (`ToolCallChunk`) tool calls now parse their arguments the same way as `MessagesSnapshot` tool calls. Arguments that are valid JSON but not an object, such as `[1, 2]` or `5`, are kept as `{"raw_args": "<the text>"}` with a warning. They used to fail `ToolCall` validation and stop the conversion. Invalid JSON is kept as `raw_args`, as before.
+- With `metadata=True`, a `ToolMessage` now gets the current `step_name`, like text messages.
+- The SSE client moved to `ragas.integrations.sse.post_sse_json`, and `call_ag_ui_endpoint()` uses it. It also accepts `data:` lines with no space after the colon, as the SSE spec allows. Without httpx, the `ImportError` now comes from the SSE client.
