@@ -168,6 +168,7 @@ testpaths = ["tests"]
 # Minimal dev dependencies for fast development setup (used by `make install-minimal`)
 dev-minimal = [
     {include-group = "test"},
+    {include-group = "workflow-lint"},
     "ruff>=0.16",
     "pyright>=1.1.403",
     "pre-commit>=4.3.0",
@@ -194,6 +195,13 @@ test = [
     # are a no-op in production unless the user configures a provider. Tests need
     # a real provider + InMemorySpanExporter to assert the span tree.
     "opentelemetry-sdk",
+]
+
+# GitHub Actions security linter (`make lint-workflows`, and the CI job of the
+# same name). Pinned exactly: a security tool's findings should come from a
+# known version. Config and accepted findings: .github/zizmor.yml (#247).
+workflow-lint = [
+    "zizmor==1.31.1",
 ]
 
 # Full dev dependencies with all features (used by `make install`)

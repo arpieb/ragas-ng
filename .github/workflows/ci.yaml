@@ -22,6 +22,7 @@ jobs:
       related: ${{ steps.filter.outputs.related }}
       ragas: ${{ steps.filter.outputs.ragas }}
       docs: ${{ steps.filter.outputs.docs }}
+      workflows: ${{ steps.filter.outputs.workflows }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -42,6 +43,11 @@ jobs:
               - "src/ragas/**"
               - "tests/**"
               - "examples/**"
+            workflows:
+              - ".github/workflows/**"
+              - ".github/zizmor.yml"
+              - pyproject.toml
+              - uv.lock
             docs:
               - *related
               - "docs/**"
@@ -156,6 +162,32 @@ jobs:
 
       - name: Type check
         run: make type
+
+  lint_workflows:
+    # GitHub Actions security lint (zizmor, pinned in the workflow-lint group).
+    # Accepted findings are listed in .github/zizmor.yml until #247 fixes them.
+    runs-on: ubuntu-latest
+    needs:
+      - diff
+    if: ${{ needs.diff.outputs.workflows == 'true' }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        with:
+          enable-cache: false
+
+      - name: zizmor
+        # Online audits too (e.g. that a pinned SHA belongs to the action's
+        # repository), using this job's read-only token.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: uv run --locked --only-group workflow-lint zizmor --format=github .github/workflows/
 
   docs_build:
     runs-on: ubuntu-latest

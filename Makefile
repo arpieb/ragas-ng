@@ -64,6 +64,9 @@ type: ## Type check all code
 	@echo "(pyright) Typechecking ragas..."
 	$(Q)PYRIGHT_PYTHON_FORCE_VERSION=latest uv run --active pyright -p pyproject.toml src
 
+lint-workflows: ## Lint GitHub Actions workflows with zizmor (offline audits)
+	$(Q)uv run --only-group workflow-lint zizmor --offline .github/workflows/
+
 check: format type ## Quick health check (format + type, no tests)
 	@echo "Code quality check complete!"
 
