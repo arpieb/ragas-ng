@@ -170,18 +170,17 @@ The repository has the following structure:
 
 The Ragas core library provides metrics, test data generation and evaluation functionality for LLM applications:
 
-1. **Metrics** - Various metrics for evaluating LLM applications including:
+1. **Metrics** (`src/ragas/metrics/collections/`) - every metric is a `ragas.metrics.collections.BaseMetric` subclass with an async `ascore(...)`, e.g. AspectCritic, AnswerCorrectness, ContextPrecision, ContextRecall, Faithfulness and many more. `ragas.metrics` itself holds only the base classes (`SimpleBaseMetric`) and the `DiscreteMetric` / `NumericMetric` / `RankingMetric` decorator family. Docs and examples import from `ragas.metrics.collections` (no short re-export).
 
-   - AspectCritic
-   - AnswerCorrectness
-   - ContextPrecision
-   - ContextRecall
-   - Faithfulness
-   - and many more
+2. **Test Data Generation** (`src/ragas/testset/`) - Automatic creation of test datasets for LLM applications, using the same modern LLMs, embeddings and prompts as the metrics
 
-2. **Test Data Generation** - Automatic creation of test datasets for LLM applications
+3. **Prompts** - `ragas.prompt.BasePrompt` (`src/ragas/prompt/metrics/base_prompt.py`) is the only prompt class: rendering, `generate` / `generate_multiple` through `llm.agenerate`, `adapt` (translation) and save/load. Metrics and testset components expose theirs through `get_prompts()` / `set_prompts()`, which the optimizers (`src/ragas/optimizers/`, `metric.train(...)`) use
 
-3. **Integrations** (`src/ragas/integrations/`) - LlamaIndex, Griptape, Amazon Bedrock, R2R, Swarm, Helicone and AG-UI, plus MLflow tracing; Haystack and OCI Gen AI are LLM wrappers in `ragas.llms`. Spans are emitted with the OpenTelemetry API, so any OTel backend (e.g. Langfuse) works without vendor code. LangChain is banned: ruff rejects its imports and `tests/unit/test_langchain_boundary.py` checks it at runtime
+4. **Integrations** (`src/ragas/integrations/`) - LlamaIndex, Griptape, Amazon Bedrock, R2R, Swarm, Helicone and AG-UI, plus MLflow tracing. There are no LLM or embedding wrappers for other frameworks: every LLM goes through `llm_factory()` and every embedding model through `embedding_factory()`. Spans are emitted with the OpenTelemetry API, so any OTel backend (e.g. Langfuse) works without vendor code. LangChain is banned: ruff rejects its imports and `tests/unit/test_langchain_boundary.py` checks it at runtime
+
+### No legacy layer
+
+The upstream legacy layer was deleted in #215, not deprecated: the old `ragas.metrics._*` metrics, `MetricWithLLM` and friends, `BaseRagasLLM` and its wrappers (Haystack, OCI, LlamaIndex, `LiteLLMStructuredLLM`), `BaseRagasEmbeddings`, and `PydanticPrompt` / `ImageTextPrompt`. Don't reintroduce them or add compatibility shims: `tests/unit/test_legacy_boundary.py` fails if a removed module or name becomes importable again. Record user-facing removals in `docs/howtos/migrations/behavior_changes.md`.
 
 ### Datasets, Experiments and Backends
 
