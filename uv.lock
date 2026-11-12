@@ -6487,22 +6487,22 @@ name = "r2r"
 version = "3.6.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "aiofiles" },
-    { name = "alembic" },
-    { name = "fastapi" },
-    { name = "filetype" },
-    { name = "httpx" },
-    { name = "openai" },
-    { name = "psycopg-binary" },
-    { name = "pydantic" },
-    { name = "python-dotenv" },
-    { name = "python-json-logger" },
-    { name = "requests" },
-    { name = "tiktoken" },
-    { name = "toml" },
-    { name = "types-aiofiles" },
-    { name = "types-requests" },
-    { name = "typing-extensions" },
+    { name = "aiofiles", marker = "python_full_version < '3.13'" },
+    { name = "alembic", marker = "python_full_version < '3.13'" },
+    { name = "fastapi", marker = "python_full_version < '3.13'" },
+    { name = "filetype", marker = "python_full_version < '3.13'" },
+    { name = "httpx", marker = "python_full_version < '3.13'" },
+    { name = "openai", marker = "python_full_version < '3.13'" },
+    { name = "psycopg-binary", marker = "python_full_version < '3.13'" },
+    { name = "pydantic", marker = "python_full_version < '3.13'" },
+    { name = "python-dotenv", marker = "python_full_version < '3.13'" },
+    { name = "python-json-logger", marker = "python_full_version < '3.13'" },
+    { name = "requests", marker = "python_full_version < '3.13'" },
+    { name = "tiktoken", marker = "python_full_version < '3.13'" },
+    { name = "toml", marker = "python_full_version < '3.13'" },
+    { name = "types-aiofiles", marker = "python_full_version < '3.13'" },
+    { name = "types-requests", marker = "python_full_version < '3.13'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/81/00/9b9953e9adf115ed245e4d52ce1a9d8cbc4ae2c037315b748a7f0e2f1f6e/r2r-3.6.6.tar.gz", hash = "sha256:f84c626e7fd9512ea312c75cc1d20221223a391222c382980a82100f25697258", size = 396663, upload-time = "2025-08-17T17:43:13.59Z" }
 wheels = [
@@ -6540,7 +6540,7 @@ all = [
     { name = "llama-index" },
     { name = "nltk" },
     { name = "pandas" },
-    { name = "r2r" },
+    { name = "r2r", marker = "python_full_version < '3.13'" },
     { name = "rapidfuzz" },
     { name = "rouge-score" },
     { name = "sacrebleu" },
@@ -6658,7 +6658,7 @@ requires-dist = [
     { name = "pillow", specifier = ">=10.4.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pyrate-limiter", specifier = ">=4.5,<5" },
-    { name = "r2r", marker = "extra == 'all'" },
+    { name = "r2r", marker = "python_full_version < '3.13' and extra == 'all'" },
     { name = "rapidfuzz", marker = "extra == 'all'" },
     { name = "rich" },
     { name = "rouge-score", marker = "extra == 'all'" },
@@ -8333,7 +8333,7 @@ name = "types-requests"
 version = "2.33.0.20260906"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "urllib3" },
+    { name = "urllib3", marker = "python_full_version < '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/c0/18/4c2c0290953f8b3b9612adfcb07b57f144ade3ad32a76764fca42b77c5f3/types_requests-2.33.0.20260906.tar.gz", hash = "sha256:76ab8a0fb736744a0c3deee7aa57b2927e301f078d9e61f5391b3e92002416b9", size = 25263, upload-time = "2026-09-06T06:35:47.707Z" }
 wheels = [

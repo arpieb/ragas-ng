@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "RAG evaluation example using Ragas"
 requires-python = ">=3.11"
 dependencies = [
-    "ragas-ng[all]",
+    "ragas-ng",
     "openai>=1.0.0",
 ]
 

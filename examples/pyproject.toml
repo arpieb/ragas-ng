@@ -70,7 +70,11 @@ include = ["ragas_examples*"]
 
 [tool.setuptools.package-data]
 ragas_examples = [
-    "**/*.csv", 
+    "**/*.csv",
+    # `ragas quickstart` copies a template from the installed package, so the
+    # template's own project files must ship with it (#270).
+    "*/pyproject.toml",
+    "*/README.md",
     "text2sql/datasets/*.csv",
     "text2sql/prompt*.txt"
 ]
