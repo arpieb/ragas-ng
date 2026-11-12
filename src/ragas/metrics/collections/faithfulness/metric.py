@@ -113,7 +113,7 @@ class Faithfulness(BaseMetric):
             retrieved_contexts=retrieved_contexts,
         )
 
-        # Step 1: Break response into atomic statements
+        # Step 1 (extract): break the response into atomic statements.
         statements = await self._create_statements(user_input, response)
 
         if not statements:
@@ -124,10 +124,19 @@ class Faithfulness(BaseMetric):
                 "faithfulness is undefined.",
             )
 
-        # Step 2: Join all contexts and evaluate statements against them.
+        # Step 2 (verify): check each statement against the joined contexts.
+        return await self._verify_statements(statements, "\n".join(retrieved_contexts))
+
+    async def _verify_statements(
+        self, statements: List[str], context_str: str
+    ) -> MetricResult:
+        """Score the statements against the context: the fraction supported.
+
+        The hook FaithfulnesswithHHEM overrides to verify with a local NLI
+        model instead of the LLM judge.
+        """
         # One verdict per statement or no score: scoring over whatever subset
         # the judge returned shifts the denominator (#52).
-        context_str = "\n".join(retrieved_contexts)
 
         async def ask() -> List[StatementFaithfulnessAnswer]:
             return (await self._create_verdicts(statements, context_str)).statements
@@ -145,7 +154,6 @@ class Faithfulness(BaseMetric):
                 reason=UNMATCHED_VERDICTS.format(what="statements"),
             )
 
-        # Step 3: Compute faithfulness score
         score = self._compute_score(NLIStatementOutput(statements=aligned))
         supported = sum(1 for v in aligned if v.verdict)
         reason = itemized(

@@ -226,3 +226,10 @@ def test_judge_inputs_share_the_sample_fields():
         assert issubclass(model, SampleFieldsInput)
         assert list(model.model_fields) == fields
     assert list(InstanceRubricScoreInput.model_fields) == [*fields, "rubrics"]
+
+
+def test_hhem_overrides_only_the_verify_hook():
+    """FaithfulnesswithHHEM reuses Faithfulness's checks and extraction (#217)."""
+    assert "ascore" not in vars(C.FaithfulnesswithHHEM)
+    assert "_verify_statements" in vars(C.FaithfulnesswithHHEM)
+    assert "_create_statements" not in vars(C.FaithfulnesswithHHEM)

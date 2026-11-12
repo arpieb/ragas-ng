@@ -2,7 +2,6 @@
 
 import typing as t
 
-from ragas.metrics.collections._inputs import require
 from ragas.metrics.collections._reasons import count_phrase, count_verb, itemized
 from ragas.metrics.collections.faithfulness import Faithfulness
 from ragas.metrics.result import MetricResult
@@ -131,38 +130,12 @@ class FaithfulnesswithHHEM(Faithfulness):
         for start in range(0, len(pairs), self.batch_size):
             yield pairs[start : start + self.batch_size]
 
-    async def ascore(
-        self,
-        user_input: str,
-        response: str,
-        retrieved_contexts: t.List[str],
+    async def _verify_statements(
+        self, statements: t.List[str], context_str: str
     ) -> MetricResult:
-        """
-        Args:
-            user_input: The original question
-            response: The response to check for faithfulness
-            retrieved_contexts: The contexts the response should be grounded in
-
-        Returns:
-            MetricResult with the proportion of statements the NLI model finds
-            entailed by the contexts, or NaN when no statements were generated.
-        """
-        require(
-            response=response,
-            user_input=user_input,
-            retrieved_contexts=retrieved_contexts,
-        )
-
-        statements = await self._create_statements(user_input, response)
-        if not statements:
-            return MetricResult(
-                value=float("nan"),
-                reason="No statements could be extracted from the response, so "
-                "faithfulness is undefined.",
-            )
-
-        premise = "\n".join(retrieved_contexts)
-        pairs = [(premise, statement) for statement in statements]
+        """The proportion of statements the NLI model finds entailed by the
+        joined contexts. Extraction and input checks are Faithfulness's."""
+        pairs = [(context_str, statement) for statement in statements]
 
         scores: t.List[float] = []
         for batch in self._batches(pairs):
