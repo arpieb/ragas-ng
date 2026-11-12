@@ -704,3 +704,12 @@ The legacy metrics, LLM and embedding wrappers and prompt classes are deleted, n
 - An image reference is an image data URI, an http(s) URL, or a path ending in an image extension (`.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.bmp`). Any other context is text, as before.
 - **⚠ silent:** under `local_dir`, a file without an image extension is no longer opened. It is sent as text, even if it holds an image.
 - Other URL schemes, such as `ftp://`, raise instead of being treated as file paths.
+
+## `ragas.llms.base` is split into modules ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+`llm_factory()`, `InstructorLLM`, `InstructorBaseRagasLLM`, `InstructorModelArgs`, `DEFAULT_LLM_MODEL` and `default_llm` import from `ragas.llms` and `ragas.llms.base` as before. Parameter mapping, cache keys and scores are unchanged.
+
+- `is_reasoning_model` moved to `ragas.llms.provider_rules` and is exported from `ragas.llms`: use `from ragas.llms import is_reasoning_model`. `from ragas.llms.base import is_reasoning_model` raises `ImportError`.
+- The per-provider parameter rules are `ragas.llms.provider_rules.PROVIDER_RULES`, a list of rule objects where the first match wins. The `InstructorLLM._map_google_params`, `_map_anthropic_params`, `_map_openai_params` and `_map_litellm_defaults` methods are gone; `_map_provider_params` still applies them. Claude's sampling warning is logged by `ragas.llms.provider_rules`.
+- `InstructorLLM(..., is_async=...)` says whether `client` is async. `llm_factory()` sets it. Without it, `InstructorLLM` checks whether `client.chat.completions.create` is a coroutine function, which holds for instructor's `AsyncInstructor`. It no longer looks inside instructor's closures or at `client.client`. If you construct `InstructorLLM` around your own client and it is detected wrongly, pass `is_async=`.
+- With `provider="google"`, `InstructorLLM` calls `client.chat.completions.create`, like every other provider, instead of `client.create`. On an instructor client these are the same method.
