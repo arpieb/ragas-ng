@@ -4,6 +4,7 @@ __all__ = ["MLflowTrace", "sync_trace"]
 
 import os
 import typing as t
+from urllib.parse import quote, urlencode, urlsplit
 
 if t.TYPE_CHECKING:
     from mlflow import get_last_active_trace_id, get_trace
@@ -50,22 +51,34 @@ class MLflowTrace:
         self.trace = trace
 
     def get_url(self) -> str:
+        """The MLflow UI URL of this trace, on the server in ``MLFLOW_HOST``.
+
+        ``MLFLOW_HOST`` must be an http(s) URL with a host, optionally with a
+        path prefix (``https://example.com/mlflow``). The experiment and trace
+        IDs are percent-encoded, so they can't change the URL's structure.
+        """
         server_url = os.getenv("MLFLOW_HOST")
         if not server_url:
             raise ValueError("MLFLOW_HOST environment variable is not set.")
+        parsed = urlsplit(server_url)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            raise ValueError(
+                f"MLFLOW_HOST must be an http(s) URL with a host, got {server_url!r}."
+            )
+        if parsed.query or parsed.fragment:
+            raise ValueError(
+                f"MLFLOW_HOST must not have a query or fragment, got {server_url!r}."
+            )
         trace_info = self.trace.info
-        server_url = server_url.rstrip("/")
-        request_id = trace_info.request_id
-        experiment_id = trace_info.experiment_id
-
-        # Build the trace URL
-        trace_url = (
-            f"{server_url}/#/experiments/{experiment_id}?"
-            f"compareRunsMode=TRACES&"
-            f"selectedTraceId={request_id}"
+        base = server_url.rstrip("/")
+        experiment_id = quote(str(trace_info.experiment_id), safe="")
+        query = urlencode(
+            {
+                "compareRunsMode": "TRACES",
+                "selectedTraceId": str(trace_info.request_id),
+            }
         )
-
-        return trace_url
+        return f"{base}/#/experiments/{experiment_id}?{query}"
 
     def get_filter(self, span_name: str) -> t.List["Span"]:
         return self.trace.search_spans(name=span_name)
