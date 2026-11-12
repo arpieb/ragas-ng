@@ -704,3 +704,12 @@ The legacy metrics, LLM and embedding wrappers and prompt classes are deleted, n
 - An image reference is an image data URI, an http(s) URL, or a path ending in an image extension (`.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.bmp`). Any other context is text, as before.
 - **⚠ silent:** under `local_dir`, a file without an image extension is no longer opened. It is sent as text, even if it holds an image.
 - Other URL schemes, such as `ftp://`, raise instead of being treated as file paths.
+
+## Custom backends implement `_load`, `_save` and `_list` ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+`BaseBackend` used to have six abstract methods (`load_dataset`, `load_experiment`, `save_dataset`, `save_experiment`, `list_datasets`, `list_experiments`), and every backend wrote the same six one-line wrappers. Now the six are concrete, and a backend implements three abstract methods that take the store, `kind` (`"datasets"` or `"experiments"`):
+
+- `_load(kind, name)`, `_save(kind, name, data, data_model)` and `_list(kind)`. A custom backend that only defines the six public methods can no longer be instantiated (`TypeError: Can't instantiate abstract class`); rename them to these three.
+- The new `ragas.backends.FileBackend(root_dir)` is the base for one-file-per-name backends: set `suffix` and implement `_read(path)` and `_write(path, data)`. `LocalCSVBackend` and `LocalJSONLBackend` are built on it.
+- The private helpers `_get_data_dir()`, `_get_file_path()` (now `FileBackend._path(kind, name)`) and `LocalJSONLBackend._serialize_datetime()` are gone, as are `GDriveBackend`'s `_load_data_from_spreadsheet()`, `_save_data_to_spreadsheet()` and `_list_data_names()`.
+- The registry names, on-disk formats and error messages are unchanged. See [Storage backends](../customizations/storage_backends.md#adding-a-backend).
