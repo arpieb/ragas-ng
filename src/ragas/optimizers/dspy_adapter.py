@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 _INSTALL_HINT = (
     "DSPy optimizer requires dspy. Install with:\n"
-    "  uv add 'ragas[dspy]'  # or: pip install 'ragas[dspy]'\n"
+    "  uv add 'ragas-ng[dspy]'  # or: pip install 'ragas-ng[dspy]'\n"
 )
 
 

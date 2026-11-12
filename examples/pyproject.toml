@@ -1,6 +1,6 @@
 [project]
-name = "ragas-examples"
-description = "Official examples for the ragas project"
+name = "ragas-ng-examples"
+description = "Examples and quickstart templates for ragas-ng"
 requires-python = ">=3.11"
 license = {text = "Apache-2.0"}
 authors = [{name = "Ragas Team"}]
@@ -16,7 +16,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "ragas", # workspace dependency - version managed by workspace
+    "ragas-ng", # workspace dependency - version managed by workspace
     "openai>=1.0.0", # required for LLM calls in examples
     "pandas", # required for benchmark_llm examples
 
@@ -24,7 +24,7 @@ dependencies = [
 dynamic = ["version", "readme"]
 
 [project.optional-dependencies]
-gdrive = ["ragas[gdrive]"]
+gdrive = ["ragas-ng[gdrive]"]
 text2sql = [
     "huggingface_hub>=0.16.0",
     "datacompy>=0.8.0", 
@@ -89,4 +89,4 @@ root = ".."
 
 # Workspace member configuration  
 [tool.uv.sources]
-ragas = { workspace = true }
+ragas-ng = { workspace = true }

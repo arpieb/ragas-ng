@@ -18,7 +18,7 @@ Choose one of the following methods:
     Install ragas first, then create the project:
 
     ```sh
-    pip install ragas
+    pip install ragas-ng
     ragas quickstart rag_eval
     cd rag_eval
     ```

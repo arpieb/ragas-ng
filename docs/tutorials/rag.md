@@ -33,7 +33,7 @@ samples = [
     },
     {
         "query": "How to install Ragas?",
-        "grading_notes": "- install from source  - install from pip using ragas[examples]",
+        "grading_notes": "- install from source  - install from pip using ragas-ng-examples",
     },
     {
         "query": "What are the main features of Ragas?",

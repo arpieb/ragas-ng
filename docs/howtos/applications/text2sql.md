@@ -18,7 +18,7 @@ What you'll accomplish:
 We've created a simple module you can install and run so that you can focus on understanding the evaluation process instead of creating the application.
 
 ```bash
-uv pip install "ragas-examples[text2sql]"
+uv pip install "ragas-ng-examples[text2sql]"
 ```
 
 ## Quick agent test

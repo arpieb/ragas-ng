@@ -7,7 +7,7 @@ Install Ragas with pip and set up Swarm locally:
 
 
 ```python
-# %pip install ragas
+# %pip install ragas-ng
 # %pip install nltk
 # %pip install git+https://github.com/openai/swarm.git
 ```

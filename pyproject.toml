@@ -1,5 +1,5 @@
 [project]
-name = "ragas"
+name = "ragas-ng"
 description = "Evaluation framework for RAG and LLM applications"
 requires-python = ">=3.11"
 license = {file = "LICENSE"}
@@ -157,7 +157,7 @@ members = [".", "examples"]
 
 # Workspace dependency sources
 [tool.uv.sources]
-ragas-examples = { workspace = true }
+ragas-ng-examples = { workspace = true }
 
 [tool.pytest.ini_options]
 addopts = "-n 0"
@@ -204,7 +204,7 @@ dev = [
     "unstructured[md]",
     "arize-phoenix>=6.1.0",
     # Include all optional features
-    "ragas[all,tracing,gdrive]",
+    "ragas-ng[all,tracing,gdrive]",
 ]
 docs = [
     "mkdocs>=1.6.1",

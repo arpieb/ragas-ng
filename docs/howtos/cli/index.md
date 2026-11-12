@@ -7,7 +7,7 @@ The Ragas Command Line Interface (CLI) provides tools for quickly setting up eva
 The CLI is included with the ragas package:
 
 ```sh
-pip install ragas
+pip install ragas-ng
 ```
 
 Or use `uvx` to run without installation:

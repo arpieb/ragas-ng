@@ -158,7 +158,7 @@ def quickstart(
     template_path = template_info["source_path"].replace("ragas_examples/", "")
 
     # Try to find examples locally first (for development and testing)
-    # Look for examples in the installed ragas-examples package or local dev environment
+    # Look for examples in the installed ragas-ng-examples package or local dev environment
     source_path = None
     temp_dir = None
 

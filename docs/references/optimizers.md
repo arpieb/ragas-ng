@@ -140,10 +140,10 @@ Learn more about DSPy concepts:
 
 ```bash
 # Using uv (recommended)
-uv add "ragas[dspy]"
+uv add "ragas-ng[dspy]"
 
 # Using pip
-pip install "ragas[dspy]"
+pip install "ragas-ng[dspy]"
 ```
 
 ### Cost Estimation
@@ -244,7 +244,7 @@ config = InstructionConfig(llm=llm, optimizer=optimizer, loss=loss)
 
 | Feature | GeneticOptimizer | DSPyOptimizer |
 |---------|------------------|---------------|
-| Installation | Built-in | Requires `ragas[dspy]` |
+| Installation | Built-in | Requires `ragas-ng[dspy]` |
 | Optimization Target | Instructions only | Instructions + Demos |
 | Min Dataset Size | 10+ samples | 20+ samples |
 | Typical LLM Calls | 100-500 | 200-700 |

@@ -7,7 +7,7 @@ Use Gemini models as ragas' evaluator and testset generator through [LiteLLM](ht
 Get an API key from [Google AI Studio](https://aistudio.google.com/apikey), then:
 
 ```bash
-pip install ragas
+pip install ragas-ng
 export GOOGLE_API_KEY="your-google-api-key"   # or GEMINI_API_KEY
 ```
 
