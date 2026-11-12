@@ -4,11 +4,11 @@ import tempfile
 
 import pytest
 
+from ragas.async_utils import async_to_sync
+from ragas.names import create_nano_id
 from ragas.utils import (
-    async_to_sync,
     batched,
     check_if_sum_is_close,
-    create_nano_id,
     get_from_dict,
     get_test_directory,
 )

@@ -5,6 +5,7 @@ __all__ = [
     "Dataset",
 ]
 
+import random
 import typing as t
 
 from pydantic import BaseModel
@@ -404,70 +405,39 @@ class DataTable(t.Generic[T]):
 
         Args:
             test_size: Proportion of the dataset to include in the test split (default: 0.2)
-            random_state: Random seed for reproducibility (default: None)
+            random_state: Seed for shuffling the rows first. ``None`` (the
+                default) keeps their order: the last ``test_size`` rows are
+                the test split.
         Returns:
-            A tuple of two Datasets: (train_dataset, test_dataset)
+            A tuple of two Datasets: (train_dataset, test_dataset), saved
+            to a new in-memory backend as ``<name>_train`` and
+            ``<name>_test``. This dataset and the global ``random`` state
+            are left unchanged.
         """
         if not self._data:
             self.reload()
 
-        # Shuffle entries if random_state is set
+        rows = list(self._data)
         if random_state is not None:
-            import random
+            random.Random(random_state).shuffle(rows)
+        split_index = int(len(rows) * (1 - test_size))
 
-            random.seed(random_state)
-            random.shuffle(self._data)
-
-        # Calculate split index
-        split_index = int(len(self._data) * (1 - test_size))
-
-        # Create new dataset instances with proper initialization
-        # Use inmemory backend for split datasets (temporary datasets)
-        inmemory_backend = InMemoryBackend()
-
-        # Handle type-safe constructor calls based on data_model presence
-        if self.data_model is not None:
-            # Validated dataset case - data should be List[T]
-            train_data = t.cast(t.List[T], self._data[:split_index])
-            test_data = t.cast(t.List[T], self._data[split_index:])
-
-            train_dataset = type(self)(
-                name=f"{self.name}_train",
-                backend=inmemory_backend,
+        # The splits are temporary: an in-memory backend
+        backend = InMemoryBackend()
+        splits = []
+        for suffix, part in (
+            ("train", rows[:split_index]),
+            ("test", rows[split_index:]),
+        ):
+            split = type(self)(
+                name=f"{self.name}_{suffix}",
+                backend=backend,
                 data_model=self.data_model,
-                data=train_data,
+                data=t.cast(t.Any, part),
             )
-
-            test_dataset = type(self)(
-                name=f"{self.name}_test",
-                backend=inmemory_backend,
-                data_model=self.data_model,
-                data=test_data,
-            )
-        else:
-            # Unvalidated dataset case - data should be List[Dict]
-            train_data = t.cast(t.List[t.Dict[str, t.Any]], self._data[:split_index])
-            test_data = t.cast(t.List[t.Dict[str, t.Any]], self._data[split_index:])
-
-            train_dataset = type(self)(
-                name=f"{self.name}_train",
-                backend=inmemory_backend,
-                data_model=None,
-                data=train_data,
-            )
-
-            test_dataset = type(self)(
-                name=f"{self.name}_test",
-                backend=inmemory_backend,
-                data_model=None,
-                data=test_data,
-            )
-
-        # save to inmemory backend
-        train_dataset.save()
-        test_dataset.save()
-
-        return train_dataset, test_dataset
+            split.save()
+            splits.append(split)
+        return splits[0], splits[1]
 
     __repr__ = __str__
 

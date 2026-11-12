@@ -378,9 +378,9 @@ def test_fail_fast_ends_the_experiment_span_as_an_error_after_its_rows(spans):
 
 
 def test_no_llm_span_outside_a_traced_call(spans):
-    from ragas.llms.base import _llm_span
+    from ragas.llms.tracing import llm_span
 
-    assert _llm_span() is None
+    assert llm_span() is None
 
 
 def test_default_path_does_not_fetch_the_raw_completion(monkeypatch):
@@ -391,7 +391,7 @@ def test_default_path_does_not_fetch_the_raw_completion(monkeypatch):
     monkeypatch.setattr(cb, "_tracer", NoOpTracer())
     llm = make_llm()
     calls = []
-    target = llm._target(llm.sync_client)
+    target = llm.sync_client.chat.completions
     real = target.create_with_completion
 
     def spy(*args, **kwargs):
@@ -409,7 +409,7 @@ def test_a_recording_span_fetches_the_raw_completion_for_token_counts(
     # The counterpart of the test above, so the spy is known to see the call.
     llm = make_llm()
     calls = []
-    target = llm._target(llm.sync_client)
+    target = llm.sync_client.chat.completions
     real = target.create_with_completion
 
     def spy(*args, **kwargs):

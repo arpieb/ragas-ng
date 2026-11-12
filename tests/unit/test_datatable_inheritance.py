@@ -308,5 +308,33 @@ def test_train_test_split_reloads_saved_rows(
     assert list(test) == expected[2:]
     assert type(train) is table_class
     assert type(test) is table_class
+
+
+@pytest.mark.parametrize("data_model", [None, SimpleTestModel])
+def test_train_test_split_seed_leaves_caller_and_global_random_alone(
+    mock_backend, data_model
+):
+    import random
+
+    rows = [{"name": f"n{i}", "age": i, "score": i / 10} for i in range(10)]
+    data = [data_model(**r) for r in rows] if data_model else [dict(r) for r in rows]
+    table = Dataset("seeded", mock_backend, data_model=data_model, data=list(data))
+
+    random.seed(123)
+    expected_next = random.random()
+    random.seed(123)
+    train, test = table.train_test_split(test_size=0.3, random_state=7)
+    assert random.random() == expected_next  # global state untouched
+    assert list(table) == data  # caller's rows not shuffled
+
+    # Same rows per split as seeding the global random and shuffling (the
+    # old implementation), and the same split on every call.
+    shuffled = list(data)
+    random.Random(7).shuffle(shuffled)
+    assert list(train) == shuffled[:7]
+    assert list(test) == shuffled[7:]
+    again_train, again_test = table.train_test_split(test_size=0.3, random_state=7)
+    assert list(again_train) == list(train)
+    assert list(again_test) == list(test)
     assert train.data_model is data_model
     assert test.data_model is data_model

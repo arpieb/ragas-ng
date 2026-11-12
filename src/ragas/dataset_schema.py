@@ -292,17 +292,28 @@ class RagasDataset(ABC, t.Generic[Sample]):
         return self.samples[0].get_features()
 
     @classmethod
-    def from_dict(cls: t.Type[T], mapping: t.Dict) -> T:
-        """Creates an EvaluationDataset from a dictionary."""
-        samples = []
-        if all(
-            "user_input" in item and isinstance(mapping[0]["user_input"], list)
-            for item in mapping
-        ):
-            samples.extend(MultiTurnSample(**sample) for sample in mapping)
-        else:
-            samples.extend(SingleTurnSample(**sample) for sample in mapping)
-        return cls(samples=samples)
+    def from_dict(cls: t.Type[T], mapping: t.Mapping[str, t.Sequence]) -> T:
+        """Creates a dataset from columns: ``{"user_input": [...], "response": [...]}``.
+
+        Every column must be the same length. For a list of row dicts, use
+        :meth:`from_list`.
+        """
+        if not isinstance(mapping, t.Mapping):
+            raise TypeError(
+                "from_dict() takes a mapping of column name to values, got "
+                f"{type(mapping).__name__}; for a list of rows use from_list()."
+            )
+        lengths = {len(values) for values in mapping.values()}
+        if len(lengths) > 1:
+            raise ValueError(
+                "from_dict() columns must all be the same length; got "
+                + ", ".join(f"{k}: {len(v)}" for k, v in mapping.items())
+            )
+        n_rows = lengths.pop() if lengths else 0
+        rows = [
+            {key: values[i] for key, values in mapping.items()} for i in range(n_rows)
+        ]
+        return cls.from_list(rows)
 
     def to_csv(self, path: t.Union[str, Path]):
         """Converts the dataset to a CSV file."""
@@ -352,6 +363,23 @@ class RagasDataset(ABC, t.Generic[Sample]):
 
 SingleTurnSampleOrMultiTurnSample = t.Union[SingleTurnSample, MultiTurnSample]
 
+SAMPLE_TYPES: t.Tuple[t.Type[BaseSample], ...] = (SingleTurnSample, MultiTurnSample)
+"""The sample classes an ``EvaluationDataset`` holds and ``evaluate()`` runs."""
+
+
+def sample_type_for(
+    row: t.Mapping[str, t.Any],
+) -> t.Type[SingleTurnSampleOrMultiTurnSample]:
+    """The sample class a row dict is: multi-turn if ``user_input`` is a list of messages."""
+    if isinstance(row.get("user_input"), list):
+        return MultiTurnSample
+    return SingleTurnSample
+
+
+def sample_from_dict(row: t.Mapping[str, t.Any]) -> SingleTurnSampleOrMultiTurnSample:
+    """Build the sample a row dict describes (see :func:`sample_type_for`)."""
+    return sample_type_for(row)(**row)
+
 
 @dataclass
 class EvaluationDataset(RagasDataset[SingleTurnSampleOrMultiTurnSample]):
@@ -362,10 +390,6 @@ class EvaluationDataset(RagasDataset[SingleTurnSampleOrMultiTurnSample]):
     ----------
     samples : List[BaseSample]
         A list of evaluation samples.
-    backend : Optional[str]
-        The backend to use for storing the dataset (e.g., "local/csv"). Default is None.
-    name : Optional[str]
-        The name of the dataset. Default is None.
 
     Methods
     -------
@@ -379,10 +403,10 @@ class EvaluationDataset(RagasDataset[SingleTurnSampleOrMultiTurnSample]):
         Converts the dataset to a pandas DataFrame.
     features()
         Returns the features of the samples.
-    from_list(mapping)
-        Creates an EvaluationDataset from a list of dictionaries.
+    from_list(data)
+        Creates an EvaluationDataset from a list of row dictionaries.
     from_dict(mapping)
-        Creates an EvaluationDataset from a dictionary.
+        Creates an EvaluationDataset from a mapping of column name to values.
     to_csv(path)
         Converts the dataset to a CSV file.
     to_jsonl(path)
@@ -390,9 +414,6 @@ class EvaluationDataset(RagasDataset[SingleTurnSampleOrMultiTurnSample]):
     from_jsonl(path)
         Creates an EvaluationDataset from a JSONL file.
     """
-
-    backend: t.Optional[str] = None
-    name: t.Optional[str] = None
 
     @t.overload
     def __getitem__(self, idx: int) -> SingleTurnSampleOrMultiTurnSample: ...
@@ -427,21 +448,9 @@ class EvaluationDataset(RagasDataset[SingleTurnSampleOrMultiTurnSample]):
         return rows
 
     @classmethod
-    def from_list(
-        cls,
-        data: t.List[t.Dict],
-        backend: t.Optional[str] = None,
-        name: t.Optional[str] = None,
-    ) -> EvaluationDataset:
-        samples = []
-        if all(
-            "user_input" in item and isinstance(data[0]["user_input"], list)
-            for item in data
-        ):
-            samples.extend(MultiTurnSample(**sample) for sample in data)
-        else:
-            samples.extend(SingleTurnSample(**sample) for sample in data)
-        return cls(samples=samples, backend=backend, name=name)
+    def from_list(cls, data: t.List[t.Dict]) -> EvaluationDataset:
+        """Creates an EvaluationDataset from row dicts (see :func:`sample_type_for`)."""
+        return cls(samples=[sample_from_dict(row) for row in data])
 
     def __repr__(self) -> str:
         return f"EvaluationDataset(features={self.features()}, len={len(self.samples)})"

@@ -21,7 +21,8 @@ from pydantic import BaseModel
 from ragas.cache import CacheInterface
 from ragas.cost import TokenUsageCollector
 from ragas.llms import llm_factory
-from ragas.llms.base import InstructorLLM, InstructorModelArgs, _build_messages
+from ragas.llms.base import InstructorLLM, InstructorModelArgs
+from ragas.llms.messages import build_messages
 from ragas.run_config import RunConfig
 
 
@@ -108,16 +109,16 @@ class RateLimited(Exception):
 
 
 def test_string_prompt_messages_are_unchanged():
-    assert _build_messages("p", None) == [{"role": "user", "content": "p"}]
-    assert _build_messages("p", "sys") == [
+    assert build_messages("p", None) == [{"role": "user", "content": "p"}]
+    assert build_messages("p", "sys") == [
         {"role": "system", "content": "sys"},
         {"role": "user", "content": "p"},
     ]
 
 
 def test_messages_are_sent_as_given_with_the_system_prompt_prepended():
-    assert _build_messages(MESSAGES, None) == MESSAGES
-    assert _build_messages(MESSAGES, "sys") == [
+    assert build_messages(MESSAGES, None) == MESSAGES
+    assert build_messages(MESSAGES, "sys") == [
         {"role": "system", "content": "sys"},
         *MESSAGES,
     ]
@@ -125,24 +126,24 @@ def test_messages_are_sent_as_given_with_the_system_prompt_prepended():
 
 def test_a_system_message_in_the_list_takes_precedence():
     messages = [{"role": "system", "content": "mine"}, *MESSAGES]
-    assert _build_messages(messages, "sys") == messages
+    assert build_messages(messages, "sys") == messages
 
 
 def test_the_callers_list_is_not_mutated():
     messages = [dict(m) for m in MESSAGES]
-    _build_messages(messages, "sys")
+    build_messages(messages, "sys")
     assert messages == MESSAGES
 
 
 @pytest.mark.parametrize("bad", [b"bytes", 3, [{"content": "no role"}], ["text"]])
 def test_other_inputs_are_rejected(bad):
     with pytest.raises(TypeError):
-        _build_messages(bad, None)
+        build_messages(bad, None)
 
 
 def test_an_empty_list_is_rejected():
     with pytest.raises(ValueError):
-        _build_messages([], None)
+        build_messages([], None)
 
 
 # --- string prompts: byte-for-byte as before ----------------------------------

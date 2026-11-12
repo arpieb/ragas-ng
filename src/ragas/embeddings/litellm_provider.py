@@ -109,35 +109,45 @@ class LiteLLMEmbeddings(BaseRagasEmbedding):
 
         return call_kwargs
 
+    def _request(
+        self, batch: t.List[str], kwargs: t.Dict[str, t.Any]
+    ) -> t.Dict[str, t.Any]:
+        """The keyword arguments for ``litellm.embedding`` / ``aembedding``."""
+        return dict(input=batch, **self._prepare_kwargs(**kwargs))
+
+    @staticmethod
+    def _vectors(response: t.Any) -> t.List[t.List[float]]:
+        return [item["embedding"] for item in response.data]
+
+    def _embed_batch(
+        self, batch: t.List[str], kwargs: t.Dict[str, t.Any]
+    ) -> t.List[t.List[float]]:
+        """One request: ``batch``'s embeddings, paced by ``rate_limit``."""
+        request = self._request(batch, kwargs)
+        self._wait(batch)
+        return self._vectors(self.litellm.embedding(**request))
+
+    async def _aembed_batch(
+        self, batch: t.List[str], kwargs: t.Dict[str, t.Any]
+    ) -> t.List[t.List[float]]:
+        request = self._request(batch, kwargs)
+        await self._await(batch)
+        return self._vectors(await self.litellm.aembedding(**request))
+
     def embed_text(self, text: str, **kwargs: t.Any) -> t.List[float]:
         """Embed a single text using LiteLLM."""
-        call_kwargs = self._prepare_kwargs(**kwargs)
-        self._wait([text])
-        response = self.litellm.embedding(input=[text], **call_kwargs)
-        return response.data[0]["embedding"]
+        return self._embed_batch([text], kwargs)[0]
 
     async def aembed_text(self, text: str, **kwargs: t.Any) -> t.List[float]:
         """Asynchronously embed a single text using LiteLLM."""
-        call_kwargs = self._prepare_kwargs(**kwargs)
-        await self._await([text])
-        response = await self.litellm.aembedding(input=[text], **call_kwargs)
-        return response.data[0]["embedding"]
+        return (await self._aembed_batch([text], kwargs))[0]
 
     def embed_texts(self, texts: t.List[str], **kwargs: t.Any) -> t.List[t.List[float]]:
         """Embed multiple texts using LiteLLM with intelligent batching."""
         texts = validate_texts(texts)
-        if not texts:
-            return []
-
-        embeddings = []
-        batches = batch_texts(texts, self.batch_size)
-
-        for batch in batches:
-            call_kwargs = self._prepare_kwargs(**kwargs)
-            self._wait(batch)
-            response = self.litellm.embedding(input=batch, **call_kwargs)
-            embeddings.extend([item["embedding"] for item in response.data])
-
+        embeddings: t.List[t.List[float]] = []
+        for batch in batch_texts(texts, self.batch_size) if texts else []:
+            embeddings.extend(self._embed_batch(batch, kwargs))
         return embeddings
 
     async def aembed_texts(
@@ -145,18 +155,9 @@ class LiteLLMEmbeddings(BaseRagasEmbedding):
     ) -> t.List[t.List[float]]:
         """Asynchronously embed multiple texts using LiteLLM with intelligent batching."""
         texts = validate_texts(texts)
-        if not texts:
-            return []
-
-        embeddings = []
-        batches = batch_texts(texts, self.batch_size)
-
-        for batch in batches:
-            call_kwargs = self._prepare_kwargs(**kwargs)
-            await self._await(batch)
-            response = await self.litellm.aembedding(input=batch, **call_kwargs)
-            embeddings.extend([item["embedding"] for item in response.data])
-
+        embeddings: t.List[t.List[float]] = []
+        for batch in batch_texts(texts, self.batch_size) if texts else []:
+            embeddings.extend(await self._aembed_batch(batch, kwargs))
         return embeddings
 
     def _get_key_config(self) -> str:

@@ -93,7 +93,7 @@ def test_decorated_metric_sync_score_shares_one_loop():
 
 
 def test_async_to_sync_shares_one_loop():
-    from ragas.utils import async_to_sync
+    from ragas.async_utils import async_to_sync
 
     pool = LoopBound()
     use = async_to_sync(pool.use)
