@@ -713,3 +713,11 @@ The legacy metrics, LLM and embedding wrappers and prompt classes are deleted, n
 - The new `ragas.backends.FileBackend(root_dir)` is the base for one-file-per-name backends: set `suffix` and implement `_read(path)` and `_write(path, data)`. `LocalCSVBackend` and `LocalJSONLBackend` are built on it.
 - The private helpers `_get_data_dir()`, `_get_file_path()` (now `FileBackend._path(kind, name)`) and `LocalJSONLBackend._serialize_datetime()` are gone, as are `GDriveBackend`'s `_load_data_from_spreadsheet()`, `_save_data_to_spreadsheet()` and `_list_data_names()`.
 - The registry names, on-disk formats and error messages are unchanged. See [Storage backends](../customizations/storage_backends.md#adding-a-backend).
+
+## `run_async_tasks()` returns results in order and runs on `Executor` ([#217](https://github.com/arpieb/ragas-ng/issues/217))
+
+`ragas.async_utils.run_async_tasks()` had its own copy of `Executor`'s batching, progress-bar and cancellation loop. It is now a thin wrapper over `Executor`, and `@experiment`'s `arun()` runs its rows through `concurrent_results()` instead of its own semaphore-and-`as_completed` loop.
+
+- `run_async_tasks()` returns results in the order of `tasks`; they used to come back in completion order. Errors are unchanged: with `fail_fast=True` the first failure cancels the rest and is raised; without it every task runs and the first error to happen is raised at the end.
+- Its unused keyword argument `cancel_check` is removed. To stop a run early, use `Executor` and call `executor.cancel()`.
+- `arun()`'s `max_workers`, `raise_exceptions`, `save_partial`, ordering and cancellation behave as before.

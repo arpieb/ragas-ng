@@ -300,80 +300,55 @@ def run_async_tasks(
     progress_bar_desc: str = "Running async tasks",
     max_workers: int = -1,
     *,
-    cancel_check: t.Optional[t.Callable[[], bool]] = None,
     fail_fast: bool = False,
 ) -> t.List[t.Any]:
-    """
-    Execute async tasks with optional batching and progress tracking.
+    """Run coroutines concurrently from sync code; return their results in order.
 
-    NOTE: Order of results is not guaranteed!
+    A thin wrapper over :class:`ragas.executor.Executor`, which does the
+    batching, progress bars, ``max_workers`` limit and cancellation.
 
     Args:
-        tasks: Sequence of coroutines to execute
-        batch_size: Optional size for batching tasks. If None, runs all concurrently
-        show_progress: Whether to display progress bars
-        max_workers: Maximum number of concurrent tasks (-1 for unlimited)
+        tasks: The coroutines to run.
+        batch_size: Run them in batches of this size, one after another.
+            ``None`` runs them all at once (up to ``max_workers``).
+        show_progress: Whether to display progress bars.
+        progress_bar_desc: The progress bar's label.
+        max_workers: Maximum number of concurrent tasks (-1 for unlimited).
         fail_fast: Stop at the first failed task: cancel the tasks still
             pending, skip the batches not yet started, and raise that error.
-            By default every task runs and the first error is raised at the end.
+            By default every task runs and the first error to happen is
+            raised at the end.
     """
-    from ragas.utils import ProgressBarManager, batched
+    from ragas.executor import Executor
+    from ragas.run_config import RunConfig
 
-    async def _run():
-        total_tasks = len(tasks)
-        results = []
-        first_exception = None
-        pbm = ProgressBarManager(progress_bar_desc, show_progress)
+    first_exception: t.Optional[BaseException] = None
 
-        if not batch_size:
-            with pbm.create_single_bar(total_tasks) as pbar:
-                async with concurrent_results(
-                    tasks, max_workers, cancel_check=cancel_check, fail_fast=fail_fast
-                ) as finished:
-                    async for result in finished:
-                        if isinstance(result, Exception):
-                            logger.error(
-                                f"Task failed with {type(result).__name__}: {result}",
-                                exc_info=False,
-                            )
-                            # the first exception is raised once all are done
-                            if first_exception is None:
-                                first_exception = result
-                        results.append(result)
-                        pbar.update(1)
-        else:
-            total_tasks = len(tasks)
-            batches = batched(tasks, batch_size)
-            overall_pbar, batch_pbar, n_batches = pbm.create_nested_bars(
-                total_tasks, batch_size
-            )
-            with overall_pbar, batch_pbar:
-                for i, batch in enumerate(batches, 1):
-                    if fail_fast and first_exception is not None:
-                        break
-                    pbm.update_batch_bar(batch_pbar, i, n_batches, len(batch))
-                    if cancel_check is not None and cancel_check():
-                        break
-                    async with concurrent_results(
-                        batch,
-                        max_workers,
-                        cancel_check=cancel_check,
-                        fail_fast=fail_fast,
-                    ) as finished:
-                        async for result in finished:
-                            if isinstance(result, Exception):
-                                logger.error(
-                                    f"Task failed with {type(result).__name__}: "
-                                    f"{result}",
-                                    exc_info=False,
-                                )
-                                # the first exception is raised once all are done
-                                if first_exception is None:
-                                    first_exception = result
-                            results.append(result)
-                            batch_pbar.update(1)
-                    overall_pbar.update(len(batch))
+    async def guarded(coro: t.Coroutine) -> t.Any:
+        nonlocal first_exception
+        try:
+            return await coro
+        except Exception as e:
+            logger.error(f"Task failed with {type(e).__name__}: {e}", exc_info=False)
+            if fail_fast:
+                raise
+            # the first exception is raised once all are done
+            if first_exception is None:
+                first_exception = e
+            return None
 
+    executor = Executor(
+        desc=progress_bar_desc,
+        show_progress=show_progress,
+        raise_exceptions=fail_fast,
+        batch_size=batch_size,
+        run_config=RunConfig(max_workers=max_workers),
+    )
+    for coro in tasks:
+        executor.submit(guarded, coro)
+    try:
+        results = executor.results()
+    finally:
         # Close coroutines that never started (cancelled before running or in
         # a batch that was skipped), so they don't warn "never awaited".
         for coro in tasks:
@@ -382,11 +357,6 @@ def run_async_tasks(
                 and inspect.getcoroutinestate(coro) == inspect.CORO_CREATED
             ):
                 coro.close()
-
-        # Raise the first exception encountered to fail fast with clear error message
-        if first_exception is not None:
-            raise first_exception
-
-        return results
-
-    return run(_run)
+    if first_exception is not None:
+        raise first_exception
+    return results
