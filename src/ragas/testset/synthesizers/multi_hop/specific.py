@@ -9,6 +9,7 @@ import numpy as np
 
 from ragas.prompt.metrics.base_prompt import BasePrompt
 from ragas.testset.graph import KnowledgeGraph
+from ragas.testset.graph_queries import find_two_nodes_single_rel
 from ragas.testset.persona import Persona
 from ragas.testset.synthesizers.multi_hop.base import (
     MultiHopQuerySynthesizer,
@@ -36,8 +37,9 @@ class MultiHopSpecificQuerySynthesizer(MultiHopQuerySynthesizer):
 
     def get_node_clusters(self, knowledge_graph: KnowledgeGraph) -> t.List[t.Tuple]:
         """Identify clusters of nodes based on the specified relationship condition."""
-        node_clusters = knowledge_graph.find_two_nodes_single_rel(
-            relationship_condition=lambda rel: rel.type == self.relation_type
+        node_clusters = find_two_nodes_single_rel(
+            knowledge_graph,
+            relationship_condition=lambda rel: rel.type == self.relation_type,
         )
         logger.info("found %d clusters", len(node_clusters))
         return node_clusters

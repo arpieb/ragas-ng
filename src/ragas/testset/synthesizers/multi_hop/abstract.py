@@ -8,6 +8,7 @@ import numpy as np
 
 from ragas.prompt.metrics.base_prompt import BasePrompt
 from ragas.testset.graph import KnowledgeGraph, Node
+from ragas.testset.graph_queries import find_n_indirect_clusters
 from ragas.testset.persona import Persona
 from ragas.testset.synthesizers.multi_hop.base import (
     MultiHopQuerySynthesizer,
@@ -42,7 +43,8 @@ class MultiHopAbstractQuerySynthesizer(MultiHopQuerySynthesizer):
     ) -> t.List[t.Set[Node]]:
         """Find n indirect clusters of nodes based on relationship condition"""
 
-        node_clusters = knowledge_graph.find_n_indirect_clusters(
+        node_clusters = find_n_indirect_clusters(
+            knowledge_graph,
             n,
             relationship_condition=lambda rel: (
                 True if rel.get_property(self.relation_property) else False
