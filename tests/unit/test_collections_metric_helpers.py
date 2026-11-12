@@ -140,3 +140,89 @@ def test_topic_adherence_scores_exactly(answered, in_scope, mode, expected):
     metric = C.TopicAdherence(llm=MagicMock(spec=InstructorLLM), mode=mode)
     score = metric._compute_score(np.array(answered), np.array(in_scope))
     assert score == expected
+
+
+# --------------------------------------------------------------------------- #
+# Shared input checks
+# --------------------------------------------------------------------------- #
+
+
+def test_require_raises_for_the_first_missing_field_in_order():
+    from ragas.metrics.collections._inputs import require
+
+    require(a="x", b=["y"], c=0)  # 0 is a value, not missing
+    with pytest.raises(ValueError) as e:
+        require(a="x", b=[], c=None)
+    assert str(e.value) == "b is missing. Please add b to the test sample."
+    with pytest.raises(ValueError, match="^c is missing"):
+        require(c=None)
+    require(a="  ")  # whitespace is left to the metric
+
+
+MISSING_CASES = [
+    (
+        C.Faithfulness,
+        dict(user_input="q", response="", retrieved_contexts=["c"]),
+        "response",
+    ),
+    (
+        C.ContextRecall,
+        dict(user_input="q", reference="r", retrieved_contexts=[]),
+        "retrieved_contexts",
+    ),
+    (
+        C.ContextPrecision,
+        dict(user_input="", reference="r", retrieved_contexts=["c"]),
+        "user_input",
+    ),
+    (C.AnswerRelevancy, dict(user_input="q", response=""), "response"),
+    (
+        C.MultiModalRelevance,
+        dict(user_input="q", response="", retrieved_contexts=["c"]),
+        "response",
+    ),
+    (C.AgentGoalAccuracyWithReference, dict(user_input=[], reference=""), "reference"),
+    (
+        C.InstanceSpecificRubrics,
+        dict(user_input="q", response="r", rubrics={}),
+        "rubrics",
+    ),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "factory,kwargs,missing", MISSING_CASES, ids=[c[0].__name__ for c in MISSING_CASES]
+)
+async def test_missing_inputs_share_one_wording(factory, kwargs, missing):
+    llm = MagicMock(spec=InstructorLLM)
+    params = inspect.signature(factory.__init__).parameters
+    extra = (
+        {"embeddings": MagicMock(spec=BaseRagasEmbedding)}
+        if "embeddings" in params
+        else {}
+    )
+    with pytest.raises(ValueError) as e:
+        await factory(llm=llm, **extra).ascore(**kwargs)
+    assert str(e.value) == (
+        f"{missing} is missing. Please add {missing} to the test sample."
+    )
+    llm.agenerate.assert_not_called()
+
+
+def test_judge_inputs_share_the_sample_fields():
+    from ragas.metrics.collections._inputs import SampleFieldsInput
+    from ragas.metrics.collections.aspect_critic.util import AspectCriticInput
+    from ragas.metrics.collections.domain_specific_rubrics.util import (
+        RubricScoreInput,
+    )
+    from ragas.metrics.collections.instance_specific_rubrics.util import (
+        InstanceRubricScoreInput,
+    )
+    from ragas.metrics.collections.simple_criteria.util import SimpleCriteriaInput
+
+    fields = list(SampleFieldsInput.model_fields)
+    for model in (AspectCriticInput, SimpleCriteriaInput, RubricScoreInput):
+        assert issubclass(model, SampleFieldsInput)
+        assert list(model.model_fields) == fields
+    assert list(InstanceRubricScoreInput.model_fields) == [*fields, "rubrics"]

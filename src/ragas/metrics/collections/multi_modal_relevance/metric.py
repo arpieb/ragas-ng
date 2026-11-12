@@ -3,6 +3,7 @@
 import typing as t
 from typing import List
 
+from ragas.metrics.collections._inputs import require
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.collections.image_sources import ImageSourcePolicy
 from ragas.metrics.result import MetricResult
@@ -112,19 +113,11 @@ class MultiModalRelevance(BaseMetric):
         Raises:
             ValueError: If user_input, response, or retrieved_contexts is missing
         """
-        # Input validation
-        if not user_input:
-            raise ValueError(
-                "user_input is missing. Please provide a question to evaluate against."
-            )
-        if not response:
-            raise ValueError(
-                "response is missing. Please provide a response to evaluate."
-            )
-        if not retrieved_contexts:
-            raise ValueError(
-                "retrieved_contexts is missing. Please provide contexts to check against."
-            )
+        require(
+            user_input=user_input,
+            response=response,
+            retrieved_contexts=retrieved_contexts,
+        )
 
         # Build multimodal message content
         message_content = build_multimodal_relevance_message_content(

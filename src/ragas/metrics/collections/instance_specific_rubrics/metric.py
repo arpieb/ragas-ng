@@ -3,6 +3,7 @@
 import typing as t
 
 from ragas.metrics.base import MetricOutputType
+from ragas.metrics.collections._inputs import require
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
 
@@ -103,10 +104,7 @@ class InstanceSpecificRubrics(BaseMetric):
         Raises:
             ValueError: If rubrics is not provided
         """
-        if not rubrics:
-            raise ValueError(
-                "rubrics must be provided for instance-specific evaluation"
-            )
+        require(rubrics=rubrics)
 
         prompt_input = InstanceRubricScoreInput(
             user_input=user_input,

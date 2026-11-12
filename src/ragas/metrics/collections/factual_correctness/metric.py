@@ -5,6 +5,7 @@ from typing import List
 
 import numpy as np
 
+from ragas.metrics.collections._inputs import require
 from ragas.metrics.collections._reasons import (
     UNMATCHED_VERDICTS,
     count_phrase,
@@ -131,15 +132,7 @@ class FactualCorrectness(BaseMetric):
         Returns:
             MetricResult with factual correctness score (0.0-1.0, higher is better)
         """
-        # Input validation
-        if not response:
-            raise ValueError(
-                "response is missing. Please add response to the test sample."
-            )
-        if not reference:
-            raise ValueError(
-                "reference is missing. Please add reference to the test sample."
-            )
+        require(response=response, reference=reference)
 
         # Precision: what fraction of the RESPONSE's claims the reference
         # supports. Recall: what fraction of the REFERENCE's claims the response

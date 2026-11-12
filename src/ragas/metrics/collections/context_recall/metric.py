@@ -5,6 +5,7 @@ from typing import List
 
 import numpy as np
 
+from ragas.metrics.collections._inputs import require
 from ragas.metrics.collections._reasons import (
     UNMATCHED_VERDICTS,
     count_phrase,
@@ -106,13 +107,11 @@ class ContextRecall(BaseMetric):
         Returns:
             MetricResult with recall score (0.0-1.0, higher is better)
         """
-        # Input validation
-        if not user_input:
-            raise ValueError("user_input cannot be empty")
-        if not reference:
-            raise ValueError("reference cannot be empty")
-        if not retrieved_contexts:
-            raise ValueError("retrieved_contexts cannot be empty")
+        require(
+            user_input=user_input,
+            reference=reference,
+            retrieved_contexts=retrieved_contexts,
+        )
 
         # Combine contexts into a single string
         context = "\n".join(retrieved_contexts) if retrieved_contexts else ""

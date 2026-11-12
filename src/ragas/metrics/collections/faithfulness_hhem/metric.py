@@ -2,6 +2,7 @@
 
 import typing as t
 
+from ragas.metrics.collections._inputs import require
 from ragas.metrics.collections._reasons import count_phrase, count_verb, itemized
 from ragas.metrics.collections.faithfulness import Faithfulness
 from ragas.metrics.result import MetricResult
@@ -146,19 +147,11 @@ class FaithfulnesswithHHEM(Faithfulness):
             MetricResult with the proportion of statements the NLI model finds
             entailed by the contexts, or NaN when no statements were generated.
         """
-        if not response:
-            raise ValueError(
-                "response is missing. Please add response to the test sample."
-            )
-        if not user_input:
-            raise ValueError(
-                "user_input is missing. Please add user_input to the test sample."
-            )
-        if not retrieved_contexts:
-            raise ValueError(
-                "retrieved_contexts is missing. Please add retrieved_contexts to "
-                "the test sample."
-            )
+        require(
+            response=response,
+            user_input=user_input,
+            retrieved_contexts=retrieved_contexts,
+        )
 
         statements = await self._create_statements(user_input, response)
         if not statements:

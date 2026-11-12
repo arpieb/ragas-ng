@@ -7,6 +7,7 @@ from typing import Dict, List, Literal
 import numpy as np
 
 from ragas.metrics.collections._concurrency import gather_bounded
+from ragas.metrics.collections._inputs import require
 from ragas.metrics.collections._reasons import count_phrase, count_verb, itemized
 from ragas.metrics.collections._verdicts import judge_each
 from ragas.metrics.collections.base import BaseMetric
@@ -123,23 +124,12 @@ class NoiseSensitivity(BaseMetric):
         Returns:
             MetricResult with noise sensitivity score (0.0-1.0, lower is better)
         """
-        # Input validation
-        if not reference:
-            raise ValueError(
-                "reference is missing. Please add reference to the test sample."
-            )
-        if not user_input:
-            raise ValueError(
-                "user_input is missing. Please add user_input to the test sample."
-            )
-        if not response:
-            raise ValueError(
-                "response is missing. Please add response to the test sample."
-            )
-        if not retrieved_contexts:
-            raise ValueError(
-                "retrieved_contexts is missing. Please add retrieved_contexts to the test sample."
-            )
+        require(
+            reference=reference,
+            user_input=user_input,
+            response=response,
+            retrieved_contexts=retrieved_contexts,
+        )
 
         # Step 1: Decompose reference and response into statements (independent)
         gt_statements, ans_statements = await asyncio.gather(

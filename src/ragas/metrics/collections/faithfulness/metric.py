@@ -3,6 +3,7 @@
 import typing as t
 from typing import List
 
+from ragas.metrics.collections._inputs import require
 from ragas.metrics.collections._reasons import (
     UNMATCHED_VERDICTS,
     count_phrase,
@@ -106,19 +107,11 @@ class Faithfulness(BaseMetric):
         Returns:
             MetricResult with faithfulness score (0.0-1.0, higher is better)
         """
-        # Input validation
-        if not response:
-            raise ValueError(
-                "response is missing. Please add response to the test sample."
-            )
-        if not user_input:
-            raise ValueError(
-                "user_input is missing. Please add user_input to the test sample."
-            )
-        if not retrieved_contexts:
-            raise ValueError(
-                "retrieved_contexts is missing. Please add retrieved_contexts to the test sample."
-            )
+        require(
+            response=response,
+            user_input=user_input,
+            retrieved_contexts=retrieved_contexts,
+        )
 
         # Step 1: Break response into atomic statements
         statements = await self._create_statements(user_input, response)

@@ -4,6 +4,7 @@ import typing as t
 
 import numpy as np
 
+from ragas.metrics.collections._inputs import require
 from ragas.metrics.collections._sampling import sample_n
 from ragas.metrics.collections.base import BaseMetric
 from ragas.metrics.result import MetricResult
@@ -106,11 +107,7 @@ class AnswerRelevancy(BaseMetric):
         Returns:
             MetricResult with relevancy score (0.0-1.0, higher is better)
         """
-        # Input validation
-        if not user_input:
-            raise ValueError("user_input cannot be empty")
-        if not response:
-            raise ValueError("response cannot be empty")
+        require(user_input=user_input, response=response)
 
         # Generate multiple questions from response
         generated_questions = []
